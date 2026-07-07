@@ -1,20 +1,25 @@
 {
-  "name": "sistem-pelaporan-iku-unpak",
-  "version": "1.0.0",
-  "description": "Sistem Pelaporan IKU Diktisaintek Berdampak - Universitas Pakuan",
-  "main": "server/index.js",
-  "scripts": {
-    "start": "node server/index.js",
-    "seed": "node server/utils/seed.js"
-  },
-  "license": "MIT",
-  "dependencies": {
-    "express": "^4.19.2",
-    "lowdb": "^1.0.0",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "cors": "^2.8.5",
-    "morgan": "^1.10.0",
-    "uuid": "^9.0.1"
-  }
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@headlessui/react": "^2.0.0",
+        "@inertiajs/react": "^2.0.0",
+        "@tailwindcss/forms": "^0.5.3",
+        "@tailwindcss/vite": "^4.0.0",
+        "@vitejs/plugin-react": "^4.2.0",
+        "autoprefixer": "^10.4.12",
+        "axios": "^1.11.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^2.0.0",
+        "postcss": "^8.4.31",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "tailwindcss": "^3.2.1",
+        "vite": "^7.0.7"
+    }
 }

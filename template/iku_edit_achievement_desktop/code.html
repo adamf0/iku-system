@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>IKU Edit Capaian - Performance Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#727578",
+                        "on-tertiary-fixed": "#191c1e",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#d7e3f9",
+                        "primary-fixed": "#d6e3ff",
+                        "outline": "#717785",
+                        "inverse-on-surface": "#eef0fb",
+                        "tertiary": "#595c5f",
+                        "on-primary": "#ffffff",
+                        "secondary": "#535f71",
+                        "on-primary-fixed": "#001b3d",
+                        "surface-container-highest": "#e0e2ec",
+                        "secondary-container": "#d7e3f9",
+                        "outline-variant": "#c0c6d6",
+                        "surface-variant": "#e0e2ec",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#bbc7dc",
+                        "inverse-primary": "#a8c8ff",
+                        "background": "#f9f9ff",
+                        "surface-container-high": "#e5e8f2",
+                        "inverse-surface": "#2d3038",
+                        "tertiary-fixed": "#e0e3e6",
+                        "error": "#ba1a1a",
+                        "on-secondary-container": "#596577",
+                        "on-secondary-fixed-variant": "#3c4859",
+                        "on-background": "#181c23",
+                        "on-surface": "#181c23",
+                        "surface-tint": "#005db5",
+                        "primary-fixed-dim": "#a8c8ff",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#00468a",
+                        "on-primary-container": "#fefcff",
+                        "on-error": "#ffffff",
+                        "surface-container": "#ebedf8",
+                        "primary-container": "#0073dd",
+                        "surface-bright": "#f9f9ff",
+                        "on-surface-variant": "#404754",
+                        "tertiary-fixed-dim": "#c4c7ca",
+                        "surface": "#f9f9ff",
+                        "on-tertiary-fixed-variant": "#44474a",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#101c2c",
+                        "primary": "#005bb1",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#d7dae4",
+                        "surface-container-low": "#f1f3fe",
+                        "on-tertiary-container": "#fbfcff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "section-margin": "2rem",
+                        "card-padding": "1.25rem",
+                        "stack-gap": "1rem",
+                        "container-margin": "1rem",
+                        "inline-gap": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Hanken Grotesk"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "label-upper": ["Inter"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "status-label": ["Inter"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-upper": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "status-label": ["11px", {"lineHeight": "12px", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Hanken Grotesk', sans-serif;
+            background-color: #f9f9ff;
+            color: #181c23;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-header {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c0c6d6;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+<!-- Sidebar Navigation (Desktop) -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-surface-container border-r border-outline-variant z-50 hidden md:flex flex-col">
+<div class="p-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-3xl">school</span>
+<span class="font-headline-md text-headline-md text-primary font-bold">IKU Admin</span>
+</div>
+<nav class="flex-1 px-4 py-6 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-secondary hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-upper text-label-upper">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full bg-secondary-container text-on-secondary-container transition-colors" href="#">
+<span class="material-symbols-outlined">assignment</span>
+<span class="font-label-upper text-label-upper">Reporting</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-secondary hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-upper text-label-upper">Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-full text-secondary hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-upper text-label-upper">Profile</span>
+</a>
+</nav>
+<div class="p-6 border-t border-outline-variant">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed font-bold">
+                    JD
+                </div>
+<div>
+<p class="font-label-upper text-label-upper text-on-surface">John Doe</p>
+<p class="text-[10px] text-on-surface-variant">Administrator</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="md:ml-64 min-h-screen">
+<!-- Top App Bar -->
+<header class="fixed top-0 right-0 left-0 md:left-64 h-16 glass-header bg-surface/80 flex items-center justify-between px-8 z-40">
+<div class="flex items-center gap-4">
+<button class="md:hidden text-on-surface">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Edit Capaian TW 1</h1>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">notifications</span>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-upper text-label-upper hover:opacity-90 active:scale-95 transition-all shadow-sm">
+                    SAVE CHANGES
+                </button>
+</div>
+</header>
+<div class="pt-24 px-8 pb-12 max-w-5xl mx-auto space-y-8">
+<!-- Summary Card (Primary Blue) -->
+<section class="bg-primary-container rounded-xl p-8 text-on-primary-container shadow-lg flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="space-y-2 text-center md:text-left">
+<p class="font-label-upper text-label-upper text-white/80 uppercase tracking-widest">Quarterly Performance Overview</p>
+<h2 class="font-display-lg text-display-lg text-on-primary-container">78.4% Average Target</h2>
+<p class="font-body-md text-body-md text-white/90">Institutional Performance Indicator (IKU) - First Quarter 2024</p>
+</div>
+<div class="flex gap-4">
+<div class="bg-white/10 backdrop-blur-md p-4 rounded-lg border border-white/20 text-center min-w-[100px]">
+<p class="text-xs opacity-70">Indicators</p>
+<p class="text-xl font-bold">12</p>
+</div>
+<div class="bg-white/10 backdrop-blur-md p-4 rounded-lg border border-white/20 text-center min-w-[100px]">
+<p class="text-xs opacity-70">Complete</p>
+<p class="text-xl font-bold">8</p>
+</div>
+</div>
+</section>
+<!-- Indicators List / Accordion Area -->
+<section class="space-y-4">
+<div class="flex justify-between items-end mb-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Indicators to Update</h3>
+<p class="text-body-md text-on-surface-variant">4 Pending Submissions</p>
+</div>
+<!-- Accordion Item 1 (Collapsed) -->
+<div class="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden hover:border-primary/50 transition-colors cursor-pointer group">
+<div class="flex items-center justify-between p-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">school</span>
+</div>
+<div>
+<p class="font-label-upper text-label-upper text-on-surface">IKU 1: Kesiapan Lulusan</p>
+<p class="text-body-md text-on-surface-variant">Lulusan mendapat pekerjaan yang layak</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-3 py-1 bg-surface-container text-on-surface-variant rounded-full text-xs font-bold">NOT STARTED</span>
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Accordion Item 2 (Expanded) -->
+<div class="bg-white rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border border-primary/20 overflow-hidden ring-1 ring-primary/5">
+<div class="flex items-center justify-between p-6 bg-primary/5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined">work</span>
+</div>
+<div>
+<p class="font-label-upper text-label-upper text-primary">IKU 2: Mahasiswa Mendapat Pengalaman di Luar Kampus</p>
+<p class="text-body-md text-on-surface-variant">Magang, proyek desa, pertukaran pelajar, wirausaha</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold">IN PROGRESS</span>
+<span class="material-symbols-outlined text-primary">expand_less</span>
+</div>
+</div>
+<!-- Expanded Form Content -->
+<div class="p-8 border-t border-outline-variant grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Realization Input -->
+<div class="space-y-2">
+<label class="font-label-upper text-label-upper text-on-surface-variant">Realization (Percentage)</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-display-lg font-display-lg h-24" placeholder="0.00" type="number"/>
+<span class="absolute right-6 top-1/2 -translate-y-1/2 text-display-lg text-outline-variant font-display-lg">%</span>
+</div>
+<p class="text-xs text-on-surface-variant italic">Quarter 1 Target: 65.0%</p>
+</div>
+<!-- Success Factors / Analysis -->
+<div class="space-y-2 row-span-2">
+<label class="font-label-upper text-label-upper text-on-surface-variant">Analysis &amp; Success Factors</label>
+<textarea class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all h-[280px] text-body-md custom-scrollbar resize-none" placeholder="Provide detailed analysis of achievements, constraints, and strategic factors contributing to this quarter's performance..."></textarea>
+</div>
+<!-- Document Upload Zone -->
+<div class="space-y-2">
+<label class="font-label-upper text-label-upper text-on-surface-variant">Supporting Data &amp; Evidences</label>
+<div class="border-2 border-dashed border-outline-variant rounded-lg p-6 bg-surface flex flex-col items-center justify-center text-center group hover:border-primary hover:bg-primary/5 transition-all cursor-pointer">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant group-hover:text-primary mb-3">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">cloud_upload</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-semibold">Drop files here or click to browse</p>
+<p class="text-xs text-on-surface-variant mt-1">PDF, Excel, or ZIP (Max 10MB)</p>
+</div>
+<!-- Attached Files List -->
+<div class="mt-4 space-y-2">
+<div class="flex items-center justify-between p-3 bg-surface-container-high/50 rounded-lg border border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">description</span>
+<span class="text-body-md text-on-surface truncate max-w-[200px]">Laporan_Magang_TW1.pdf</span>
+</div>
+<button class="text-error hover:bg-error/10 p-1 rounded transition-colors">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Form Actions -->
+<div class="md:col-span-2 pt-6 border-t border-outline-variant flex justify-end gap-4">
+<button class="px-6 py-2.5 rounded-lg border border-outline text-secondary font-label-upper text-label-upper hover:bg-surface-container transition-colors">
+                                RESET FORM
+                            </button>
+<button class="px-8 py-2.5 rounded-lg bg-primary text-on-primary font-label-upper text-label-upper shadow-md hover:opacity-90 active:scale-95 transition-all">
+                                UPDATE INDICATOR
+                            </button>
+</div>
+</div>
+</div>
+<!-- Accordion Item 3 (Collapsed) -->
+<div class="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden hover:border-primary/50 transition-colors cursor-pointer group">
+<div class="flex items-center justify-between p-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">person_search</span>
+</div>
+<div>
+<p class="font-label-upper text-label-upper text-on-surface">IKU 3: Dosen Berkegiatan di Luar Kampus</p>
+<p class="text-body-md text-on-surface-variant">Tridharma di luar kampus sendiri</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-3 py-1 bg-surface-container text-on-surface-variant rounded-full text-xs font-bold">NOT STARTED</span>
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">expand_more</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Footer / Bottom Context -->
+<footer class="max-w-5xl mx-auto px-8 pb-12">
+<div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant flex flex-col md:flex-row items-center gap-6">
+<div class="p-3 bg-white rounded-full text-secondary">
+<span class="material-symbols-outlined">info</span>
+</div>
+<div class="flex-1">
+<h4 class="font-label-upper text-label-upper text-on-surface">Submission Deadline</h4>
+<p class="text-body-md text-on-surface-variant">The reporting period for TW 1 closes in <strong>4 days, 12 hours</strong>. Please ensure all evidence is validated by the head of department.</p>
+</div>
+<button class="text-primary font-label-upper text-label-upper underline decoration-primary/30 hover:decoration-primary transition-all">
+                    View Guidelines
+                </button>
+</div>
+</footer>
+</main>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple interactive feedback for focus states and transitions
+        const inputs = document.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('focus', () => {
+                input.parentElement.classList.add('scale-[1.01]');
+            });
+            input.addEventListener('blur', () => {
+                input.parentElement.classList.remove('scale-[1.01]');
+            });
+        });
+
+        // Simulating the save button interaction
+        const saveBtn = document.querySelector('header button');
+        saveBtn.addEventListener('click', () => {
+            const originalText = saveBtn.innerText;
+            saveBtn.innerText = "SAVING...";
+            saveBtn.classList.add('opacity-70');
+            
+            setTimeout(() => {
+                saveBtn.innerText = "SAVED ✓";
+                saveBtn.classList.replace('bg-primary', 'bg-emerald-600');
+                
+                setTimeout(() => {
+                    saveBtn.innerText = originalText;
+                    saveBtn.classList.replace('bg-emerald-600', 'bg-primary');
+                    saveBtn.classList.remove('opacity-70');
+                }, 2000);
+            }, 1200);
+        });
+    </script>
+</body></html>

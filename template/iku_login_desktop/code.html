@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html class="light" lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>IKU Portal - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface-variant": "#404754",
+                    "on-secondary-fixed": "#101c2c",
+                    "on-surface": "#181c23",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-highest": "#e0e2ec",
+                    "surface-container-high": "#e5e8f2",
+                    "on-tertiary-container": "#fbfcff",
+                    "on-background": "#181c23",
+                    "tertiary-fixed": "#e0e3e6",
+                    "on-tertiary-fixed": "#191c1e",
+                    "on-primary-fixed-variant": "#00468a",
+                    "secondary-container": "#d7e3f9",
+                    "tertiary": "#595c5f",
+                    "primary-fixed": "#d6e3ff",
+                    "on-primary-fixed": "#001b3d",
+                    "on-secondary-container": "#596577",
+                    "inverse-on-surface": "#eef0fb",
+                    "error-container": "#ffdad6",
+                    "surface-tint": "#005db5",
+                    "outline": "#717785",
+                    "outline-variant": "#c0c6d6",
+                    "surface": "#f9f9ff",
+                    "error": "#ba1a1a",
+                    "secondary-fixed": "#d7e3f9",
+                    "on-tertiary": "#ffffff",
+                    "primary-fixed-dim": "#a8c8ff",
+                    "on-primary-container": "#fefcff",
+                    "surface-variant": "#e0e2ec",
+                    "tertiary-container": "#727578",
+                    "on-secondary": "#ffffff",
+                    "surface-bright": "#f9f9ff",
+                    "inverse-surface": "#2d3038",
+                    "surface-container": "#ebedf8",
+                    "on-secondary-fixed-variant": "#3c4859",
+                    "secondary-fixed-dim": "#bbc7dc",
+                    "inverse-primary": "#a8c8ff",
+                    "secondary": "#535f71",
+                    "surface-container-low": "#f1f3fe",
+                    "primary-container": "#0073dd",
+                    "on-tertiary-fixed-variant": "#44474a",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed-dim": "#c4c7ca",
+                    "on-error-container": "#93000a",
+                    "on-primary": "#ffffff",
+                    "primary": "#005bb1",
+                    "surface-dim": "#d7dae4",
+                    "background": "#f9f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "inline-gap": "0.75rem",
+                    "container-margin": "1rem",
+                    "card-padding": "1.25rem",
+                    "stack-gap": "1rem",
+                    "section-margin": "2rem"
+            },
+            "fontFamily": {
+                    "status-label": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"],
+                    "headline-sm": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"],
+                    "label-upper": ["Inter"],
+                    "body-md": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "status-label": ["11px", {"lineHeight": "12px", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "headline-md-mobile": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-sm-mobile": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-upper": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      body {
+        background-color: #f9f9ff;
+        font-family: 'Hanken Grotesk', sans-serif;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.05);
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .input-focus-effect:focus-within {
+        box-shadow: 0 0 0 2px rgba(0, 91, 177, 0.2);
+      }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Top Navigation Bar (Hidden/Simplified for Login per "Destination Rule") -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-container-margin h-16 bg-surface/80 backdrop-blur-xl">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl">school</span>
+<span class="font-headline-md text-headline-md-mobile text-primary font-bold">IKU Portal</span>
+</div>
+</header>
+<main class="flex-grow flex items-center justify-center pt-16 pb-12 px-container-margin relative overflow-hidden">
+<!-- Abstract Background Shape -->
+<div class="absolute -top-24 -right-24 w-96 h-96 bg-primary-container/10 rounded-full blur-3xl"></div>
+<div class="absolute -bottom-24 -left-24 w-96 h-96 bg-secondary-container/10 rounded-full blur-3xl"></div>
+<!-- Login Card Container -->
+<div class="w-full max-w-5xl bg-surface-container-lowest rounded-xl overflow-hidden flex flex-col md:flex-row shadow-xl relative z-10">
+<!-- Left Side: Visual Illustration (Hidden on Small Screens) -->
+<div class="hidden md:block md:w-1/2 relative group">
+<div class="absolute inset-0 bg-primary/10 z-10 group-hover:bg-transparent transition-colors duration-500"></div>
+<div class="h-full w-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A professional architectural photograph of a modern university building at dawn, featuring glass facades that reflect a soft blue sky. The scene conveys academic excellence and institutional prestige, with clean lines and a minimalist aesthetic. The lighting is crisp and natural, highlighting the structured, high-contrast environment of a world-class educational facility in a corporate modern style." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB42DkGfZchTesoL0-RckVKn8KOEkVXhTBhpVtVQlaAsp7X15l8OL6W6NJcGTKFXSOsOpvSyqOp-DzGKRHfm3g0UG7mO6tbGSh0mK4fb3E3onwNIXiMD1hnkhAjzvaOapYELpQMoAycfzdvLoM0FCmO-oh2zYrL8RkNeWFMZ2cHzfaJRNZOGzGJNqyS0ab4H4ZkcOs-MXt0HUchzHdfpVIBQyg8ay7fO7TQukXaccmbOROhqUEBKTSlBlBa_DVBTZfjuqtC8Knd8Wc')"></div>
+<div class="absolute bottom-10 left-10 right-10 z-20 text-white">
+<p class="font-headline-md text-headline-md mb-2 drop-shadow-md">Indikator Kinerja Utama</p>
+<p class="font-body-lg text-body-lg opacity-90 drop-shadow-md">Mengukur prestasi, mewujudkan visi pendidikan berkualitas tinggi.</p>
+</div>
+</div>
+<!-- Right Side: Login Form -->
+<div class="w-full md:w-1/2 p-10 md:p-14 flex flex-col justify-center">
+<div class="mb-10 text-center md:text-left">
+<div class="inline-flex items-center justify-center w-14 h-14 bg-primary-container/10 rounded-xl mb-6">
+<span class="material-symbols-outlined text-primary text-3xl">analytics</span>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface mb-2">Selamat Datang Kembali</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Masuk ke Portal IKU untuk mengakses dashboard performa akademik Anda.</p>
+</div>
+<form class="space-y-6" id="loginForm">
+<!-- Username/Email Field -->
+<div class="space-y-2">
+<label class="font-label-upper text-label-upper text-on-surface-variant block" for="username">Username atau Email</label>
+<div class="relative group input-focus-effect rounded-lg overflow-hidden border border-outline-variant transition-all">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary">person</span>
+<input class="w-full pl-12 pr-4 py-3.5 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/50 font-body-md" id="username" name="username" placeholder="Masukkan username anda" required="" type="text"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="font-label-upper text-label-upper text-on-surface-variant block" for="password">Password</label>
+<a class="font-label-upper text-label-upper text-primary hover:underline transition-all" href="#">Lupa Password?</a>
+</div>
+<div class="relative group input-focus-effect rounded-lg overflow-hidden border border-outline-variant transition-all">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary">lock</span>
+<input class="w-full pl-12 pr-12 py-3.5 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/50 font-body-md" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors" onclick="togglePassword()" type="button">
+<span class="material-symbols-outlined" id="passwordIcon">visibility</span>
+</button>
+</div>
+</div>
+<!-- Submit Button -->
+<button class="w-full bg-primary text-on-primary py-4 rounded-lg font-headline-sm text-headline-sm-mobile shadow-md hover:bg-primary-container active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 group" type="submit">
+<span>Masuk</span>
+<span class="material-symbols-outlined transition-transform group-hover:translate-x-1">login</span>
+</button>
+</form>
+<!-- Security Assurance -->
+<div class="mt-8 flex items-center justify-center gap-3 py-3 px-4 bg-surface-container-low rounded-lg">
+<span class="material-symbols-outlined text-secondary text-lg" style="font-variation-settings: 'FILL' 1">verified_user</span>
+<p class="font-status-label text-status-label text-secondary uppercase tracking-wider">Koneksi Aman Terenkripsi</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer: Institutional Branding -->
+<footer class="w-full py-8 px-container-margin border-t border-outline-variant/30 mt-auto">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+<div class="flex flex-col md:flex-row items-center gap-6 opacity-80 hover:opacity-100 transition-opacity">
+<div class="flex items-center gap-3">
+<img class="h-10 w-auto object-contain" data-alt="The official logo of Universitas Gadjah Mada (UGM) in a high-resolution, clean vector format. The logo features its iconic sun and circular emblem with traditional cultural motifs. The visual style is professional and institutional, rendered in clear, crisp colors that represent the university's historical prestige and modern academic standing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjeIORrl0S10mapz8iTQ-2CVQFw3sNyR0vljIvXl2_sTnTEseRaEqqsXynYJHfmSp_Qp5nqsP2dtLtET4-qha3MjI0YKZ3g9FLgDtvdkOOu6Ye4EE6Xn4BvgGM-hoQnYkAj1u817NdY5ZwB62FR6Rr78qovWz7SXam0r818BpJhPyAdFNe33Foc1h3cqucv2Svn2vq7IJvf2Y8uL7pLDbGe3A8VY1rpIBhxa08JwrHSdiQ_Zc8bHuvndeKO8rXp7qlmlWBt3ktbrE"/>
+<div class="hidden md:block w-[1px] h-8 bg-outline-variant"></div>
+<img class="h-10 w-auto object-contain" data-alt="The official logo of the Ministry of Education, Culture, Research, and Technology of the Republic of Indonesia (Kemendikbudristek). The logo is clean and minimalist, showing the Tut Wuri Handayani emblem in its official blue and white color scheme. The visual style is modern, official, and authoritative, suitable for a national performance portal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCl8Ks4wRtSyhYuOGWsTJ0NM6-02fMqfUa9dPH1kSPdfAXIL3H2JqU8CCgSCPeEjv19cl2mU_LAhhbQjdFUkqi3XXA4FRQepbX2sq37VgKezrGBkJiBMlBoGGlSHUYcIAp_bNnHsuuucFkkz3Bdo5s-NDa5_xTIgo8yafTKt74q6N1loL-hsTgJmx4D-1BdiySK46WKLwn4qbL8Wj7Vsp1nVCZH2EAwht_GFCFuig3baw3ZdtGRlSusLgggrMFovBEoPPkXoXVcgdE"/>
+</div>
+<div class="text-center md:text-left">
+<p class="font-label-upper text-label-upper text-on-surface-variant">DIKEMBANGKAN OLEH</p>
+<p class="font-body-md text-body-md text-on-surface font-semibold uppercase tracking-tight">Universitas Gadjah Mada</p>
+</div>
+</div>
+<div class="text-center md:text-right">
+<p class="font-body-md text-body-md text-on-surface-variant">© 2024 IKU Portal — Kementerian Pendidikan, Kebudayaan, Riset, dan Teknologi</p>
+<div class="flex justify-center md:justify-end gap-4 mt-2">
+<a class="font-status-label text-status-label text-secondary hover:text-primary transition-colors" href="#">Syarat &amp; Ketentuan</a>
+<a class="font-status-label text-status-label text-secondary hover:text-primary transition-colors" href="#">Kebijakan Privasi</a>
+</div>
+</div>
+</div>
+</footer>
+<script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const passwordIcon = document.getElementById('passwordIcon');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                passwordIcon.innerText = 'visibility_off';
+            } else {
+                passwordInput.type = 'password';
+                passwordIcon.innerText = 'visibility';
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const originalContent = btn.innerHTML;
+            
+            // Interaction Feedback
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span> <span>Memproses...</span>';
+            btn.disabled = true;
+            btn.classList.add('opacity-80');
+
+            setTimeout(() => {
+                // Mock success behavior
+                btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> <span>Berhasil!</span>';
+                btn.classList.replace('bg-primary', 'bg-green-600');
+                
+                setTimeout(() => {
+                    alert('Simulasi Login Berhasil. Mengalihkan ke Dashboard...');
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-80');
+                    btn.classList.replace('bg-green-600', 'bg-primary');
+                }, 1000);
+            }, 1500);
+        });
+    </script>
+</body></html>
