@@ -1,0 +1,20 @@
+{
+  "name": "sistem-pelaporan-iku-unpak",
+  "version": "1.0.0",
+  "description": "Sistem Pelaporan IKU Diktisaintek Berdampak - Universitas Pakuan",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node server/utils/seed.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "lowdb": "^1.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "morgan": "^1.10.0",
+    "uuid": "^9.0.1"
+  }
+}
