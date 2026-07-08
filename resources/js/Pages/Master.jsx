@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
+import axios from 'axios';
 
 export default function Master() {
     const user = usePage().props.auth.user;
@@ -73,13 +74,7 @@ export default function Master() {
     const handleDeleteClick = (id) => {
         if (!confirm('Apakah anda yakin ingin menghapus indikator ini? Semua sub-indikator dan data capaian terkait juga akan dihapus.')) return;
         
-        fetch(`/api/master/iku/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            }
-        })
-        .then(res => res.json())
+        axios.delete(`/api/master/iku/${id}`)
         .then(() => {
             alert('Indikator berhasil dihapus.');
             loadData();
@@ -98,15 +93,7 @@ export default function Master() {
         e.preventDefault();
         const url = isCreate ? '/api/master/iku' : `/api/master/iku/${editingIkuId}`;
         
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(res => res.json())
+        axios.post(url, formData)
         .then(() => {
             alert(isCreate ? 'Indikator berhasil dibuat!' : 'Indikator berhasil diperbarui!');
             setEditingIkuId(null);
@@ -310,7 +297,6 @@ export default function Master() {
                                     onChange={(e) => handleInputChange('kategori', e.target.value)}
                                     className="w-full bg-white border border-[#c0c6d6] rounded-xl p-3 text-xs h-20 resize-none outline-none focus:ring-1 focus:ring-[#005bb1]"
                                     placeholder="Masukkan deskripsi lengkap indikator..."
-                                    required
                                 />
                             </div>
 

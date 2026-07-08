@@ -1,0 +1,42 @@
+[
+    {
+        "kode_fakultas": "01",
+        "kode_pt": "041004",
+        "nama_fakultas": "HUKUM"
+    },
+    {
+        "kode_fakultas": "02",
+        "kode_pt": "041004",
+        "nama_fakultas": "EKONOMI DAN BISNIS"
+    },
+    {
+        "kode_fakultas": "03",
+        "kode_pt": "041004",
+        "nama_fakultas": "KIP"
+    },
+    {
+        "kode_fakultas": "04",
+        "kode_pt": "041004",
+        "nama_fakultas": "ISIB"
+    },
+    {
+        "kode_fakultas": "05",
+        "kode_pt": "041004",
+        "nama_fakultas": "TEKNIK"
+    },
+    {
+        "kode_fakultas": "06",
+        "kode_pt": "041004",
+        "nama_fakultas": "MIPA"
+    },
+    {
+        "kode_fakultas": "07",
+        "kode_pt": "041004",
+        "nama_fakultas": "PASCASARJANA"
+    },
+    {
+        "kode_fakultas": "08",
+        "kode_pt": "041004",
+        "nama_fakultas": "VOKASI"
+    }
+]

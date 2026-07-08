@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -11,7 +9,6 @@ use Illuminate\Support\Facades\DB;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -25,7 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
-        'kode_unit',
+        'fakultas_unit',
     ];
 
     /**
@@ -52,32 +49,29 @@ class User extends Authenticatable
     }
 
     /**
-     * Get list of unit codes this user has access to.
+     * Get list of unit IDs this user has access to.
      */
     public function scopeUnits(): array
     {
         if (in_array($this->role, ['LPM', 'ADMIN'])) {
-            return DB::table('units')->pluck('kode_unit')->toArray();
+            return DB::table('v_fakultas_unit')->pluck('id')->toArray();
         }
 
-        if (!$this->kode_unit) {
+        if (!$this->fakultas_unit) {
             return [];
         }
 
-        $allUnits = DB::table('units')->get()->toArray();
-        $res = [$this->kode_unit];
-        $queue = [$this->kode_unit];
-
-        while (count($queue) > 0) {
-            $current = array_shift($queue);
-            foreach ($allUnits as $u) {
-                if ($u->unit_induk === $current && !in_array($u->kode_unit, $res)) {
-                    $res[] = $u->kode_unit;
-                    $queue[] = $u->kode_unit;
-                }
+        if ($this->role === 'FAKULTAS') {
+            $faculty = DB::table('v_fakultas_unit')->where('id', $this->fakultas_unit)->first();
+            if ($faculty) {
+                return DB::table('v_fakultas_unit')
+                    ->where('id', $this->fakultas_unit)
+                    ->orWhere('fakultas', $faculty->nama_fak_prod_unit)
+                    ->pluck('id')
+                    ->toArray();
             }
         }
 
-        return $res;
+        return [$this->fakultas_unit];
     }
 }

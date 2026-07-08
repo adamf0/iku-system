@@ -35,34 +35,50 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                         <span className="text-[13px]">Dashboard PT</span>
                     </Link>
 
-                    <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
-                    <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">MASTER SETTINGS</span>
-                    </div>
+                    {user.role === 'ADMIN' && (
+                        <>
+                            <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
+                            <div className="px-4 py-1">
+                                <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">MASTER SETTINGS</span>
+                            </div>
 
-                    <Link 
-                        href={route('master')} 
-                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('master') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
-                        }`}
-                    >
-                        <span className="material-symbols-outlined text-lg">format_list_bulleted</span>
-                        <span className="text-[13px]">Management Indikator</span>
-                    </Link>
+                            <Link 
+                                href={route('master')} 
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                                    route().current('master') 
+                                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">format_list_bulleted</span>
+                                <span className="text-[13px]">Management Indikator</span>
+                            </Link>
 
-                    <Link 
-                        href={route('management-target')} 
-                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('management-target') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
-                        }`}
-                    >
-                        <span className="material-symbols-outlined text-lg">track_changes</span>
-                        <span className="text-[13px]">Management Target</span>
-                    </Link>
+                            <Link 
+                                href={route('management-target')} 
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                                    route().current('management-target') 
+                                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">track_changes</span>
+                                <span className="text-[13px]">Management Target</span>
+                            </Link>
+
+                            <Link 
+                                href={route('penugasan-target')} 
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                                    route().current('penugasan-target') 
+                                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">assignment_ind</span>
+                                <span className="text-[13px]">Penugasan Target</span>
+                            </Link>
+                        </>
+                    )}
 
                     <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
                     <div className="px-4 py-1">
@@ -81,22 +97,28 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                         <span className="text-[13px]">Capaian Kinerja</span>
                     </Link>
 
-                    <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
-                    <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">PROFILE & ACCOUNTS</span>
-                    </div>
+                    {user.role === 'ADMIN' && (
+                        <>
+                            <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
+                            <div className="px-4 py-1">
+                                <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">PROFILE & ACCOUNTS</span>
+                            </div>
 
-                    <Link 
-                        href={route('profile.edit')} 
-                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('profile.edit') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
-                        }`}
-                    >
-                        <span className="material-symbols-outlined text-lg">person</span>
-                        <span className="text-[13px]">Profil Perguruan Tinggi</span>
-                    </Link>
+                            <Link 
+                                href={route('profile.edit')} 
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                                    route().current('profile.edit') 
+                                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">person</span>
+                                <span className="text-[13px]">Profil Perguruan Tinggi</span>
+                            </Link>
+                        </>
+                    )}
+
+                    <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
 
                     <Link 
                         method="post" 
@@ -122,7 +144,7 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                         </div>
                         <div className="flex-grow min-w-0">
                             <p className="text-xs font-bold truncate text-[#181c23]">{user?.name}</p>
-                            <p className="text-[9px] text-[#717785] uppercase font-bold tracking-widest truncate">{user?.role} - {user?.kode_unit}</p>
+                            <p className="text-[9px] text-[#717785] uppercase font-bold tracking-widest truncate">{user?.role} - {user?.nama_unit || user?.fakultas_unit}</p>
                         </div>
                     </div>
                 </div>

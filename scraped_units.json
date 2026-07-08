@@ -1,0 +1,785 @@
+[
+    {
+        "id": 1,
+        "nama_fak_prod_unit": "ILMU HUKUM",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "HUKUM"
+    },
+    {
+        "id": 2,
+        "nama_fak_prod_unit": "MANAJEMEN",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "EKONOMI DAN BISNIS"
+    },
+    {
+        "id": 3,
+        "nama_fak_prod_unit": "BISNIS DIGITAL",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "EKONOMI DAN BISNIS"
+    },
+    {
+        "id": 4,
+        "nama_fak_prod_unit": "AKUNTANSI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "EKONOMI DAN BISNIS"
+    },
+    {
+        "id": 5,
+        "nama_fak_prod_unit": "PENDIDIKAN BIOLOGI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 6,
+        "nama_fak_prod_unit": "PENDIDIKAN IPA",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 7,
+        "nama_fak_prod_unit": "PENDIDIKAN GURU SEKOLAH DASAR",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 8,
+        "nama_fak_prod_unit": "PKSGJ",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 9,
+        "nama_fak_prod_unit": "PPG",
+        "kode_jenjang": "J",
+        "jenjang": "profesi",
+        "jenjang_int": "6",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 10,
+        "nama_fak_prod_unit": "PENDIDIKAN BAHASA DAN SASTRA INDONESIA",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 11,
+        "nama_fak_prod_unit": "PENDIDIKAN BAHASA INGGRIS",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 12,
+        "nama_fak_prod_unit": "ILMU KOMUNIKASI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "ISIB"
+    },
+    {
+        "id": 13,
+        "nama_fak_prod_unit": "SASTRA INDONESIA",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "ISIB"
+    },
+    {
+        "id": 14,
+        "nama_fak_prod_unit": "SASTRA INGGRIS",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "ISIB"
+    },
+    {
+        "id": 15,
+        "nama_fak_prod_unit": "SASTRA JEPANG",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "ISIB"
+    },
+    {
+        "id": 16,
+        "nama_fak_prod_unit": "TEKNIK ELEKTRO",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "TEKNIK"
+    },
+    {
+        "id": 17,
+        "nama_fak_prod_unit": "TEKNIK SIPIL",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "TEKNIK"
+    },
+    {
+        "id": 18,
+        "nama_fak_prod_unit": "TEKNIK GEODESI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "TEKNIK"
+    },
+    {
+        "id": 19,
+        "nama_fak_prod_unit": "TEKNIK GEOLOGI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "TEKNIK"
+    },
+    {
+        "id": 20,
+        "nama_fak_prod_unit": "PERENCANAAN WILAYAH DAN KOTA",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "TEKNIK"
+    },
+    {
+        "id": 21,
+        "nama_fak_prod_unit": "MATEMATIKA",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 22,
+        "nama_fak_prod_unit": "BIOLOGI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 23,
+        "nama_fak_prod_unit": "KIMIA",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 24,
+        "nama_fak_prod_unit": "FARMASI",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 25,
+        "nama_fak_prod_unit": "ILMU KOMPUTER",
+        "kode_jenjang": "C",
+        "jenjang": "s1",
+        "jenjang_int": "1",
+        "type": "prodi",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 26,
+        "nama_fak_prod_unit": "ILMU MANAJEMEN",
+        "kode_jenjang": "A",
+        "jenjang": "s3",
+        "jenjang_int": "3",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 27,
+        "nama_fak_prod_unit": "MANAJEMEN",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 28,
+        "nama_fak_prod_unit": "MANAJEMEN LINGKUNGAN",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 29,
+        "nama_fak_prod_unit": "ILMU HUKUM",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 30,
+        "nama_fak_prod_unit": "PENDIDIKAN IPA",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 31,
+        "nama_fak_prod_unit": "MANAJEMEN PENDIDIKAN",
+        "kode_jenjang": "A",
+        "jenjang": "s3",
+        "jenjang_int": "3",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 32,
+        "nama_fak_prod_unit": "ADMINISTRASI PENDIDIKAN",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 33,
+        "nama_fak_prod_unit": "PENDIDIKAN DASAR",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 34,
+        "nama_fak_prod_unit": "PKLH",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 35,
+        "nama_fak_prod_unit": "PERENCANAAN WILAYAH DAN KOTA",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 36,
+        "nama_fak_prod_unit": "TEKNIK KOMPUTER",
+        "kode_jenjang": "E",
+        "jenjang": "d3",
+        "jenjang_int": "4",
+        "type": "prodi",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 37,
+        "nama_fak_prod_unit": "MANAJEMEN INFORMATIKA",
+        "kode_jenjang": "E",
+        "jenjang": "d3",
+        "jenjang_int": "4",
+        "type": "prodi",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 38,
+        "nama_fak_prod_unit": "MANAJEMEN PERPAJAKAN",
+        "kode_jenjang": "E",
+        "jenjang": "d3",
+        "jenjang_int": "4",
+        "type": "prodi",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 39,
+        "nama_fak_prod_unit": "KEUANGAN DAN PERBANKAN",
+        "kode_jenjang": "E",
+        "jenjang": "d3",
+        "jenjang_int": "4",
+        "type": "prodi",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 40,
+        "nama_fak_prod_unit": "AKUNTANSI",
+        "kode_jenjang": "E",
+        "jenjang": "d3",
+        "jenjang_int": "4",
+        "type": "prodi",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 41,
+        "nama_fak_prod_unit": "BPSI",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 64,
+        "nama_fak_prod_unit": "SEKRETARIS UNIVERSITAS",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 65,
+        "nama_fak_prod_unit": "WAKIL REKTOR 1",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 66,
+        "nama_fak_prod_unit": "WAKIL REKTOR 2",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 67,
+        "nama_fak_prod_unit": "WAKIL REKTOR 3",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 68,
+        "nama_fak_prod_unit": "Kantor Pengembangan Karir dan\u00a0Tracer\u00a0Study",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 69,
+        "nama_fak_prod_unit": "LPM",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 70,
+        "nama_fak_prod_unit": "LPPM",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 71,
+        "nama_fak_prod_unit": "PERPUSTAKAAN PUSAT",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 72,
+        "nama_fak_prod_unit": "HUMAS DAN PROMOSI",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 73,
+        "nama_fak_prod_unit": "PERPUSTAKAAN MIPA",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 74,
+        "nama_fak_prod_unit": "DIVISI PENELITIAN DAN PENGABDIAN FMIPA",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 75,
+        "nama_fak_prod_unit": "UNPAK PRES",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 76,
+        "nama_fak_prod_unit": "FKIP KKN",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 77,
+        "nama_fak_prod_unit": "LABORATORIUM FKIP",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 78,
+        "nama_fak_prod_unit": "FKIP E-JOURNAL",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 79,
+        "nama_fak_prod_unit": "UPMF MIPA",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 80,
+        "nama_fak_prod_unit": "Laboratorium FMIPA ",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 81,
+        "nama_fak_prod_unit": "Laboratorium Service ",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 82,
+        "nama_fak_prod_unit": "Apotek",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 83,
+        "nama_fak_prod_unit": "Unit Pelayanan Kesehatan",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 84,
+        "nama_fak_prod_unit": "Unit Publikasi dan jurnal",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 85,
+        "nama_fak_prod_unit": "Unit Comstract dan Data Sience Center",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 86,
+        "nama_fak_prod_unit": "Perpustakaan FKIP",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 87,
+        "nama_fak_prod_unit": "Bimbingan Konseling FKIP",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 88,
+        "nama_fak_prod_unit": "Pusat Inovasi",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 89,
+        "nama_fak_prod_unit": "Inkubator Bisnis",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 91,
+        "nama_fak_prod_unit": "HUKUM",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "HUKUM"
+    },
+    {
+        "id": 94,
+        "nama_fak_prod_unit": "EKONOMI DAN BISNIS",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "EKONOMI DAN BISNIS"
+    },
+    {
+        "id": 97,
+        "nama_fak_prod_unit": "KIP",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "KIP"
+    },
+    {
+        "id": 100,
+        "nama_fak_prod_unit": "ISIB",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "ISIB"
+    },
+    {
+        "id": 103,
+        "nama_fak_prod_unit": "TEKNIK",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "TEKNIK"
+    },
+    {
+        "id": 106,
+        "nama_fak_prod_unit": "MIPA",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 109,
+        "nama_fak_prod_unit": "PASCASARJANA",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 112,
+        "nama_fak_prod_unit": "VOKASI",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "fakultas",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 113,
+        "nama_fak_prod_unit": "Kantor Kemitraan dan Hubungan Internasional",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 116,
+        "nama_fak_prod_unit": "BAUM",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 119,
+        "nama_fak_prod_unit": "BAAK",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 121,
+        "nama_fak_prod_unit": "KECERDASAN BUATAN DAN ROBOTIK",
+        "kode_jenjang": "D",
+        "jenjang": "d4",
+        "jenjang_int": "5",
+        "type": "prodi",
+        "fakultas": "VOKASI"
+    },
+    {
+        "id": 122,
+        "nama_fak_prod_unit": "WAKIL REKTOR 4",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 125,
+        "nama_fak_prod_unit": "Kemitraan",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 126,
+        "nama_fak_prod_unit": "ILMU KOMPUTER",
+        "kode_jenjang": "B",
+        "jenjang": "s2",
+        "jenjang_int": "2",
+        "type": "prodi",
+        "fakultas": "PASCASARJANA"
+    },
+    {
+        "id": 127,
+        "nama_fak_prod_unit": "PROFESI APOTEKER",
+        "kode_jenjang": "J",
+        "jenjang": "profesi",
+        "jenjang_int": "6",
+        "type": "prodi",
+        "fakultas": "MIPA"
+    },
+    {
+        "id": 128,
+        "nama_fak_prod_unit": "LABORATORIUM SENI",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 129,
+        "nama_fak_prod_unit": "LABORATORIUM BAHASA INGGRIS",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 130,
+        "nama_fak_prod_unit": "LABORATORIUM MICROTEACHING",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    },
+    {
+        "id": 131,
+        "nama_fak_prod_unit": "LABORATORIUM KOMPUTER",
+        "kode_jenjang": null,
+        "jenjang": "",
+        "jenjang_int": "7",
+        "type": "unit",
+        "fakultas": null
+    }
+]

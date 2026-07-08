@@ -21,6 +21,30 @@ class MasterController extends Controller
         return response()->json($data);
     }
 
+    // List indicators assigned to active user's unit
+    public function assignedIku(Request $request)
+    {
+        $user = $request->user();
+        $unitId = $request->query('unit');
+        $tahun = $request->query('tahun');
+        
+        if (empty($unitId)) {
+            $unitId = $user->fakultas_unit;
+        }
+        
+        $query = DB::table('master_indikator')
+            ->join('penugasan_target', 'master_indikator.id', '=', 'penugasan_target.id_indikator')
+            ->where('penugasan_target.fakultas_unit', $unitId);
+
+        if (!empty($tahun)) {
+            $query->where('penugasan_target.tahun', $tahun);
+        }
+
+        $data = $query->select('master_indikator.*')->get();
+        
+        return response()->json($data);
+    }
+
     // Create indicator (Menu 1: Management Indikator)
     public function createIku(Request $request)
     {
@@ -32,7 +56,7 @@ class MasterController extends Controller
         $validated = $request->validate([
             'id_konteks' => 'required|integer|exists:master_konteks,id',
             'iku' => 'required|string',
-            'kategori' => 'required|string',
+            'kategori' => 'nullable|string',
             'id_sub' => 'nullable|integer|exists:master_indikator,id',
             'satuan' => 'required|string',
             'base_line' => 'nullable|string',
@@ -47,9 +71,10 @@ class MasterController extends Controller
             }
         }
 
+        $kategori = $validated['kategori'] ?? '';
         $fullKategori = $parentIkuCode 
-            ? $parentIkuCode . ' - ' . $validated['kategori']
-            : $validated['iku'] . ' - ' . $validated['kategori'];
+            ? ($kategori ? $parentIkuCode . ' - ' . $kategori : $parentIkuCode)
+            : ($kategori ? $validated['iku'] . ' - ' . $kategori : $validated['iku']);
 
         $id = DB::table('master_indikator')->insertGetId(array_merge($validated, [
             'full_kategori' => $fullKategori,
@@ -71,7 +96,7 @@ class MasterController extends Controller
         $validated = $request->validate([
             'id_konteks' => 'sometimes|integer|exists:master_konteks,id',
             'iku' => 'sometimes|string',
-            'kategori' => 'sometimes|string',
+            'kategori' => 'nullable|string',
             'id_sub' => 'nullable|integer|exists:master_indikator,id',
             'satuan' => 'sometimes|string',
             'base_line' => 'nullable|string',
@@ -92,7 +117,7 @@ class MasterController extends Controller
         $current = DB::table('master_indikator')->where('id', $id)->first();
         if ($current) {
             $idSub = array_key_exists('id_sub', $validated) ? $validated['id_sub'] : $current->id_sub;
-            $kategori = isset($validated['kategori']) ? $validated['kategori'] : $current->kategori;
+            $kategori = array_key_exists('kategori', $validated) ? ($validated['kategori'] ?? '') : ($current->kategori ?? '');
             $iku = isset($validated['iku']) ? $validated['iku'] : $current->iku;
 
             $parentIkuCode = null;
@@ -104,8 +129,8 @@ class MasterController extends Controller
             }
 
             $validated['full_kategori'] = $parentIkuCode 
-                ? $parentIkuCode . ' - ' . $kategori
-                : $iku . ' - ' . $kategori;
+                ? ($kategori ? $parentIkuCode . ' - ' . $kategori : $parentIkuCode)
+                : ($kategori ? $iku . ' - ' . $kategori : $iku);
         }
 
         DB::table('master_indikator')
@@ -127,9 +152,17 @@ class MasterController extends Controller
         return response()->json(['message' => 'Indikator berhasil dihapus.']);
     }
 
+    // Fetch units from v_fakultas_unit view
     public function units(Request $request)
     {
-        $data = DB::table('units')->get();
+        $data = DB::table('v_fakultas_unit')->get();
+        return response()->json($data);
+    }
+
+    // Fetch unique years registered
+    public function tahun(Request $request)
+    {
+        $data = DB::table('master_tahun')->orderBy('tahun', 'desc')->get();
         return response()->json($data);
     }
 }

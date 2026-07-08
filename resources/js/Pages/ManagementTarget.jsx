@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
+import axios from 'axios';
 
 export default function ManagementTarget() {
     const user = usePage().props.auth.user;
@@ -72,15 +73,7 @@ export default function ManagementTarget() {
     const handleSave = (e) => {
         e.preventDefault();
         
-        fetch(`/api/master/iku/${editingTargetId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(res => res.json())
+        axios.post(`/api/master/iku/${editingTargetId}`, formData)
         .then(() => {
             alert('Target indikator berhasil diperbarui!');
             setEditingTargetId(null);

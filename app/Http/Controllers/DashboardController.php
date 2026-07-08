@@ -15,7 +15,7 @@ class DashboardController extends Controller
         $scope = $user->scopeUnits();
 
         return DB::table('template_capaian')
-            ->whereIn('kode_unit', $scope)
+            ->whereIn('fakultas_unit', $scope)
             ->where('tahun', $tahun)
             ->get();
     }
@@ -49,7 +49,6 @@ class DashboardController extends Controller
                 return $item->id_indikator === $iku->id && $item->status_validasi === 'DISAHKAN';
             });
 
-            // Find latest triwulan
             $latestTw = null;
             foreach (array_reverse($this->TRIWULAN) as $tw) {
                 if (!$latestTw && $rows->contains('triwulan', $tw)) {
@@ -87,6 +86,15 @@ class DashboardController extends Controller
         $totalTercapai = count(array_filter($perIku, function($x) { return $x['status'] === 'TERCAPAI'; }));
         $totalAdaData = count(array_filter($perIku, function($x) { return $x['capaian_rata'] !== null; }));
 
+        $isAssigned = true;
+        if (!in_array($user->role, ['ADMIN', 'LPM'])) {
+            $isAssigned = DB::table('penugasan_target')
+                ->where('fakultas_unit', $user->fakultas_unit)
+                ->where('tahun', $tahun)
+                ->whereNull('deleted_at')
+                ->exists();
+        }
+
         return response()->json([
             'tahun' => (int)$tahun,
             'total_unit_terpantau' => count($scope),
@@ -94,7 +102,8 @@ class DashboardController extends Controller
             'total_laporan' => $data->count(),
             'status_count' => $statusCount,
             'persentase_iku_tercapai' => $totalAdaData ? round(($totalTercapai / $totalAdaData) * 100, 1) : 0,
-            'per_iku' => $perIku
+            'per_iku' => $perIku,
+            'is_assigned' => $isAssigned
         ]);
     }
 
@@ -107,20 +116,20 @@ class DashboardController extends Controller
         $user = $request->user();
         $scope = $user->scopeUnits();
 
-        $unitsToShow = DB::table('units')->whereIn('kode_unit', $scope)->get();
+        $unitsToShow = DB::table('units')->whereIn('id', $scope)->get();
         $ikuList = DB::table('master_indikator')->whereNull('id_sub')->get();
 
         $matriks = [];
         foreach ($unitsToShow as $u) {
             $row = [
-                'kode_unit' => $u->kode_unit,
-                'nama_unit' => $u->nama_unit,
+                'id' => $u->id,
+                'nama_unit' => $u->nama_fak_prod_unit,
                 'jenjang' => $u->jenjang,
                 'nilai' => []
             ];
 
             foreach ($ikuList as $iku) {
-                $found = $data->where('kode_unit', $u->kode_unit)->where('id_indikator', $iku->id)->first();
+                $found = $data->where('fakultas_unit', $u->id)->where('id_indikator', $iku->id)->first();
                 $row['nilai'][$iku->id] = $found ? [
                     'capaian' => (float)$found->nilai_capaian,
                     'target' => (float)$iku->target,
@@ -149,13 +158,13 @@ class DashboardController extends Controller
 
         $data = DB::table('template_capaian')->where('status_validasi', 'DIAJUKAN')->get();
         
-        $units = DB::table('units')->pluck('nama_unit', 'kode_unit');
+        $units = DB::table('units')->pluck('nama_fak_prod_unit', 'id');
         $ikus = DB::table('master_indikator')->pluck('kategori', 'id');
         $ikuCodes = DB::table('master_indikator')->pluck('iku', 'id');
 
         $enriched = [];
         foreach ($data as $c) {
-            $c->nama_unit = $units[$c->kode_unit] ?? $c->kode_unit;
+            $c->nama_unit = $units[$c->fakultas_unit] ?? $c->fakultas_unit;
             $c->nama_iku = $ikus[$c->id_indikator] ?? $c->id_indikator;
             $c->kode_iku = $ikuCodes[$c->id_indikator] ?? '';
             $enriched[] = $c;

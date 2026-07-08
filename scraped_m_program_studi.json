@@ -1,0 +1,354 @@
+[
+    {
+        "kode_prodi": "20201",
+        "kode_pt": "041004",
+        "kode_fak": "05",
+        "kode_jenjang": "C",
+        "kode_jurusan": "05",
+        "nama_prodi": "TEKNIK ELEKTRO"
+    },
+    {
+        "kode_prodi": "22201",
+        "kode_pt": "041004",
+        "kode_fak": "05",
+        "kode_jenjang": "C",
+        "kode_jurusan": "05",
+        "nama_prodi": "TEKNIK SIPIL"
+    },
+    {
+        "kode_prodi": "29201",
+        "kode_pt": "041004",
+        "kode_fak": "05",
+        "kode_jenjang": "C",
+        "kode_jurusan": "05",
+        "nama_prodi": "TEKNIK GEODESI"
+    },
+    {
+        "kode_prodi": "34201",
+        "kode_pt": "041004",
+        "kode_fak": "05",
+        "kode_jenjang": "C",
+        "kode_jurusan": "05",
+        "nama_prodi": "TEKNIK GEOLOGI"
+    },
+    {
+        "kode_prodi": "35201",
+        "kode_pt": "041004",
+        "kode_fak": "05",
+        "kode_jenjang": "C",
+        "kode_jurusan": "05",
+        "nama_prodi": "PERENCANAAN WILAYAH DAN KOTA"
+    },
+    {
+        "kode_prodi": "44201",
+        "kode_pt": "041004",
+        "kode_fak": "06",
+        "kode_jenjang": "C",
+        "kode_jurusan": "06",
+        "nama_prodi": "MATEMATIKA"
+    },
+    {
+        "kode_prodi": "46201",
+        "kode_pt": "041004",
+        "kode_fak": "06",
+        "kode_jenjang": "C",
+        "kode_jurusan": "06",
+        "nama_prodi": "BIOLOGI"
+    },
+    {
+        "kode_prodi": "47201",
+        "kode_pt": "041004",
+        "kode_fak": "06",
+        "kode_jenjang": "C",
+        "kode_jurusan": "06",
+        "nama_prodi": "KIMIA"
+    },
+    {
+        "kode_prodi": "48201",
+        "kode_pt": "041004",
+        "kode_fak": "06",
+        "kode_jenjang": "C",
+        "kode_jurusan": "06",
+        "nama_prodi": "FARMASI"
+    },
+    {
+        "kode_prodi": "48901",
+        "kode_pt": "041004",
+        "kode_fak": "06",
+        "kode_jenjang": "J",
+        "kode_jurusan": "06",
+        "nama_prodi": "PROFESI APOTEKER"
+    },
+    {
+        "kode_prodi": "55101",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "ILMU KOMPUTER"
+    },
+    {
+        "kode_prodi": "55201",
+        "kode_pt": "041004",
+        "kode_fak": "06",
+        "kode_jenjang": "C",
+        "kode_jurusan": "06",
+        "nama_prodi": "ILMU KOMPUTER"
+    },
+    {
+        "kode_prodi": "56209",
+        "kode_pt": "041004",
+        "kode_fak": "08",
+        "kode_jenjang": "D",
+        "kode_jurusan": "08",
+        "nama_prodi": "KECERDASAN BUATAN DAN ROBOTIK"
+    },
+    {
+        "kode_prodi": "56401",
+        "kode_pt": "041004",
+        "kode_fak": "08",
+        "kode_jenjang": "E",
+        "kode_jurusan": "08",
+        "nama_prodi": "TEKNIK KOMPUTER"
+    },
+    {
+        "kode_prodi": "57401",
+        "kode_pt": "041004",
+        "kode_fak": "08",
+        "kode_jenjang": "E",
+        "kode_jurusan": "08",
+        "nama_prodi": "MANAJEMEN INFORMATIKA"
+    },
+    {
+        "kode_prodi": "61001",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "A",
+        "kode_jurusan": "07",
+        "nama_prodi": "ILMU MANAJEMEN"
+    },
+    {
+        "kode_prodi": "61101",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "MANAJEMEN"
+    },
+    {
+        "kode_prodi": "61105",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "MANAJEMEN LINGKUNGAN"
+    },
+    {
+        "kode_prodi": "61201",
+        "kode_pt": "041004",
+        "kode_fak": "02",
+        "kode_jenjang": "C",
+        "kode_jurusan": "02",
+        "nama_prodi": "MANAJEMEN"
+    },
+    {
+        "kode_prodi": "61209",
+        "kode_pt": "041004",
+        "kode_fak": "02",
+        "kode_jenjang": "C",
+        "kode_jurusan": "02",
+        "nama_prodi": "BISNIS DIGITAL"
+    },
+    {
+        "kode_prodi": "61403",
+        "kode_pt": "041004",
+        "kode_fak": "08",
+        "kode_jenjang": "E",
+        "kode_jurusan": "08",
+        "nama_prodi": "MANAJEMEN PERPAJAKAN"
+    },
+    {
+        "kode_prodi": "61406",
+        "kode_pt": "041004",
+        "kode_fak": "08",
+        "kode_jenjang": "E",
+        "kode_jurusan": "08",
+        "nama_prodi": "KEUANGAN DAN PERBANKAN"
+    },
+    {
+        "kode_prodi": "62201",
+        "kode_pt": "041004",
+        "kode_fak": "02",
+        "kode_jenjang": "C",
+        "kode_jurusan": "02",
+        "nama_prodi": "AKUNTANSI"
+    },
+    {
+        "kode_prodi": "62401",
+        "kode_pt": "041004",
+        "kode_fak": "08",
+        "kode_jenjang": "E",
+        "kode_jurusan": "08",
+        "nama_prodi": "AKUNTANSI"
+    },
+    {
+        "kode_prodi": "70201",
+        "kode_pt": "041004",
+        "kode_fak": "04",
+        "kode_jenjang": "C",
+        "kode_jurusan": "04",
+        "nama_prodi": "ILMU KOMUNIKASI"
+    },
+    {
+        "kode_prodi": "74101",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "ILMU HUKUM"
+    },
+    {
+        "kode_prodi": "74201",
+        "kode_pt": "041004",
+        "kode_fak": "01",
+        "kode_jenjang": "C",
+        "kode_jurusan": "01",
+        "nama_prodi": "ILMU HUKUM"
+    },
+    {
+        "kode_prodi": "79201",
+        "kode_pt": "041004",
+        "kode_fak": "04",
+        "kode_jenjang": "C",
+        "kode_jurusan": "04",
+        "nama_prodi": "SASTRA INDONESIA"
+    },
+    {
+        "kode_prodi": "79202",
+        "kode_pt": "041004",
+        "kode_fak": "04",
+        "kode_jenjang": "C",
+        "kode_jurusan": "04",
+        "nama_prodi": "SASTRA INGGRIS"
+    },
+    {
+        "kode_prodi": "79204",
+        "kode_pt": "041004",
+        "kode_fak": "04",
+        "kode_jenjang": "C",
+        "kode_jurusan": "04",
+        "nama_prodi": "SASTRA JEPANG"
+    },
+    {
+        "kode_prodi": "84101",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "PENDIDIKAN IPA"
+    },
+    {
+        "kode_prodi": "84205",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "C",
+        "kode_jurusan": "03",
+        "nama_prodi": "PENDIDIKAN BIOLOGI"
+    },
+    {
+        "kode_prodi": "84206",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "C",
+        "kode_jurusan": "03",
+        "nama_prodi": "PENDIDIKAN IPA"
+    },
+    {
+        "kode_prodi": "86004",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "A",
+        "kode_jurusan": "07",
+        "nama_prodi": "MANAJEMEN PENDIDIKAN"
+    },
+    {
+        "kode_prodi": "86104",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "ADMINISTRASI PENDIDIKAN"
+    },
+    {
+        "kode_prodi": "86122",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "PENDIDIKAN DASAR"
+    },
+    {
+        "kode_prodi": "86139",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "MANAJEMEN PENDIDIKAN"
+    },
+    {
+        "kode_prodi": "86206",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "C",
+        "kode_jurusan": "03",
+        "nama_prodi": "PENDIDIKAN GURU SEKOLAH DASAR"
+    },
+    {
+        "kode_prodi": "86276",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "C",
+        "kode_jurusan": "03",
+        "nama_prodi": "PSKGJ PENDIDIKAN GURU SEKOLAH DASAR (PGSD)"
+    },
+    {
+        "kode_prodi": "86904",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "J",
+        "kode_jurusan": "03",
+        "nama_prodi": "PENDIDIKAN PROFESI GURU"
+    },
+    {
+        "kode_prodi": "88201",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "C",
+        "kode_jurusan": "03",
+        "nama_prodi": "PENDIDIKAN BAHASA DAN SASTRA INDONESIA"
+    },
+    {
+        "kode_prodi": "88203",
+        "kode_pt": "041004",
+        "kode_fak": "03",
+        "kode_jenjang": "C",
+        "kode_jurusan": "03",
+        "nama_prodi": "PENDIDIKAN BAHASA INGGRIS"
+    },
+    {
+        "kode_prodi": "95102",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "PKLH"
+    },
+    {
+        "kode_prodi": "95125",
+        "kode_pt": "041004",
+        "kode_fak": "07",
+        "kode_jenjang": "B",
+        "kode_jurusan": "07",
+        "nama_prodi": "PERENCANAAN WILAYAH DAN KOTA"
+    }
+]

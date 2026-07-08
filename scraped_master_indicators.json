@@ -161,15 +161,6 @@
         },
         {
             "context": "2a. - Inovasi",
-            "iku": "-",
-            "kategori": "- Publikasi bereputasi internasional (Scopus/WoS)",
-            "parent_iku": null,
-            "satuan": "%",
-            "baseline": "4,4",
-            "target": "5,5"
-        },
-        {
-            "context": "2a. - Inovasi",
             "iku": "IKU 5",
             "kategori": "Persentase luaran hasil kerjasama antara PT dan start-up /industri/Lembaga",
             "parent_iku": null,
@@ -183,8 +174,8 @@
             "kategori": "Publikasi bereputasi internasional (Scopus/WoS)",
             "parent_iku": null,
             "satuan": "%",
-            "baseline": "-",
-            "target": "-"
+            "baseline": "4,4",
+            "target": "5,5"
         },
         {
             "context": "2a. - Inovasi",

@@ -1,0 +1,698 @@
+[
+    {
+        "id": 1,
+        "kode_fakultas": "01",
+        "kode_prodi": "74201",
+        "nama": null,
+        "id_m_prodi": 7,
+        "standalone": 0
+    },
+    {
+        "id": 2,
+        "kode_fakultas": "02",
+        "kode_prodi": "61201",
+        "nama": null,
+        "id_m_prodi": 8,
+        "standalone": 0
+    },
+    {
+        "id": 3,
+        "kode_fakultas": "02",
+        "kode_prodi": "61209",
+        "nama": null,
+        "id_m_prodi": 84,
+        "standalone": 0
+    },
+    {
+        "id": 4,
+        "kode_fakultas": "02",
+        "kode_prodi": "62201",
+        "nama": null,
+        "id_m_prodi": 12,
+        "standalone": 0
+    },
+    {
+        "id": 5,
+        "kode_fakultas": "03",
+        "kode_prodi": "84205",
+        "nama": null,
+        "id_m_prodi": 18,
+        "standalone": 0
+    },
+    {
+        "id": 6,
+        "kode_fakultas": "03",
+        "kode_prodi": "84206",
+        "nama": null,
+        "id_m_prodi": 73,
+        "standalone": 0
+    },
+    {
+        "id": 7,
+        "kode_fakultas": "03",
+        "kode_prodi": "86206",
+        "nama": null,
+        "id_m_prodi": 19,
+        "standalone": 0
+    },
+    {
+        "id": 8,
+        "kode_fakultas": "03",
+        "kode_prodi": "86276",
+        "nama": "PKSGJ",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 9,
+        "kode_fakultas": "03",
+        "kode_prodi": "86904",
+        "nama": "PPG",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 10,
+        "kode_fakultas": "03",
+        "kode_prodi": "88201",
+        "nama": null,
+        "id_m_prodi": 17,
+        "standalone": 0
+    },
+    {
+        "id": 11,
+        "kode_fakultas": "03",
+        "kode_prodi": "88203",
+        "nama": null,
+        "id_m_prodi": 16,
+        "standalone": 0
+    },
+    {
+        "id": 12,
+        "kode_fakultas": "04",
+        "kode_prodi": "70201",
+        "nama": null,
+        "id_m_prodi": 23,
+        "standalone": 0
+    },
+    {
+        "id": 13,
+        "kode_fakultas": "04",
+        "kode_prodi": "79201",
+        "nama": null,
+        "id_m_prodi": 21,
+        "standalone": 0
+    },
+    {
+        "id": 14,
+        "kode_fakultas": "04",
+        "kode_prodi": "79202",
+        "nama": null,
+        "id_m_prodi": 20,
+        "standalone": 0
+    },
+    {
+        "id": 15,
+        "kode_fakultas": "04",
+        "kode_prodi": "79204",
+        "nama": null,
+        "id_m_prodi": 22,
+        "standalone": 0
+    },
+    {
+        "id": 16,
+        "kode_fakultas": "05",
+        "kode_prodi": "20201",
+        "nama": null,
+        "id_m_prodi": 27,
+        "standalone": 0
+    },
+    {
+        "id": 17,
+        "kode_fakultas": "05",
+        "kode_prodi": "22201",
+        "nama": null,
+        "id_m_prodi": 26,
+        "standalone": 0
+    },
+    {
+        "id": 18,
+        "kode_fakultas": "05",
+        "kode_prodi": "29201",
+        "nama": null,
+        "id_m_prodi": 24,
+        "standalone": 0
+    },
+    {
+        "id": 19,
+        "kode_fakultas": "05",
+        "kode_prodi": "34201",
+        "nama": null,
+        "id_m_prodi": 28,
+        "standalone": 0
+    },
+    {
+        "id": 20,
+        "kode_fakultas": "05",
+        "kode_prodi": "35201",
+        "nama": null,
+        "id_m_prodi": 25,
+        "standalone": 0
+    },
+    {
+        "id": 21,
+        "kode_fakultas": "06",
+        "kode_prodi": "44201",
+        "nama": null,
+        "id_m_prodi": 31,
+        "standalone": 0
+    },
+    {
+        "id": 22,
+        "kode_fakultas": "06",
+        "kode_prodi": "46201",
+        "nama": null,
+        "id_m_prodi": 29,
+        "standalone": 0
+    },
+    {
+        "id": 23,
+        "kode_fakultas": "06",
+        "kode_prodi": "47201",
+        "nama": null,
+        "id_m_prodi": 30,
+        "standalone": 0
+    },
+    {
+        "id": 24,
+        "kode_fakultas": "06",
+        "kode_prodi": "48201",
+        "nama": null,
+        "id_m_prodi": 33,
+        "standalone": 0
+    },
+    {
+        "id": 25,
+        "kode_fakultas": "06",
+        "kode_prodi": "55201",
+        "nama": null,
+        "id_m_prodi": 32,
+        "standalone": 0
+    },
+    {
+        "id": 26,
+        "kode_fakultas": "07",
+        "kode_prodi": "61001",
+        "nama": null,
+        "id_m_prodi": 58,
+        "standalone": 0
+    },
+    {
+        "id": 27,
+        "kode_fakultas": "07",
+        "kode_prodi": "61101",
+        "nama": null,
+        "id_m_prodi": 54,
+        "standalone": 0
+    },
+    {
+        "id": 28,
+        "kode_fakultas": "07",
+        "kode_prodi": "61105",
+        "nama": null,
+        "id_m_prodi": 59,
+        "standalone": 0
+    },
+    {
+        "id": 29,
+        "kode_fakultas": "07",
+        "kode_prodi": "74101",
+        "nama": null,
+        "id_m_prodi": 55,
+        "standalone": 0
+    },
+    {
+        "id": 30,
+        "kode_fakultas": "07",
+        "kode_prodi": "84101",
+        "nama": null,
+        "id_m_prodi": 56,
+        "standalone": 0
+    },
+    {
+        "id": 31,
+        "kode_fakultas": "07",
+        "kode_prodi": "86004",
+        "nama": null,
+        "id_m_prodi": 57,
+        "standalone": 0
+    },
+    {
+        "id": 32,
+        "kode_fakultas": "07",
+        "kode_prodi": "86104",
+        "nama": null,
+        "id_m_prodi": 53,
+        "standalone": 0
+    },
+    {
+        "id": 33,
+        "kode_fakultas": "07",
+        "kode_prodi": "86122",
+        "nama": null,
+        "id_m_prodi": 87,
+        "standalone": 0
+    },
+    {
+        "id": 34,
+        "kode_fakultas": "07",
+        "kode_prodi": "95102",
+        "nama": "PKLH",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 35,
+        "kode_fakultas": "07",
+        "kode_prodi": "95125",
+        "nama": null,
+        "id_m_prodi": 70,
+        "standalone": 0
+    },
+    {
+        "id": 36,
+        "kode_fakultas": "08",
+        "kode_prodi": "56401",
+        "nama": null,
+        "id_m_prodi": 34,
+        "standalone": 0
+    },
+    {
+        "id": 37,
+        "kode_fakultas": "08",
+        "kode_prodi": "57401",
+        "nama": null,
+        "id_m_prodi": 35,
+        "standalone": 0
+    },
+    {
+        "id": 38,
+        "kode_fakultas": "08",
+        "kode_prodi": "61403",
+        "nama": null,
+        "id_m_prodi": 14,
+        "standalone": 0
+    },
+    {
+        "id": 39,
+        "kode_fakultas": "08",
+        "kode_prodi": "61406",
+        "nama": null,
+        "id_m_prodi": 15,
+        "standalone": 0
+    },
+    {
+        "id": 40,
+        "kode_fakultas": "08",
+        "kode_prodi": "62401",
+        "nama": null,
+        "id_m_prodi": 13,
+        "standalone": 0
+    },
+    {
+        "id": 41,
+        "kode_fakultas": "U1",
+        "kode_prodi": null,
+        "nama": "BPSI",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 64,
+        "kode_fakultas": "U2",
+        "kode_prodi": null,
+        "nama": "SEKRETARIS UNIVERSITAS",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 65,
+        "kode_fakultas": "U3",
+        "kode_prodi": null,
+        "nama": "WAKIL REKTOR 1",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 66,
+        "kode_fakultas": "U4",
+        "kode_prodi": null,
+        "nama": "WAKIL REKTOR 2",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 67,
+        "kode_fakultas": "U5",
+        "kode_prodi": null,
+        "nama": "WAKIL REKTOR 3",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 68,
+        "kode_fakultas": "U6",
+        "kode_prodi": null,
+        "nama": "Kantor Pengembangan Karir dan\u00a0Tracer\u00a0Study",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 69,
+        "kode_fakultas": "U7",
+        "kode_prodi": null,
+        "nama": "LPM",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 70,
+        "kode_fakultas": "U8",
+        "kode_prodi": null,
+        "nama": "LPPM",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 71,
+        "kode_fakultas": "U9",
+        "kode_prodi": null,
+        "nama": "PERPUSTAKAAN PUSAT",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 72,
+        "kode_fakultas": "U10",
+        "kode_prodi": null,
+        "nama": "HUMAS DAN PROMOSI",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 73,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "PERPUSTAKAAN MIPA",
+        "id_m_prodi": 61,
+        "standalone": 0
+    },
+    {
+        "id": 74,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "DIVISI PENELITIAN DAN PENGABDIAN FMIPA",
+        "id_m_prodi": 62,
+        "standalone": 0
+    },
+    {
+        "id": 75,
+        "kode_fakultas": "U13",
+        "kode_prodi": null,
+        "nama": "UNPAK PRES",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 76,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "FKIP KKN",
+        "id_m_prodi": 65,
+        "standalone": 0
+    },
+    {
+        "id": 77,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "LABORATORIUM FKIP",
+        "id_m_prodi": 66,
+        "standalone": 0
+    },
+    {
+        "id": 78,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "FKIP E-JOURNAL",
+        "id_m_prodi": 68,
+        "standalone": 0
+    },
+    {
+        "id": 79,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "UPMF MIPA",
+        "id_m_prodi": 75,
+        "standalone": 0
+    },
+    {
+        "id": 80,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "Laboratorium FMIPA ",
+        "id_m_prodi": 76,
+        "standalone": 0
+    },
+    {
+        "id": 81,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "Laboratorium Service ",
+        "id_m_prodi": 77,
+        "standalone": 0
+    },
+    {
+        "id": 82,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "Apotek",
+        "id_m_prodi": 78,
+        "standalone": 0
+    },
+    {
+        "id": 83,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "Unit Pelayanan Kesehatan",
+        "id_m_prodi": 79,
+        "standalone": 0
+    },
+    {
+        "id": 84,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "Unit Publikasi dan jurnal",
+        "id_m_prodi": 80,
+        "standalone": 0
+    },
+    {
+        "id": 85,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": "Unit Comstract dan Data Sience Center",
+        "id_m_prodi": 81,
+        "standalone": 0
+    },
+    {
+        "id": 86,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "Perpustakaan FKIP",
+        "id_m_prodi": 82,
+        "standalone": 0
+    },
+    {
+        "id": 87,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "Bimbingan Konseling FKIP",
+        "id_m_prodi": 83,
+        "standalone": 0
+    },
+    {
+        "id": 88,
+        "kode_fakultas": "U26",
+        "kode_prodi": null,
+        "nama": "Pusat Inovasi",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 89,
+        "kode_fakultas": "U27",
+        "kode_prodi": null,
+        "nama": "Inkubator Bisnis",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 91,
+        "kode_fakultas": "01",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 94,
+        "kode_fakultas": "02",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 97,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 100,
+        "kode_fakultas": "04",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 103,
+        "kode_fakultas": "05",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 106,
+        "kode_fakultas": "06",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 109,
+        "kode_fakultas": "07",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 112,
+        "kode_fakultas": "08",
+        "kode_prodi": null,
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 1
+    },
+    {
+        "id": 113,
+        "kode_fakultas": "U155",
+        "kode_prodi": null,
+        "nama": "Kantor Kemitraan dan Hubungan Internasional",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 116,
+        "kode_fakultas": "U28",
+        "kode_prodi": null,
+        "nama": "BAUM",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 119,
+        "kode_fakultas": "U29",
+        "kode_prodi": null,
+        "nama": "BAAK",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 121,
+        "kode_fakultas": "08",
+        "kode_prodi": "56209",
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 122,
+        "kode_fakultas": "U28",
+        "kode_prodi": null,
+        "nama": "WAKIL REKTOR 4",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 125,
+        "kode_fakultas": "U29",
+        "kode_prodi": null,
+        "nama": "Kemitraan",
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 126,
+        "kode_fakultas": "07",
+        "kode_prodi": "55101",
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 127,
+        "kode_fakultas": "06",
+        "kode_prodi": "48901",
+        "nama": null,
+        "id_m_prodi": null,
+        "standalone": 0
+    },
+    {
+        "id": 128,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "LABORATORIUM SENI",
+        "id_m_prodi": 66,
+        "standalone": 0
+    },
+    {
+        "id": 129,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "LABORATORIUM BAHASA INGGRIS",
+        "id_m_prodi": 66,
+        "standalone": 0
+    },
+    {
+        "id": 130,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "LABORATORIUM MICROTEACHING",
+        "id_m_prodi": 66,
+        "standalone": 0
+    },
+    {
+        "id": 131,
+        "kode_fakultas": "03",
+        "kode_prodi": null,
+        "nama": "LABORATORIUM KOMPUTER",
+        "id_m_prodi": 66,
+        "standalone": 0
+    }
+]
