@@ -42,6 +42,15 @@ export default function Reporting() {
                 <div className="flex items-center justify-center min-h-[300px]">
                     <span className="material-symbols-outlined animate-spin text-[#005bb1] text-3xl">progress_activity</span>
                 </div>
+            ) : !summary?.is_assigned ? (
+                <div className="bg-white border border-[#c0c6d6]/20 rounded-2xl p-12 text-center text-[#535f71] space-y-4 max-w-2xl mx-auto shadow-sm">
+                    <span className="material-symbols-outlined text-[#005bb1] text-6xl">info</span>
+                    <h3 className="text-base font-extrabold text-[#181c23] uppercase tracking-wider">Belum Ada Penugasan Target</h3>
+                    <p className="text-xs text-[#717785] leading-relaxed">
+                        Unit Anda belum ditugaskan untuk pelaporan target IKU pada tahun {tahun} ini oleh Administrator. 
+                        Silakan hubungi pihak admin untuk mendapatkan penugasan target terlebih dahulu.
+                    </p>
+                </div>
             ) : (
                 <div className="space-y-8">
                     {/* Annual progress banner */}

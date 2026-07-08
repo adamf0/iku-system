@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Illuminate\Support\Facades\DB;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -29,10 +30,17 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $namaUnit = null;
+        if ($user) {
+            $unit = DB::table('v_fakultas_unit')->where('id', $user->fakultas_unit)->first();
+            $namaUnit = $unit ? $unit->nama_fak_prod_unit : null;
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user ? array_merge($user->toArray(), ['nama_unit' => $namaUnit]) : null,
             ],
         ];
     }

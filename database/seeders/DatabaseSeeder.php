@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,49 +16,77 @@ class DatabaseSeeder extends Seeder
         // 1. Reset all tables
         DB::table('log_aktivitas')->truncate();
         DB::table('template_capaian')->truncate();
+        DB::table('penugasan_target')->truncate();
+        DB::table('master_tahun')->truncate();
         DB::table('master_indikator')->truncate();
         DB::table('master_konteks')->truncate();
         DB::table('users')->truncate();
-        DB::table('units')->truncate();
+        DB::table('sijamu_fakultas_unit')->truncate();
+        DB::table('m_program_studi')->truncate();
+        DB::table('m_fakultas')->truncate();
 
-        // ---------- A. SEED UNITS ----------
-        $units = [
-            ['kode_unit' => 'UNPAK', 'nama_unit' => 'Universitas Pakuan (Institusi)', 'jenjang' => 'INSTITUSI', 'unit_induk' => null],
-            ['kode_unit' => 'LPM', 'nama_unit' => 'Lembaga Penjaminan Mutu', 'jenjang' => 'LEMBAGA', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'LPPM', 'nama_unit' => 'Lembaga Penelitian & Pengabdian Masyarakat', 'jenjang' => 'LEMBAGA', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'BAAK', 'nama_unit' => 'Biro Administrasi Akademik & Kemahasiswaan', 'jenjang' => 'UNIT_KERJA', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'BKAU', 'nama_unit' => 'Biro Keuangan & Aset Universitas', 'jenjang' => 'UNIT_KERJA', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'FT', 'nama_unit' => 'Fakultas Teknik', 'jenjang' => 'FAKULTAS', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'FT-TI', 'nama_unit' => 'Program Studi Teknik Informatika', 'jenjang' => 'PRODI', 'unit_induk' => 'FT'],
-            ['slide_show_unit' => 'FT-TS', 'nama_unit' => 'Program Studi Teknik Sipil', 'jenjang' => 'PRODI', 'unit_induk' => 'FT'],
-            ['kode_unit' => 'FT-TE', 'nama_unit' => 'Program Studi Teknik Elektro', 'jenjang' => 'PRODI', 'unit_induk' => 'FT'],
-            ['kode_unit' => 'FEB', 'nama_unit' => 'Fakultas Ekonomi dan Bisnis', 'jenjang' => 'FAKULTAS', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'FEB-MNJ', 'nama_unit' => 'Program Studi Manajemen', 'jenjang' => 'PRODI', 'unit_induk' => 'FEB'],
-            ['kode_unit' => 'FEB-AKT', 'nama_unit' => 'Program Studi Akuntansi', 'jenjang' => 'PRODI', 'unit_induk' => 'FEB'],
-            ['kode_unit' => 'FMIPA', 'nama_unit' => 'Fakultas Matematika dan Ilmu Pengetahuan Alam', 'jenjang' => 'FAKULTAS', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'FMIPA-BIO', 'nama_unit' => 'Program Studi Biologi', 'jenjang' => 'PRODI', 'unit_induk' => 'FMIPA'],
-            ['kode_unit' => 'FMIPA-MTK', 'nama_unit' => 'Program Studi Matematika', 'jenjang' => 'PRODI', 'unit_induk' => 'FMIPA'],
-            ['kode_unit' => 'PASCA', 'nama_unit' => 'Sekolah Pascasarjana', 'jenjang' => 'FAKULTAS', 'unit_induk' => 'UNPAK'],
-            ['kode_unit' => 'PASCA-MM', 'nama_unit' => 'Program Studi Magister Manajemen', 'jenjang' => 'PRODI', 'unit_induk' => 'PASCA']
-        ];
-        foreach ($units as $u) {
-            unset($u['slide_show_unit']);
-            if ($u['nama_unit'] === 'Program Studi Teknik Sipil') {
-                $u['kode_unit'] = 'FT-TS';
-            }
-            DB::table('units')->insert(array_merge($u, [
+        // ---------- A. SEED BASE TABLES FROM JSON DUMPS ----------
+        
+        // 1. m_fakultas
+        $fakJson = base_path('scraped_m_fakultas.json');
+        if (!file_exists($fakJson)) {
+            throw new \Exception("scraped_m_fakultas.json not found in base path!");
+        }
+        $fakData = json_decode(file_get_contents($fakJson), true);
+        foreach ($fakData as $f) {
+            DB::table('m_fakultas')->insert([
+                'kode_fakultas' => $f['kode_fakultas'],
+                'kode_pt' => $f['kode_pt'],
+                'nama_fakultas' => $f['nama_fakultas'],
                 'created_at' => now(),
                 'updated_at' => now()
-            ]));
+            ]);
+        }
+
+        // 2. m_program_studi
+        $prodJson = base_path('scraped_m_program_studi.json');
+        if (!file_exists($prodJson)) {
+            throw new \Exception("scraped_m_program_studi.json not found in base path!");
+        }
+        $prodData = json_decode(file_get_contents($prodJson), true);
+        foreach ($prodData as $p) {
+            DB::table('m_program_studi')->insert([
+                'kode_prodi' => $p['kode_prodi'],
+                'kode_pt' => $p['kode_pt'],
+                'kode_fak' => $p['kode_fak'],
+                'kode_jenjang' => $p['kode_jenjang'],
+                'kode_jurusan' => $p['kode_jurusan'],
+                'nama_prodi' => $p['nama_prodi'],
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        }
+
+        // 3. sijamu_fakultas_unit
+        $sfuJson = base_path('scraped_sijamu_fakultas_unit.json');
+        if (!file_exists($sfuJson)) {
+            throw new \Exception("scraped_sijamu_fakultas_unit.json not found in base path!");
+        }
+        $sfuData = json_decode(file_get_contents($sfuJson), true);
+        foreach ($sfuData as $s) {
+            DB::table('sijamu_fakultas_unit')->insert([
+                'id' => $s['id'],
+                'kode_fakultas' => $s['kode_fakultas'],
+                'kode_prodi' => $s['kode_prodi'],
+                'nama' => $s['nama'],
+                'id_m_prodi' => $s['id_m_prodi'],
+                'standalone' => $s['standalone'],
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
         }
 
         // ---------- B. SEED USERS ----------
         $users = [
-            ['username' => 'admin', 'password' => Hash::make('admin123'), 'name' => 'Administrator Sistem', 'role' => 'ADMIN', 'kode_unit' => 'UNPAK', 'email' => 'admin@unpak.ac.id'],
-            ['username' => 'lpm', 'password' => Hash::make('lpm123'), 'name' => 'Kepala Lembaga Penjaminan Mutu', 'role' => 'LPM', 'kode_unit' => 'LPM', 'email' => 'lpm@unpak.ac.id'],
-            ['username' => 'fakultas_ft', 'password' => Hash::make('fakultas123'), 'name' => 'Wakil Dekan I - Fakultas Teknik', 'role' => 'FAKULTAS', 'kode_unit' => 'FT', 'email' => 'wadek1.ft@unpak.ac.id'],
-            ['username' => 'prodi_ti', 'password' => Hash::make('prodi123'), 'name' => 'Ketua Program Studi Teknik Informatika', 'role' => 'PRODI', 'kode_unit' => 'FT-TI', 'email' => 'kaprodi.ti@unpak.ac.id'],
-            ['username' => 'prodi_ts', 'password' => Hash::make('prodi123'), 'name' => 'Ketua Program Studi Teknik Sipil', 'role' => 'PRODI', 'kode_unit' => 'FT-TS', 'email' => 'kaprodi.ts@unpak.ac.id']
+            // admin: fakultas_unit = 64 (Sekretaris Universitas)
+            ['username' => 'admin', 'password' => Hash::make('123'), 'name' => 'Administrator Sistem', 'role' => 'ADMIN', 'fakultas_unit' => 64, 'email' => 'admin@unpak.ac.id'],
+            // lpm: fakultas_unit = 69 (LPM)
+            ['username' => 'lpm', 'password' => Hash::make('123'), 'name' => 'Kepala Lembaga Penjaminan Mutu', 'role' => 'LPM', 'fakultas_unit' => 69, 'email' => 'lpm@unpak.ac.id'],
         ];
         foreach ($users as $us) {
             DB::table('users')->insert(array_merge($us, [
@@ -68,7 +95,61 @@ class DatabaseSeeder extends Seeder
             ]));
         }
 
-        // ---------- C. SEED MASTER KONTEKS & INDIKATOR ----------
+        // Create accounts for all v_fakultas_unit records dynamically
+        $createdUsernames = ['admin' => true, 'lpm' => true];
+        $unitsDb = DB::table('v_fakultas_unit')->get();
+        foreach ($unitsDb as $u) {
+            $role = strtoupper($u->type); // 'FAKULTAS', 'PRODI', or 'UNIT'
+
+            // Exclude already created static unit IDs (admin / lpm)
+            if (in_array($u->id, [64, 69])) {
+                continue;
+            }
+
+            // Generate clean name
+            $cleanName = preg_replace('/[^a-zA-Z0-9]/', ' ', strtolower($u->nama_fak_prod_unit));
+            $cleanName = preg_replace('/\s+/', '_', trim($cleanName));
+            $cleanName = trim($cleanName, '_');
+            
+            if (empty($cleanName)) {
+                $cleanName = 'user_' . $u->id;
+            }
+
+            // Apply prefix and suffix formatting based on type
+            if ($u->type === 'fakultas') {
+                $cleanName = 'f_' . $cleanName;
+            } elseif ($u->type === 'prodi') {
+                $jenjangSuffix = strtolower($u->jenjang);
+                $cleanName = 'p_' . $cleanName . ($jenjangSuffix ? '_' . $jenjangSuffix : '');
+            }
+
+            $baseName = $cleanName;
+            $counter = 2;
+            while (isset($createdUsernames[$cleanName])) {
+                $cleanName = $baseName . '_' . $counter;
+                $counter++;
+            }
+            $createdUsernames[$cleanName] = true;
+
+            DB::table('users')->insertOrIgnore([
+                'username' => $cleanName,
+                'password' => Hash::make('123'),
+                'name' => $u->nama_fak_prod_unit,
+                'role' => $role,
+                'fakultas_unit' => $u->id,
+                'email' => $cleanName . '@unpak.ac.id',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        }
+
+        // ---------- C. SEED MASTER TAHUN ----------
+        DB::table('master_tahun')->insert([
+            ['tahun' => 2026, 'created_at' => now(), 'updated_at' => now()],
+            ['tahun' => 2027, 'created_at' => now(), 'updated_at' => now()]
+        ]);
+
+        // ---------- D. SEED MASTER KONTEKS & INDIKATOR ----------
         $jsonPath = base_path('scraped_master_indicators.json');
         if (!file_exists($jsonPath)) {
             throw new \Exception("scraped_master_indicators.json not found in base path!");
@@ -100,13 +181,18 @@ class DatabaseSeeder extends Seeder
             $baseline = str_replace(',', '.', $ind['baseline']);
             $target = str_replace(',', '.', $ind['target']);
 
-            // Image 2 format for full_kategori:
-            // If parent_iku is defined, e.g. parent_iku = "IKU 1", kategori = "a. D1*", full_kategori = "IKU 1 - a. D1*"
-            // Otherwise, it is "[iku] - [kategori]"
             if ($ind['parent_iku'] !== null) {
                 $fullKategori = $ind['parent_iku'] . ' - ' . $ind['kategori'];
             } else {
                 $fullKategori = $ind['iku'] . ' - ' . $ind['kategori'];
+            }
+
+            $formula = "Tingkat Pencapaian " . $ind['iku'] . " = (Realisasi / Target) * 100%";
+            $sumber = "Data akademik PDDikti / SIAKAD / Dokumen pendukung prodi";
+
+            if (strpos($ind['iku'], 'IKU 1') !== false) {
+                $formula = "Tingkat Pencapaian AEE(i) = (AEE Realisasi / AEE Ideal) x 100% | AEE PT = SUM(Tingkat Pencapaian i) / n";
+                $sumber = "Data mahasiswa masuk & lulus per program studi (PDDikti/SIAKAD)";
             }
 
             $indId = DB::table('master_indikator')->insertGetId([
@@ -118,6 +204,8 @@ class DatabaseSeeder extends Seeder
                 'satuan' => $ind['satuan'],
                 'base_line' => $baseline,
                 'target' => $target,
+                'formula_text' => $formula,
+                'sumber_data' => $sumber,
                 'target_d3' => ($ind['iku'] === 'IKU 1 - c') ? '90' : null,
                 'target_d4' => ($ind['iku'] === 'IKU 1 - d') ? '12' : null,
                 'target_s1' => ($ind['iku'] === 'IKU 1 - e') ? '90' : null,
@@ -134,20 +222,42 @@ class DatabaseSeeder extends Seeder
             $indicatorCodeToIdMap[$ind['iku']] = $indId;
         }
 
-        // ---------- D. SEED TEMPLATE CAPAIAN ----------
-        $unitProdi = ['FT-TI', 'FT-TS'];
-        $triwulanList = ['Q1', 'Q2', 'Q3', 'Q4'];
+        // ---------- E. SEED PENUGASAN TARGET & TEMPLATE CAPAIAN ----------
+        $unitProdiIds = [25, 17];
+        $triwulanList = ['TW1', 'TW2', 'TW3', 'TW4'];
         $statusByTw = [
-            'Q1' => 'DISAHKAN',
-            'Q2' => 'DISAHKAN',
-            'Q3' => 'DIVERIFIKASI',
-            'Q4' => 'DRAFT'
+            'TW1' => 'DISAHKAN',
+            'TW2' => 'DISAHKAN',
+            'TW3' => 'DIVERIFIKASI',
+            'TW4' => 'DRAFT'
         ];
 
         $topIndicators = DB::table('master_indikator')->whereNull('id_sub')->get();
         
-        foreach ($unitProdi as $unit) {
+        foreach ($unitProdiIds as $unitId) {
             foreach ($topIndicators as $ind) {
+                // 1. Assign this indicator to the unit
+                DB::table('penugasan_target')->insert([
+                    'fakultas_unit' => $unitId,
+                    'id_indikator' => $ind->id,
+                    'tahun' => 2026,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                // 2. Also assign its child indicators (if any)
+                $childs = DB::table('master_indikator')->where('id_sub', $ind->id)->get();
+                foreach ($childs as $child) {
+                    DB::table('penugasan_target')->insert([
+                        'fakultas_unit' => $unitId,
+                        'id_indikator' => $child->id,
+                        'tahun' => 2026,
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ]);
+                }
+
+                // 3. Seed demo CAPAIAN transactions
                 $targetVal = (float)$ind->target ?: 50.0;
                 $penyebut = 100 + rand(0, 50);
 
@@ -157,7 +267,7 @@ class DatabaseSeeder extends Seeder
 
                     DB::table('template_capaian')->insert([
                         'id_indikator' => $ind->id,
-                        'kode_unit' => $unit,
+                        'fakultas_unit' => $unitId,
                         'tahun' => 2026,
                         'triwulan' => $tw,
                         'pembilang' => $pembilang,

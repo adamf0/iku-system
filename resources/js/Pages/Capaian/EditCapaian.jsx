@@ -1,136 +1,185 @@
 import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage } from '@inertiajs/react';
+import axios from 'axios';
 
 export default function EditCapaian() {
     const user = usePage().props.auth.user;
 
-    const [triwulan, setTriwulan] = useState('Q1');
-    const [tahun, setTahun] = useState(2026);
-    const [contexts, setContexts] = useState([]);
+    // List states
+    const [units, setUnits] = useState([]);
+    const [years, setYears] = useState([{ tahun: 2026 }]);
     const [indicators, setIndicators] = useState([]);
     const [capaianList, setCapaianList] = useState([]);
-    const [expandedFamily, setExpandedFamily] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [streaming, setStreaming] = useState(false);
 
-    // Form inputs for current active parent indicator (being edited/saved)
+    // Form inputs
+    const [selectedUnitId, setSelectedUnitId] = useState(user.fakultas_unit || '');
+    const [selectedIkuId, setSelectedIkuId] = useState('');
+    const [tahun, setTahun] = useState(2026);
+    const [triwulan, setTriwulan] = useState('TW1');
     const [pembilang, setPembilang] = useState('');
     const [penyebut, setPenyebut] = useState('1');
+    const [targetCapaian, setTargetCapaian] = useState('');
     const [catatan, setCatatan] = useState('');
     const [fileUrl, setFileUrl] = useState('');
-    const [subValues, setSubValues] = useState({});
 
-    // Active indicator being edited inside the expanded family
-    const [activeEditId, setActiveEditId] = useState(null);
+    // Table filters
+    const [filterIku, setFilterIku] = useState('');
 
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tw = urlParams.get('triwulan') || 'Q1';
-        setTriwulan(tw);
+        // Fetch metadata
+        Promise.all([
+            fetch('/api/master/units').then(res => res.json()),
+            fetch('/api/master/tahun').then(res => res.json())
+        ])
+        .then(([unitsData, yearsData]) => {
+            setUnits(unitsData);
+            if (yearsData.length > 0) {
+                setYears(yearsData);
+                setTahun(yearsData[0].tahun);
+            }
+            if (!selectedUnitId && unitsData.length > 0) {
+                setSelectedUnitId(unitsData[0].id);
+            }
+        })
+        .catch(err => console.error(err));
     }, []);
 
+    // Load indicators when unit or year changes on the form
     useEffect(() => {
-        loadData();
-    }, [triwulan, tahun]);
+        if (selectedUnitId && tahun) {
+            fetchIndicators(selectedUnitId, tahun);
+        }
+    }, [selectedUnitId, tahun]);
 
-    const loadData = () => {
+    // Load streamed data table whenever unit, tahun, triwulan, or table filter changes
+    useEffect(() => {
+        if (selectedUnitId) {
+            loadStreamedCapaian();
+        }
+    }, [selectedUnitId, tahun, triwulan, filterIku]);
+
+    const fetchIndicators = (unitId, yearVal) => {
         setLoading(true);
-        Promise.all([
-            fetch('/api/master/contexts').then(res => res.json()),
-            fetch('/api/master/iku').then(res => res.json()),
-            fetch(`/api/capaian?tahun=${tahun}&triwulan=${triwulan}`).then(res => res.json())
-        ])
-        .then(([ctxData, ikuData, capData]) => {
-            setContexts(ctxData);
-            setIndicators(ikuData);
-            setCapaianList(capData);
-            setLoading(false);
-        })
-        .catch(err => {
-            console.error(err);
-            setLoading(false);
+        fetch(`/api/master/iku/assigned?unit=${unitId}&tahun=${yearVal}`)
+            .then(res => res.json())
+            .then(data => {
+                setIndicators(data);
+                if (data.length > 0) {
+                    setSelectedIkuId(data[0].id);
+                    loadExistingRecord(data[0].id, capaianList, data);
+                } else {
+                    setSelectedIkuId('');
+                    resetFormFields();
+                }
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setLoading(false);
+            });
+    };
+
+    const loadStreamedCapaian = () => {
+        setStreaming(true);
+        setCapaianList([]);
+
+        const params = new URLSearchParams();
+        params.append('unit', selectedUnitId);
+        params.append('tahun', tahun);
+        params.append('triwulan', triwulan);
+        if (filterIku) params.append('iku', filterIku);
+
+        const source = new EventSource(`/api/capaian/stream?${params.toString()}`);
+        let tempRows = [];
+
+        source.addEventListener('row', (event) => {
+            const row = JSON.parse(event.data);
+            tempRows.push(row);
+            setCapaianList([...tempRows]);
+            
+            // If the row matches the currently selected IKU, pre-load form inputs
+            if (originalSelectedIkuIdRef.current && Number(row.id_indikator) === Number(originalSelectedIkuIdRef.current)) {
+                setPembilang(row.pembilang);
+                setPenyebut(row.penyebut);
+                setCatatan(row.catatan || '');
+                setFileUrl(row.file_url || '');
+            }
         });
-    };
 
-    const getCapaian = (idIndikator) => {
-        return capaianList.find(c => c.id_indikator === idIndikator);
-    };
+        source.addEventListener('end', () => {
+            source.close();
+            setStreaming(false);
+        });
 
-    // Helper: extract base family key (e.g. IKU 1, IKU 7, IKU 9)
-    const getIkuFamily = (ikuObj) => {
-        const text = ikuObj.iku || '';
-        const match = text.match(/(IKU\s+\d+)/i);
-        if (match) {
-            return match[1].toUpperCase();
-        }
-        if (ikuObj.kategori && ikuObj.kategori.toLowerCase().includes('publikasi bereputasi')) {
-            return 'IKU 6';
-        }
-        return 'IKU LAINNYA';
-    };
-
-    const getFamilyLabel = (family) => {
-        const labels = {
-            'IKU 1': 'Kualitas Lulusan (Talenta / AEE PT)',
-            'IKU 2': 'Lulusan Berkegiatan di Luar Kampus',
-            'IKU 3': 'Mahasiswa Berprestasi di Luar Kampus',
-            'IKU 4': 'Kualitas Dosen (Rekognisi & S3)',
-            'IKU 5': 'Penerapan Riset & Kerjasama Start-up',
-            'IKU 6': 'Publikasi Reputasi Internasional',
-            'IKU 7': 'Keterlibatan PT dalam SDGs & World Ranking',
-            'IKU 8': 'SDM PT Terlibat dalam Kebijakan',
-            'IKU 9': 'Tata Kelola Non-UKT & Alokasi Riset/Lab',
-            'IKU 10': 'Zona Integritas (WBK/WBBM)',
-            'IKU 11': 'Akuntabilitas & Anti Kekerasan/Korupsi',
-            'IKU 12': 'Kesejahteraan Dosen'
+        source.onerror = () => {
+            source.close();
+            setStreaming(false);
         };
-        return labels[family] || family;
     };
 
-    const handleStartEdit = (iku) => {
-        setActiveEditId(iku.id);
-        const currentCap = getCapaian(iku.id);
-        if (currentCap) {
-            setPembilang(currentCap.pembilang || '0');
-            setPenyebut(currentCap.penyebut || '1');
-            setCatatan(currentCap.catatan || '');
-            setFileUrl(currentCap.file_url || '');
+    // Ref container to access selected Iku in EventSource callback without stale closures
+    const originalSelectedIkuIdRef = React.useRef(selectedIkuId);
+    useEffect(() => {
+        originalSelectedIkuIdRef.current = selectedIkuId;
+    }, [selectedIkuId]);
+
+    const loadExistingRecord = (ikuId, capList, ikuList) => {
+        const found = capList.find(c => Number(c.id_indikator) === Number(ikuId));
+        const activeIku = ikuList.find(i => Number(i.id) === Number(ikuId));
+
+        if (found) {
+            setPembilang(found.pembilang);
+            setPenyebut(found.penyebut);
+            setCatatan(found.catatan || '');
+            setFileUrl(found.file_url || '');
+            setTargetCapaian(activeIku ? activeIku.target : '');
         } else {
             setPembilang('');
             setPenyebut('1');
             setCatatan('');
             setFileUrl('');
+            setTargetCapaian(activeIku ? activeIku.target : '');
+        }
+    };
+
+    const resetFormFields = () => {
+        setPembilang('');
+        setPenyebut('1');
+        setCatatan('');
+        setFileUrl('');
+        setTargetCapaian('');
+    };
+
+    const handleIkuChange = (e) => {
+        const id = e.target.value;
+        setSelectedIkuId(id);
+        loadExistingRecord(id, capaianList, indicators);
+    };
+
+    const handleEditFromTable = (item) => {
+        setSelectedIkuId(item.id_indikator);
+        setPembilang(item.pembilang);
+        setPenyebut(item.penyebut);
+        setCatatan(item.catatan || '');
+        setFileUrl(item.file_url || '');
+        
+        const actIku = indicators.find(i => Number(i.id) === Number(item.id_indikator));
+        setTargetCapaian(actIku ? actIku.target : '');
+    };
+
+    const handleSave = (e) => {
+        e.preventDefault();
+        if (!selectedIkuId) {
+            alert('Silakan pilih Indikator Kinerja Utama terlebih dahulu.');
+            return;
         }
 
-        // Initialize child values
-        const initialSubs = {};
-        const subInds = indicators.filter(i => i.id_sub === iku.id);
-        subInds.forEach(sub => {
-            const subCap = getCapaian(sub.id);
-            initialSubs[sub.id] = {
-                pembilang: subCap ? subCap.pembilang : '0',
-                penyebut: subCap ? subCap.penyebut : '1',
-                catatan: subCap ? subCap.catatan : '',
-                file_url: subCap ? subCap.file_url : ''
-            };
-        });
-        setSubValues(initialSubs);
-    };
-
-    const handleSubInputChange = (subId, field, value) => {
-        setSubValues(prev => ({
-            ...prev,
-            [subId]: {
-                ...prev[subId],
-                [field]: value
-            }
-        }));
-    };
-
-    const handleSave = (idIndikator) => {
         const payload = {
-            id_indikator: idIndikator,
-            kode_unit: user.kode_unit,
+            id_indikator: selectedIkuId,
+            fakultas_unit: selectedUnitId,
             tahun: tahun,
             triwulan: triwulan,
             pembilang: pembilang || '0',
@@ -139,49 +188,14 @@ export default function EditCapaian() {
             file_url: fileUrl
         };
 
-        fetch('/api/capaian', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                alert(data.error);
+        axios.post('/api/capaian', payload)
+        .then(res => {
+            if (res.data.error) {
+                alert(res.data.error);
                 return;
             }
-
-            const subInds = indicators.filter(i => i.id_sub === idIndikator);
-            const subPromises = subInds.map(sub => {
-                const vals = subValues[sub.id] || { pembilang: '0', penyebut: '1', catatan: '', file_url: '' };
-                return fetch('/api/capaian', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-                    },
-                    body: JSON.stringify({
-                        id_indikator: sub.id,
-                        kode_unit: user.kode_unit,
-                        tahun: tahun,
-                        triwulan: triwulan,
-                        pembilang: vals.pembilang || '0',
-                        penyebut: vals.penyebut || '1',
-                        catatan: vals.catatan,
-                        file_url: vals.file_url
-                    })
-                });
-            });
-
-            return Promise.all(subPromises);
-        })
-        .then(() => {
-            alert('Capaian berhasil disimpan!');
-            loadData();
-            setActiveEditId(null);
+            alert('Capaian berhasil disimpan sebagai Draft!');
+            loadStreamedCapaian();
         })
         .catch(err => {
             console.error(err);
@@ -189,42 +203,42 @@ export default function EditCapaian() {
         });
     };
 
-    // Grouping indicators by base family
-    const familyGroups = {};
-    const familyNames = [
-        'IKU 1', 'IKU 2', 'IKU 3', 'IKU 4', 'IKU 5', 'IKU 6',
-        'IKU 7', 'IKU 8', 'IKU 9', 'IKU 10', 'IKU 11', 'IKU 12'
-    ];
-    
-    familyNames.forEach(name => {
-        familyGroups[name] = [];
-    });
-
-    indicators.forEach(ind => {
-        const family = getIkuFamily(ind);
-        if (familyGroups[family]) {
-            familyGroups[family].push(ind);
-        } else {
-            if (!familyGroups['IKU LAINNYA']) {
-                familyGroups['IKU LAINNYA'] = [];
-            }
-            familyGroups['IKU LAINNYA'].push(ind);
+    const handleSubmitForVerification = (id) => {
+        if (!confirm('Apakah Anda yakin ingin mengajukan capaian ini untuk verifikasi? Setelah diajukan data tidak dapat diedit.')) {
+            return;
         }
-    });
 
-    const getStatusColor = (status) => {
+        axios.post(`/api/capaian/${id}/submit`)
+        .then(() => {
+            alert('Capaian berhasil diajukan!');
+            loadStreamedCapaian();
+        })
+        .catch(err => console.error(err));
+    };
+
+    // Calculate dynamic estimation
+    const numPembilang = Number(pembilang) || 0;
+    const numPenyebut = Number(penyebut) || 1;
+    const estimasiCapaian = numPenyebut !== 0 
+        ? ((numPembilang / numPenyebut) * 100).toFixed(2) + '%'
+        : '0.00%';
+
+    const selectedIku = indicators.find(i => Number(i.id) === Number(selectedIkuId));
+
+    const getStatusBadgeColor = (status) => {
         switch (status) {
             case 'DISAHKAN': return 'bg-green-100 text-green-700';
             case 'DIVERIFIKASI': return 'bg-blue-100 text-blue-700';
             case 'DIAJUKAN': return 'bg-orange-100 text-orange-700';
             case 'DRAFT': return 'bg-[#d6e3ff] text-[#00468a]';
+            case 'DITOLAK': return 'bg-red-100 text-red-700';
             default: return 'bg-gray-100 text-gray-500';
         }
     };
 
     return (
-        <AuthenticatedLayout pageTitle={`Isi Capaian Kinerja - Triwulan ${triwulan}`}>
-            <Head title={`Isi Capaian ${triwulan}`} />
+        <AuthenticatedLayout pageTitle={`Isi Capaian Kinerja`}>
+            <Head title={`Isi Capaian Kinerja - IKU Portal`} />
 
             <div className="absolute right-8 top-3 flex items-center gap-3 z-50">
                 <Link href={route('reporting')} className="bg-[#005bb1] text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-[#0073dd] transition-all uppercase tracking-wider">
@@ -232,237 +246,258 @@ export default function EditCapaian() {
                 </Link>
             </div>
 
-            {/* Reporting Unit (Unit Pelaporan) automatically bound */}
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-[#c0c6d6]/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <div>
-                    <span className="text-[10px] font-bold text-[#717785] uppercase tracking-wider block">UNIT PELAPORAN</span>
-                    <span className="text-sm font-bold text-[#181c23]">{user.kode_unit} - {user.name}</span>
-                </div>
-                <div>
-                    <span className="text-[10px] font-bold text-[#717785] uppercase tracking-wider block text-left sm:text-right">ROLE AKSES</span>
-                    <span className="text-xs font-bold text-[#005bb1] bg-[#005bb1]/10 px-3 py-1 rounded-full block mt-1">{user.role}</span>
-                </div>
-            </div>
+            <div className="space-y-8">
+                {/* Form Input Card */}
+                <div className="bg-white rounded-2xl border border-[#c0c6d6]/20 shadow-sm overflow-hidden">
+                    <div className="px-8 py-5 bg-[#ebedf8]/40 border-b border-[#c0c6d6]/20">
+                        <h2 className="text-sm font-extrabold text-[#005bb1] uppercase tracking-wider">Form Input Capaian IKU Triwulanan</h2>
+                    </div>
 
-            {loading ? (
-                <div className="flex items-center justify-center min-h-[300px]">
-                    <span className="material-symbols-outlined animate-spin text-[#005bb1] text-3xl">progress_activity</span>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    {Object.keys(familyGroups).map(family => {
-                        const familyIkus = familyGroups[family];
-                        if (familyIkus.length === 0) return null;
-
-                        // Only get top-level indicators for this family inside accordion header list
-                        const topLevelFamilyIkus = familyIkus.filter(i => !i.id_sub);
-                        const isExpanded = expandedFamily === family;
-
-                        return (
-                            <div key={family} className="bg-white rounded-xl shadow-sm border border-[#c0c6d6]/20 overflow-hidden hover:border-[#005bb1]/30 transition-all">
-                                {/* Accordion Header (Domain IKU) */}
-                                <div 
-                                    onClick={() => setExpandedFamily(isExpanded ? null : family)}
-                                    className="flex items-center justify-between p-6 cursor-pointer bg-[#f9f9ff]/70 border-b border-[#c0c6d6]/10"
+                    <form onSubmit={handleSave} className="p-8 space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Unit Pelapor */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Unit Pelapor</label>
+                                <select 
+                                    value={selectedUnitId}
+                                    onChange={(e) => setSelectedUnitId(e.target.value)}
+                                    disabled={user.role !== 'ADMIN'}
+                                    className="w-full bg-[#f9f9ff] border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1] disabled:opacity-75 disabled:cursor-not-allowed"
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-[#005bb1]/10 text-[#005bb1] flex items-center justify-center flex-shrink-0 font-bold text-sm">
-                                            {family.replace('IKU ', '')}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-bold text-[#181c23]">{family}</h4>
-                                            <p className="text-[11px] text-[#717785] font-semibold mt-0.5">{getFamilyLabel(family)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-[10px] bg-[#f1f3fe] text-[#535f71] font-bold px-3 py-1 rounded-full">
-                                            {topLevelFamilyIkus.length} Indikator
-                                        </span>
-                                        <span className={`material-symbols-outlined text-[#717785] transition-transform ${isExpanded ? 'rotate-180 text-[#005bb1]' : ''}`}>
-                                            expand_more
-                                        </span>
-                                    </div>
-                                </div>
+                                    {units.map(u => (
+                                        <option key={u.id} value={u.id}>
+                                            {u.nama_fak_prod_unit} ({u.type.toUpperCase()})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
-                                {/* Accordion Body */}
-                                {isExpanded && (
-                                    <div className="p-6 bg-white divide-y divide-[#c0c6d6]/10 space-y-6">
-                                        {topLevelFamilyIkus.map(iku => {
-                                            const subInds = familyIkus.filter(i => i.id_sub === iku.id);
-                                            const currentCap = getCapaian(iku.id);
-                                            const isEditing = activeEditId === iku.id;
+                            {/* IKU */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Indikator Kinerja Utama (IKU)</label>
+                                <select 
+                                    value={selectedIkuId}
+                                    onChange={handleIkuChange}
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                    required
+                                >
+                                    {indicators.length === 0 ? (
+                                        <option value="">-- Belum ada penugasan IKU --</option>
+                                    ) : (
+                                        indicators.map(i => (
+                                            <option key={i.id} value={i.id}>
+                                                {i.full_kategori}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                            </div>
 
-                                            const realization = pembilang && penyebut && Number(penyebut) !== 0 
-                                                ? ((Number(pembilang) / Number(penyebut)) * 100).toFixed(2)
-                                                : '0.00';
+                            {/* Tahun */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Tahun</label>
+                                <select 
+                                    value={tahun}
+                                    onChange={(e) => setTahun(Number(e.target.value))}
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                    required
+                                >
+                                    {years.map(y => (
+                                        <option key={y.tahun} value={y.tahun}>
+                                            {y.tahun}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
-                                            return (
-                                                <div key={iku.id} className="pt-6 first:pt-0 space-y-4">
-                                                    {/* Header Indikator */}
-                                                    <div className="flex justify-between items-start gap-4">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-bold bg-[#f1f3fe] text-[#005bb1] px-2 py-0.5 rounded uppercase">
-                                                                    {iku.iku}
-                                                                </span>
-                                                                {currentCap && (
-                                                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${getStatusColor(currentCap.status_validasi)}`}>
-                                                                        {currentCap.status_validasi === 'DRAFT' ? 'IN PROGRESS' : currentCap.status_validasi}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <h5 className="text-xs font-bold text-[#181c23]">{iku.full_kategori}</h5>
-                                                            <p className="text-[10px] text-[#717785] font-semibold">
-                                                                Satuan: {iku.satuan} • Target 2026: {iku.target || '-'}
-                                                                {currentCap && ` • Capaian Saat Ini: ${currentCap.nilai_capaian}%`}
-                                                            </p>
-                                                        </div>
+                            {/* Triwulan */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Triwulan</label>
+                                <select 
+                                    value={triwulan}
+                                    onChange={(e) => setTriwulan(e.target.value)}
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                >
+                                    <option value="TW1">TW1</option>
+                                    <option value="TW2">TW2</option>
+                                    <option value="TW3">TW3</option>
+                                    <option value="TW4">TW4</option>
+                                </select>
+                            </div>
 
-                                                        {!isEditing && (
-                                                            <button 
-                                                                onClick={() => handleStartEdit(iku)}
-                                                                className="bg-[#005bb1] text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#0073dd] shadow-sm uppercase tracking-wider"
-                                                            >
-                                                                Isi Capaian
-                                                            </button>
-                                                        )}
-                                                    </div>
+                            {/* Pembilang */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Nilai Pembilang (Numerator)</label>
+                                <input 
+                                    type="number" 
+                                    value={pembilang}
+                                    onChange={(e) => setPembilang(e.target.value)}
+                                    required
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                />
+                            </div>
 
-                                                    {/* Edit Form Panel */}
-                                                    {isEditing && (
-                                                        <div className="bg-[#f9f9ff] border border-[#c0c6d6]/20 rounded-xl p-6 space-y-6">
-                                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                                                <div className="space-y-4">
-                                                                    <div className="space-y-1">
-                                                                        <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Capaian Realisasi (Pembilang/Penyebut)</label>
-                                                                        <div className="bg-white border border-[#c0c6d6]/20 rounded-xl p-4 flex items-center justify-between gap-4 relative">
-                                                                            <div className="text-3xl font-extrabold text-[#005bb1] flex items-center">
-                                                                                <span>{realization}</span>
-                                                                                <span className="text-base text-[#717785] ml-1">%</span>
-                                                                            </div>
-                                                                            <div className="flex gap-2">
-                                                                                <input 
-                                                                                    type="number"
-                                                                                    value={pembilang}
-                                                                                    onChange={(e) => setPembilang(e.target.value)}
-                                                                                    placeholder="Pembilang"
-                                                                                    className="w-20 text-center bg-white border border-[#c0c6d6]/30 rounded px-1.5 py-1 text-xs"
-                                                                                />
-                                                                                <input 
-                                                                                    type="number"
-                                                                                    value={penyebut}
-                                                                                    onChange={(e) => setPenyebut(e.target.value)}
-                                                                                    placeholder="Penyebut"
-                                                                                    className="w-20 text-center bg-white border border-[#c0c6d6]/30 rounded px-1.5 py-1 text-xs"
-                                                                                />
-                                                                            </div>
-                                                                            <span className="absolute bottom-1 left-4 text-[9px] text-[#717785] font-semibold">
-                                                                                Target: {iku.target}%
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
+                            {/* Penyebut */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Nilai Penyebut (Denominator)</label>
+                                <input 
+                                    type="number" 
+                                    value={penyebut}
+                                    onChange={(e) => setPenyebut(e.target.value)}
+                                    required
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                />
+                            </div>
 
-                                                                    <div className="space-y-1">
-                                                                        <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Link Bukti Dukung (Google Drive, dll)</label>
-                                                                        <input 
-                                                                            type="text" 
-                                                                            value={fileUrl}
-                                                                            onChange={(e) => setFileUrl(e.target.value)}
-                                                                            placeholder="https://drive.google.com/..."
-                                                                            className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
-                                                                        />
-                                                                    </div>
-                                                                </div>
+                            {/* Target Capaian */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Target Capaian (%)</label>
+                                <input 
+                                    type="text" 
+                                    value={targetCapaian}
+                                    onChange={(e) => setTargetCapaian(e.target.value)}
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                />
+                            </div>
 
-                                                                <div className="space-y-1">
-                                                                    <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Faktor Pendukung & Analisis Hambatan</label>
-                                                                    <textarea 
-                                                                        value={catatan}
-                                                                        onChange={(e) => setCatatan(e.target.value)}
-                                                                        placeholder="Masukkan analisis detail capaian..."
-                                                                        className="w-full bg-white border border-[#c0c6d6] rounded-xl p-3 text-xs h-[140px] resize-none outline-none focus:ring-1 focus:ring-[#005bb1]"
-                                                                    />
-                                                                </div>
-                                                            </div>
+                            {/* Estimasi Capaian */}
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Estimasi Capaian</label>
+                                <input 
+                                    type="text" 
+                                    value={estimasiCapaian}
+                                    disabled
+                                    className="w-full bg-[#f1f3fe] border border-[#c0c6d6]/60 rounded-xl px-4 py-2.5 text-xs font-bold text-[#005bb1] outline-none"
+                                />
+                            </div>
+                        </div>
 
-                                                            {/* Nested Sub-Indicators inside edit box */}
-                                                            {subInds.length > 0 && (
-                                                                <div className="pt-4 border-t border-[#c0c6d6]/10 space-y-3">
-                                                                    <h6 className="text-[10px] font-bold text-[#181c23] uppercase tracking-wider">Sub-Indikator Turunan</h6>
-                                                                    <div className="overflow-hidden border border-[#c0c6d6]/10 rounded-xl bg-white">
-                                                                        <table className="w-full text-left border-collapse text-xs">
-                                                                            <thead>
-                                                                                <tr className="bg-[#f1f3fe]/40 border-b border-[#c0c6d6]/20">
-                                                                                    <th className="p-3 font-bold text-[#535f71]">Sub Indikator</th>
-                                                                                    <th className="p-3 text-center w-20">Satuan</th>
-                                                                                    <th className="p-3 text-center w-20">Baseline</th>
-                                                                                    <th className="p-3 text-center w-20">Target</th>
-                                                                                    <th className="p-3 text-center w-28">Pembilang</th>
-                                                                                    <th className="p-3 text-center w-28">Penyebut</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody className="divide-y divide-[#c0c6d6]/10">
-                                                                                {subInds.map(sub => {
-                                                                                    const vals = subValues[sub.id] || { pembilang: '0', penyebut: '1' };
-                                                                                    return (
-                                                                                        <tr key={sub.id} className="hover:bg-[#f9f9ff]">
-                                                                                            <td className="p-3 font-semibold text-[#181c23]">{sub.kategori}</td>
-                                                                                            <td className="p-3 text-center text-[#535f71]">{sub.satuan}</td>
-                                                                                            <td className="p-3 text-center text-[#535f71]">{sub.base_line || '-'}</td>
-                                                                                            <td className="p-3 text-center text-[#535f71]">{sub.target || '-'}</td>
-                                                                                            <td className="p-3 text-center">
-                                                                                                <input 
-                                                                                                    type="number"
-                                                                                                    value={vals.pembilang}
-                                                                                                    onChange={(e) => handleSubInputChange(sub.id, 'pembilang', e.target.value)}
-                                                                                                    className="w-16 text-center bg-white border border-[#c0c6d6]/30 rounded px-1 py-0.5 text-xs font-bold"
-                                                                                                />
-                                                                                            </td>
-                                                                                            <td className="p-3 text-center">
-                                                                                                <input 
-                                                                                                    type="number"
-                                                                                                    value={vals.penyebut}
-                                                                                                    onChange={(e) => handleSubInputChange(sub.id, 'penyebut', e.target.value)}
-                                                                                                    className="w-16 text-center bg-white border border-[#c0c6d6]/30 rounded px-1 py-0.5 text-xs font-bold"
-                                                                                                />
-                                                                                            </td>
-                                                                                        </tr>
-                                                                                    );
-                                                                                })}
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                        {/* Catatan */}
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Catatan / Penjelasan Data</label>
+                            <textarea 
+                                value={catatan}
+                                onChange={(e) => setCatatan(e.target.value)}
+                                placeholder="Contoh: rincian sumber data, metode penghitungan, dsb."
+                                className="w-full bg-white border border-[#c0c6d6] rounded-xl p-4 text-xs h-28 resize-none outline-none focus:ring-1 focus:ring-[#005bb1]"
+                            />
+                        </div>
 
-                                                            <div className="pt-4 border-t border-[#c0c6d6]/10 flex justify-end gap-3">
-                                                                <button 
-                                                                    type="button"
-                                                                    onClick={() => setActiveEditId(null)}
-                                                                    className="px-5 py-2 text-xs font-bold border border-[#c0c6d6] text-[#535f71] rounded-lg hover:bg-[#f1f3fe]"
-                                                                >
-                                                                    Batal
-                                                                </button>
-                                                                <button 
-                                                                    type="button"
-                                                                    onClick={() => handleSave(iku.id)}
-                                                                    className="px-6 py-2 text-xs font-bold bg-[#005bb1] text-white rounded-lg hover:bg-[#0073dd] shadow-sm uppercase tracking-wider"
-                                                                >
-                                                                    Simpan Capaian
-                                                                </button>
-                                                            </div>
-                                                        </div>
+                        {/* Link Bukti Dukung */}
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Link Bukti Dukung (Google Drive, dll)</label>
+                            <input 
+                                type="text" 
+                                value={fileUrl}
+                                onChange={(e) => setFileUrl(e.target.value)}
+                                placeholder="https://drive.google.com/..."
+                                className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                            />
+                        </div>
+
+                        {/* Bottom Metadata Summary Panel */}
+                        {selectedIku && (
+                            <div className="bg-[#f9f9ff] border border-[#c0c6d6]/20 rounded-xl p-4 text-[11px] text-[#535f71] space-y-1">
+                                <div><strong className="text-[#181c23]">Formula:</strong> {selectedIku.formula_text || '-'}</div>
+                                <div><strong className="text-[#181c23]">Satuan:</strong> {selectedIku.satuan}</div>
+                                <div><strong className="text-[#181c23]">Sumber data:</strong> {selectedIku.sumber_data || '-'}</div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-[#c0c6d6]/10">
+                            <button 
+                                type="submit"
+                                className="bg-[#005bb1] text-white px-6 py-2.5 rounded-lg text-xs font-bold hover:bg-[#0073dd] shadow-sm uppercase tracking-wider"
+                            >
+                                Simpan sebagai Draft
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                {/* Submissions List Card (Always Below Form, Full Width) */}
+                <div className="bg-white rounded-2xl border border-[#c0c6d6]/20 shadow-sm overflow-hidden p-6 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h3 className="text-sm font-bold text-[#181c23]">Daftar Capaian yang Telah Diinput</h3>
+                            <p className="text-[11px] text-[#717785] mt-0.5">Daftar entri laporan untuk Triwulan {triwulan} - {tahun}.</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input 
+                                type="text"
+                                value={filterIku}
+                                onChange={(e) => setFilterIku(e.target.value)}
+                                placeholder="Cari IKU..."
+                                className="bg-white border border-[#c0c6d6]/30 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1] w-48"
+                            />
+                            {streaming && (
+                                <span className="text-[9px] text-[#005bb1] bg-[#005bb1]/10 px-2 py-0.5 rounded animate-pulse font-bold">
+                                    Streaming...
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr className="border-b border-[#c0c6d6]/25 bg-[#f1f3fe]/40 text-[#717785] font-bold uppercase tracking-wider">
+                                    <th className="p-3">IKU</th>
+                                    <th className="p-3">Indikator</th>
+                                    <th className="p-3 text-center">Pembilang</th>
+                                    <th className="p-3 text-center">Penyebut</th>
+                                    <th className="p-3 text-center">Capaian</th>
+                                    <th className="p-3 text-center">Status</th>
+                                    <th className="p-3 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#c0c6d6]/10">
+                                {capaianList.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" className="p-4 text-center text-[#717785] italic">
+                                            {streaming ? 'Memuat data capaian...' : 'Belum ada laporan diinput pada triwulan ini.'}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    capaianList.map(c => (
+                                        <tr key={c.id} className="hover:bg-[#f9f9ff]">
+                                            <td className="p-3 font-bold text-[#005bb1]">{c.iku || '-'}</td>
+                                            <td className="p-3 font-semibold text-[#181c23]">{c.kategori || c.full_kategori || 'Indikator tidak diketahui'}</td>
+                                            <td className="p-3 text-center text-[#535f71]">{c.pembilang}</td>
+                                            <td className="p-3 text-center text-[#535f71]">{c.penyebut}</td>
+                                            <td className="p-3 text-center font-bold text-[#181c23]">{c.nilai_capaian}%</td>
+                                            <td className="p-3 text-center">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${getStatusBadgeColor(c.status_validasi)}`}>
+                                                    {c.status_validasi}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <div className="flex justify-center gap-2">
+                                                    <button 
+                                                        onClick={() => handleEditFromTable(c)}
+                                                        disabled={['DIAJUKAN', 'DIVERIFIKASI', 'DISAHKAN'].includes(c.status_validasi)}
+                                                        className="bg-[#ebedf8] text-[#005bb1] px-3 py-1 rounded text-[10px] font-bold hover:bg-[#d6e3ff] transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    {c.status_validasi === 'DRAFT' && (
+                                                        <button 
+                                                            onClick={() => handleSubmitForVerification(c.id)}
+                                                            className="bg-[#005bb1] text-white px-3 py-1 rounded text-[10px] font-bold hover:bg-[#0073dd] transition-all uppercase"
+                                                        >
+                                                            Ajukan
+                                                        </button>
                                                     )}
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
-                            </div>
-                        );
-                    })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            )}
+            </div>
         </AuthenticatedLayout>
     );
 }
