@@ -19,8 +19,7 @@ export default function EditCapaian() {
     const [selectedIkuId, setSelectedIkuId] = useState('');
     const [tahun, setTahun] = useState(2026);
     const [triwulan, setTriwulan] = useState('TW1');
-    const [pembilang, setPembilang] = useState('');
-    const [penyebut, setPenyebut] = useState('1');
+    const [nilaiCapaian, setNilaiCapaian] = useState('');
     const [targetCapaian, setTargetCapaian] = useState('');
     const [catatan, setCatatan] = useState('');
     const [fileUrl, setFileUrl] = useState('');
@@ -102,8 +101,7 @@ export default function EditCapaian() {
             
             // If the row matches the currently selected IKU, pre-load form inputs
             if (originalSelectedIkuIdRef.current && Number(row.id_indikator) === Number(originalSelectedIkuIdRef.current)) {
-                setPembilang(row.pembilang);
-                setPenyebut(row.penyebut);
+                setNilaiCapaian(row.nilai_capaian);
                 setCatatan(row.catatan || '');
                 setFileUrl(row.file_url || '');
             }
@@ -131,14 +129,12 @@ export default function EditCapaian() {
         const activeIku = ikuList.find(i => Number(i.id) === Number(ikuId));
 
         if (found) {
-            setPembilang(found.pembilang);
-            setPenyebut(found.penyebut);
+            setNilaiCapaian(found.nilai_capaian);
             setCatatan(found.catatan || '');
             setFileUrl(found.file_url || '');
             setTargetCapaian(activeIku ? activeIku.target : '');
         } else {
-            setPembilang('');
-            setPenyebut('1');
+            setNilaiCapaian('');
             setCatatan('');
             setFileUrl('');
             setTargetCapaian(activeIku ? activeIku.target : '');
@@ -146,8 +142,7 @@ export default function EditCapaian() {
     };
 
     const resetFormFields = () => {
-        setPembilang('');
-        setPenyebut('1');
+        setNilaiCapaian('');
         setCatatan('');
         setFileUrl('');
         setTargetCapaian('');
@@ -161,8 +156,7 @@ export default function EditCapaian() {
 
     const handleEditFromTable = (item) => {
         setSelectedIkuId(item.id_indikator);
-        setPembilang(item.pembilang);
-        setPenyebut(item.penyebut);
+        setNilaiCapaian(item.nilai_capaian);
         setCatatan(item.catatan || '');
         setFileUrl(item.file_url || '');
         
@@ -182,8 +176,7 @@ export default function EditCapaian() {
             fakultas_unit: selectedUnitId,
             tahun: tahun,
             triwulan: triwulan,
-            pembilang: pembilang || '0',
-            penyebut: penyebut || '1',
+            nilai_capaian: nilaiCapaian || '0',
             catatan: catatan,
             file_url: fileUrl
         };
@@ -216,12 +209,7 @@ export default function EditCapaian() {
         .catch(err => console.error(err));
     };
 
-    // Calculate dynamic estimation
-    const numPembilang = Number(pembilang) || 0;
-    const numPenyebut = Number(penyebut) || 1;
-    const estimasiCapaian = numPenyebut !== 0 
-        ? ((numPembilang / numPenyebut) * 100).toFixed(2) + '%'
-        : '0.00%';
+
 
     const selectedIku = indicators.find(i => Number(i.id) === Number(selectedIkuId));
 
@@ -235,6 +223,9 @@ export default function EditCapaian() {
             default: return 'bg-gray-100 text-gray-500';
         }
     };
+
+    const activeIndicator = indicators.find(i => Number(i.id) === Number(selectedIkuId));
+    const activeSatuan = activeIndicator ? activeIndicator.satuan : '%';
 
     return (
         <AuthenticatedLayout pageTitle={`Isi Capaian Kinerja`}>
@@ -325,25 +316,14 @@ export default function EditCapaian() {
                                 </select>
                             </div>
 
-                            {/* Pembilang */}
+                            {/* Realisasi Capaian */}
                             <div className="space-y-1">
-                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Nilai Pembilang (Numerator)</label>
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Realisasi Capaian ({selectedIku?.satuan || '%'})</label>
                                 <input 
                                     type="number" 
-                                    value={pembilang}
-                                    onChange={(e) => setPembilang(e.target.value)}
-                                    required
-                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
-                                />
-                            </div>
-
-                            {/* Penyebut */}
-                            <div className="space-y-1">
-                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Nilai Penyebut (Denominator)</label>
-                                <input 
-                                    type="number" 
-                                    value={penyebut}
-                                    onChange={(e) => setPenyebut(e.target.value)}
+                                    step="any"
+                                    value={nilaiCapaian}
+                                    onChange={(e) => setNilaiCapaian(e.target.value)}
                                     required
                                     className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
                                 />
@@ -351,21 +331,10 @@ export default function EditCapaian() {
 
                             {/* Target Capaian */}
                             <div className="space-y-1">
-                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Target Capaian (%)</label>
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Target Capaian ({selectedIku?.satuan || '%'})</label>
                                 <input 
                                     type="text" 
                                     value={targetCapaian}
-                                    onChange={(e) => setTargetCapaian(e.target.value)}
-                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
-                                />
-                            </div>
-
-                            {/* Estimasi Capaian */}
-                            <div className="space-y-1">
-                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Estimasi Capaian</label>
-                                <input 
-                                    type="text" 
-                                    value={estimasiCapaian}
                                     disabled
                                     className="w-full bg-[#f1f3fe] border border-[#c0c6d6]/60 rounded-xl px-4 py-2.5 text-xs font-bold text-[#005bb1] outline-none"
                                 />
@@ -444,8 +413,6 @@ export default function EditCapaian() {
                                 <tr className="border-b border-[#c0c6d6]/25 bg-[#f1f3fe]/40 text-[#717785] font-bold uppercase tracking-wider">
                                     <th className="p-3">IKU</th>
                                     <th className="p-3">Indikator</th>
-                                    <th className="p-3 text-center">Pembilang</th>
-                                    <th className="p-3 text-center">Penyebut</th>
                                     <th className="p-3 text-center">Capaian</th>
                                     <th className="p-3 text-center">Status</th>
                                     <th className="p-3 text-center">Aksi</th>
@@ -454,7 +421,7 @@ export default function EditCapaian() {
                             <tbody className="divide-y divide-[#c0c6d6]/10">
                                 {capaianList.length === 0 ? (
                                     <tr>
-                                        <td colSpan="7" className="p-4 text-center text-[#717785] italic">
+                                        <td colSpan="5" className="p-4 text-center text-[#717785] italic">
                                             {streaming ? 'Memuat data capaian...' : 'Belum ada laporan diinput pada triwulan ini.'}
                                         </td>
                                     </tr>
@@ -463,9 +430,7 @@ export default function EditCapaian() {
                                         <tr key={c.id} className="hover:bg-[#f9f9ff]">
                                             <td className="p-3 font-bold text-[#005bb1]">{c.iku || '-'}</td>
                                             <td className="p-3 font-semibold text-[#181c23]">{c.kategori || c.full_kategori || 'Indikator tidak diketahui'}</td>
-                                            <td className="p-3 text-center text-[#535f71]">{c.pembilang}</td>
-                                            <td className="p-3 text-center text-[#535f71]">{c.penyebut}</td>
-                                            <td className="p-3 text-center font-bold text-[#181c23]">{c.nilai_capaian}%</td>
+                                            <td className="p-3 text-center font-bold text-[#181c23]">{c.nilai_capaian} {c.satuan || '%'}</td>
                                             <td className="p-3 text-center">
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${getStatusBadgeColor(c.status_validasi)}`}>
                                                     {c.status_validasi}

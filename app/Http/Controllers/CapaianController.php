@@ -39,7 +39,8 @@ class CapaianController extends Controller
                 'v_fakultas_unit.nama_fak_prod_unit as nama_unit',
                 'master_indikator.iku',
                 'master_indikator.kategori',
-                'master_indikator.full_kategori'
+                'master_indikator.full_kategori',
+                'master_indikator.satuan'
             )
             ->whereIn('template_capaian.fakultas_unit', $scope);
 
@@ -90,8 +91,7 @@ class CapaianController extends Controller
             'fakultas_unit' => 'required|integer',
             'tahun' => 'required|integer',
             'triwulan' => 'required|string',
-            'pembilang' => 'required|numeric',
-            'penyebut' => 'required|numeric',
+            'nilai_capaian' => 'required|numeric',
             'catatan' => 'nullable|string',
             'file_url' => 'nullable|string',
         ]);
@@ -113,11 +113,6 @@ class CapaianController extends Controller
             return response()->json(['error' => 'Unit Anda tidak ditugaskan untuk indikator ini pada tahun ' . $validated['tahun'] . '.'], 403);
         }
 
-        $nilai_capaian = 0;
-        if ($validated['penyebut'] != 0) {
-            $nilai_capaian = round(($validated['pembilang'] / $validated['penyebut']) * 100, 2);
-        }
-
         $existing = DB::table('template_capaian')
             ->where('id_indikator', $validated['id_indikator'])
             ->where('fakultas_unit', $validated['fakultas_unit'])
@@ -133,7 +128,8 @@ class CapaianController extends Controller
             DB::table('template_capaian')
                 ->where('id', $existing->id)
                 ->update(array_merge($validated, [
-                    'nilai_capaian' => $nilai_capaian,
+                    'pembilang' => 0,
+                    'penyebut' => 1,
                     'status_validasi' => 'DRAFT',
                     'diinput_oleh' => $user->username,
                     'updated_at' => now()
@@ -142,7 +138,8 @@ class CapaianController extends Controller
             $id = $existing->id;
         } else {
             $id = DB::table('template_capaian')->insertGetId(array_merge($validated, [
-                'nilai_capaian' => $nilai_capaian,
+                'pembilang' => 0,
+                'penyebut' => 1,
                 'status_validasi' => 'DRAFT',
                 'diinput_oleh' => $user->username,
                 'created_at' => now(),

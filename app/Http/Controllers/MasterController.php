@@ -34,7 +34,8 @@ class MasterController extends Controller
         
         $query = DB::table('master_indikator')
             ->join('penugasan_target', 'master_indikator.id', '=', 'penugasan_target.id_indikator')
-            ->where('penugasan_target.fakultas_unit', $unitId);
+            ->where('penugasan_target.fakultas_unit', $unitId)
+            ->whereNull('penugasan_target.deleted_at');
 
         if (!empty($tahun)) {
             $query->where('penugasan_target.tahun', $tahun);
@@ -162,7 +163,7 @@ class MasterController extends Controller
     // Fetch unique years registered
     public function tahun(Request $request)
     {
-        $data = DB::table('master_tahun')->orderBy('tahun', 'desc')->get();
+        $data = DB::table('master_tahun')->orderBy('tahun', 'asc')->get();
         return response()->json($data);
     }
 }
