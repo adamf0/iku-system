@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    private $TRIWULAN = ['Q1', 'Q2', 'Q3', 'Q4'];
+    private $TRIWULAN = ['TW1', 'TW2', 'TW3', 'TW4'];
 
     private function getScopedCapaian(Request $request, $tahun)
     {
@@ -63,6 +63,30 @@ class DashboardController extends Controller
                 $rataCapaian = round($rowsLatest->avg('nilai_capaian'), 2);
             }
 
+            $capaianTw1 = null;
+            $rowsTw1 = $rows->where('triwulan', 'TW1');
+            if ($rowsTw1->count() > 0) {
+                $capaianTw1 = round($rowsTw1->avg('nilai_capaian'), 2);
+            }
+
+            $capaianTw2 = null;
+            $rowsTw2 = $rows->where('triwulan', 'TW2');
+            if ($rowsTw2->count() > 0) {
+                $capaianTw2 = round($rowsTw2->avg('nilai_capaian'), 2);
+            }
+
+            $capaianTw3 = null;
+            $rowsTw3 = $rows->where('triwulan', 'TW3');
+            if ($rowsTw3->count() > 0) {
+                $capaianTw3 = round($rowsTw3->avg('nilai_capaian'), 2);
+            }
+
+            $capaianTw4 = null;
+            $rowsTw4 = $rows->where('triwulan', 'TW4');
+            if ($rowsTw4->count() > 0) {
+                $capaianTw4 = round($rowsTw4->avg('nilai_capaian'), 2);
+            }
+
             $target = (float)$iku->target;
             
             $status = 'BELUM ADA DATA SAH';
@@ -78,6 +102,10 @@ class DashboardController extends Controller
                 'satuan' => $iku->satuan,
                 'triwulan_terakhir' => $latestTw,
                 'capaian_rata' => $rataCapaian,
+                'capaian_tw1' => $capaianTw1,
+                'capaian_tw2' => $capaianTw2,
+                'capaian_tw3' => $capaianTw3,
+                'capaian_tw4' => $capaianTw4,
                 'target' => $target,
                 'status' => $status
             ];

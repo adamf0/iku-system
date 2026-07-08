@@ -5,6 +5,7 @@ import { Head, Link } from '@inertiajs/react';
 export default function Dashboard() {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [activePeriod, setActivePeriod] = useState('LATEST');
 
     useEffect(() => {
         fetch('/api/dashboard/summary?tahun=2026')
@@ -19,28 +20,46 @@ export default function Dashboard() {
             });
     }, []);
 
+    const getAchievedValue = (iku, period) => {
+        switch (period) {
+            case 'TW1': return iku.capaian_tw1;
+            case 'TW2': return iku.capaian_tw2;
+            case 'TW3': return iku.capaian_tw3;
+            case 'TW4': return iku.capaian_tw4;
+            default: return iku.capaian_rata;
+        }
+    };
+
+    const getStatusForPeriod = (iku, period) => {
+        const achieved = getAchievedValue(iku, period);
+        if (achieved === null || achieved === undefined) {
+            return 'BELUM ADA DATA';
+        }
+        return Number(achieved) >= Number(iku.target) ? 'TERCAPAI' : 'BELUM TERCAPAI';
+    };
+
     // Get status color matching mockup
     const getStatusBadge = (status) => {
         switch (status) {
             case 'TERCAPAI':
                 return (
-                    <span className="bg-green-100 text-green-700 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
+                    <span className="bg-green-100 text-green-700 flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider w-max">
                         <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
                         MET
                     </span>
                 );
             case 'BELUM TERCAPAI':
                 return (
-                    <span className="bg-red-100 text-red-700 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
+                    <span className="bg-red-100 text-red-700 flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider w-max">
                         <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
                         AT RISK
                     </span>
                 );
             default:
                 return (
-                    <span className="bg-blue-100 text-blue-700 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
-                        NEAR TARGET
+                    <span className="bg-gray-100 text-gray-500 flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider w-max">
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                        NO DATA
                     </span>
                 );
         }
@@ -229,15 +248,26 @@ export default function Dashboard() {
 
             {/* Performance Distribution Table */}
             <section className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-[#c0c6d6]/10">
-                <div className="p-8 border-b border-[#c0c6d6]/15 flex justify-between items-center">
+                <div className="p-8 border-b border-[#c0c6d6]/15 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h3 className="text-lg font-bold text-[#181c23]">Performance Distribution</h3>
                         <p className="text-xs text-[#535f71]">Detailed view of all primary Performance Indicators</p>
                     </div>
-                    <div className="flex gap-2">
-                        <div className="bg-[#f1f3fe] p-1 rounded-lg flex items-center gap-1 text-[11px] font-bold text-[#535f71]">
-                            <button className="px-4 py-1 bg-white rounded shadow-sm text-[#181c23]">Table</button>
-                            <button className="px-4 py-1 opacity-70 hover:opacity-100 transition-opacity">Charts</button>
+                    <div>
+                        <div className="bg-[#f1f3fe] p-1 rounded-xl flex items-center gap-1 text-[11px] font-bold text-[#535f71]">
+                            {['LATEST', 'TW1', 'TW2', 'TW3', 'TW4'].map((p) => (
+                                <button 
+                                    key={p} 
+                                    onClick={() => setActivePeriod(p)}
+                                    className={`px-3 py-1.5 rounded-lg transition-all duration-200 uppercase tracking-wider text-[10px] ${
+                                        activePeriod === p 
+                                            ? 'bg-[#005bb1] text-white shadow-sm font-extrabold' 
+                                            : 'opacity-70 hover:opacity-100 text-[#535f71]'
+                                    }`}
+                                >
+                                    {p === 'LATEST' ? 'Terbaru' : p}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -263,9 +293,11 @@ export default function Dashboard() {
                                         <p className="text-[10px] text-[#717785] font-bold uppercase tracking-widest">{iku.sifat} • {iku.satuan}</p>
                                     </td>
                                     <td className="px-8 py-5 text-center font-bold text-sm text-[#535f71]">{iku.target ?? '-'}</td>
-                                    <td className="px-8 py-5 text-center font-bold text-sm text-[#181c23]">{iku.capaian_rata ?? '-'}</td>
+                                    <td className="px-8 py-5 text-center font-bold text-sm text-[#181c23]">
+                                        {getAchievedValue(iku, activePeriod) !== null ? `${getAchievedValue(iku, activePeriod)}` : '-'}
+                                    </td>
                                     <td className="px-8 py-5">
-                                        {getStatusBadge(iku.status)}
+                                        {getStatusBadge(getStatusForPeriod(iku, activePeriod))}
                                     </td>
                                     <td className="pr-8 text-right">
                                         <span className="material-symbols-outlined text-[#717785] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>

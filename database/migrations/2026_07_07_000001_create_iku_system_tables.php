@@ -206,6 +206,7 @@ return new class extends Migration
             $table->string('diverifikasi_oleh')->nullable();
             $table->timestamps();
 
+            $table->unique(['id_indikator', 'fakultas_unit', 'tahun', 'triwulan'], 'uniq_capaian_unit_period');
             $table->foreign('id_indikator')->references('id')->on('master_indikator')->onDelete('cascade');
             $table->foreign('fakultas_unit')->references('id')->on('sijamu_fakultas_unit')->onDelete('cascade');
             $table->foreign('tahun')->references('tahun')->on('master_tahun')->onDelete('cascade');

@@ -414,6 +414,7 @@ export default function EditCapaian() {
                                     <th className="p-3">IKU</th>
                                     <th className="p-3">Indikator</th>
                                     <th className="p-3 text-center">Capaian</th>
+                                    <th className="p-3 text-center">Bukti Dukung</th>
                                     <th className="p-3 text-center">Status</th>
                                     <th className="p-3 text-center">Aksi</th>
                                 </tr>
@@ -421,7 +422,7 @@ export default function EditCapaian() {
                             <tbody className="divide-y divide-[#c0c6d6]/10">
                                 {capaianList.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" className="p-4 text-center text-[#717785] italic">
+                                        <td colSpan="6" className="p-4 text-center text-[#717785] italic">
                                             {streaming ? 'Memuat data capaian...' : 'Belum ada laporan diinput pada triwulan ini.'}
                                         </td>
                                     </tr>
@@ -431,6 +432,21 @@ export default function EditCapaian() {
                                             <td className="p-3 font-bold text-[#005bb1]">{c.iku || '-'}</td>
                                             <td className="p-3 font-semibold text-[#181c23]">{c.kategori || c.full_kategori || 'Indikator tidak diketahui'}</td>
                                             <td className="p-3 text-center font-bold text-[#181c23]">{c.nilai_capaian} {c.satuan || '%'}</td>
+                                            <td className="p-3 text-center">
+                                                {c.file_url ? (
+                                                    <a 
+                                                        href={c.file_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="text-[#005bb1] hover:text-[#0073dd] inline-flex items-center gap-1 font-bold underline transition-colors"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[14px]">link</span>
+                                                        Buka Bukti
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-[#717785] italic">Tidak ada</span>
+                                                )}
+                                            </td>
                                             <td className="p-3 text-center">
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${getStatusBadgeColor(c.status_validasi)}`}>
                                                     {c.status_validasi}

@@ -80,22 +80,26 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                         </>
                     )}
 
-                    <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
-                    <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">REPORTING</span>
-                    </div>
+                    {user.role !== 'ADMIN' && (
+                        <>
+                            <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
+                            <div className="px-4 py-1">
+                                <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">REPORTING</span>
+                            </div>
 
-                    <Link 
-                        href={route('reporting')} 
-                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('reporting') || route().current('capaian.edit')
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
-                        }`}
-                    >
-                        <span className="material-symbols-outlined text-lg">analytics</span>
-                        <span className="text-[13px]">Capaian Kinerja</span>
-                    </Link>
+                            <Link 
+                                href={route('reporting')} 
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                                    route().current('reporting') || route().current('capaian.edit')
+                                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">analytics</span>
+                                <span className="text-[13px]">Capaian Kinerja</span>
+                            </Link>
+                        </>
+                    )}
 
                     {user.role === 'ADMIN' && (
                         <>

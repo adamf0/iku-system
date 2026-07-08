@@ -14,7 +14,12 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // 1. Reset all tables
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement('PRAGMA foreign_keys = OFF;');
+        } else {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
+
         DB::table('log_aktivitas')->truncate();
         DB::table('template_capaian')->truncate();
         DB::table('penugasan_target')->truncate();
@@ -22,8 +27,12 @@ class DatabaseSeeder extends Seeder
         DB::table('master_indikator')->truncate();
         DB::table('master_konteks')->truncate();
         DB::table('users')->truncate();
-        DB::table('units')->truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement('PRAGMA foreign_keys = ON;');
+        } else {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
 
         // ---------- A. SEED BASE TABLES FROM JSON DUMPS ----------
         
@@ -190,9 +199,52 @@ class DatabaseSeeder extends Seeder
             $formula = "Tingkat Pencapaian " . $ind['iku'] . " = (Realisasi / Target) * 100%";
             $sumber = "Data akademik PDDikti / SIAKAD / Dokumen pendukung prodi";
 
-            if (strpos($ind['iku'], 'IKU 1') !== false) {
+            $ikuCode = trim($ind['iku']);
+            if (strpos($ikuCode, 'IKU 1') === 0) {
                 $formula = "Tingkat Pencapaian AEE(i) = (AEE Realisasi / AEE Ideal) x 100% | AEE PT = SUM(Tingkat Pencapaian i) / n";
                 $sumber = "Data mahasiswa masuk & lulus per program studi (PDDikti/SIAKAD)";
+            } elseif (strpos($ikuCode, 'IKU 2') === 0) {
+                $formula = "Tingkat Pencapaian IKU 2 = (SUM(ni * ki) / t) * 100%";
+                $sumber = "Hasil tracer study yang dilakukan 1 (satu) tahun setelah kelulusan";
+            } elseif (strpos($ikuCode, 'IKU 3') === 0) {
+                $formula = "Tingkat Pencapaian IKU 3 = (SUM(ni * ki) / t) * 100%";
+                $sumber = "Data aktivitas mahasiswa di luar kampus / pengakuan SKS";
+            } elseif (strpos($ikuCode, 'IKU 4') === 0) {
+                $formula = "Tingkat Pencapaian IKU 4 = (Jumlah dosen dengan NUPTK mendapat rekognisi internasional / Total dosen PT) * 100%";
+                $sumber = "Database resmi Scopus / bukti rekognisi internasional / SK / sertifikat";
+            } elseif (strpos($ikuCode, 'IKU 5') === 0) {
+                $formula = "Tingkat Pencapaian IKU 5 = (Jumlah luaran hasil kerjasama PT dan start-up/industri/lembaga / Total Kerjasama PT) * 100%";
+                $sumber = "Dokumen kerjasama resmi (MoU/MoA), bukti luaran (jurnal, paten, produk terapan)";
+            } elseif (strpos($ikuCode, 'IKU 6') === 0) {
+                $formula = "Tingkat Pencapaian IKU 6 = (SUM(ni * ki) / t) * 100%";
+                $sumber = "Database resmi Scopus / Web of Science (WoS) / sistem pelaporan riset PT";
+            } elseif (strpos($ikuCode, 'IKU 7') === 0) {
+                $formula = "Tingkat Pencapaian IKU 7 = (Jumlah program/kegiatan PT yang berkontribusi pada SDGs / Total program SDG's PT) * 100%";
+                $sumber = "Dokumen resmi (Renstra perguruan tinggi atau laporan kinerja tahunan)";
+            } elseif (strpos($ikuCode, 'IKU 8') === 0) {
+                $formula = "Tingkat Pencapaian IKU 8 = (Jumlah SDM terlibat penyusunan kebijakan / Total SDM PT) * 100%";
+                $sumber = "SK penugasan resmi, undangan resmi, laporan FGD, notulen, atau dokumen kebijakan";
+            } elseif (strpos($ikuCode, 'IKU 9') === 0) {
+                $formula = "Tingkat Pencapaian IKU 9 = (Jumlah pendapatan non mahasiswa / Total pendapatan PT) * 100%";
+                $sumber = "Laporan keuangan audited BPK atau Kantor Akuntan Publik independen";
+            } elseif (strpos($ikuCode, 'IKU 10') === 0) {
+                $formula = "Jumlah Unit Kerja yang Pengajuan Zona Integritas PT dalam satu periode";
+                $sumber = "Sistem monitoring Zona Integritas Kementerian / tanda terima resmi KemenPAN-RB";
+            } elseif (strpos($ikuCode, 'IKU 11 - a') === 0) {
+                $formula = "Opini atas laporan Keuangan Perguruan Tinggi";
+                $sumber = "Laporan audit resmi dari BPK, auditor independen, atau Inspektorat Jenderal";
+            } elseif (strpos($ikuCode, 'IKU 11 - b') === 0) {
+                $formula = "Nilai rata-rata predikat SAKIP perguruan tinggi yang dinilai pada tahun berjalan";
+                $sumber = "Hasil penilaian SAKIP resmi oleh Kementerian PANRB / Inspektorat Jenderal";
+            } elseif (strpos($ikuCode, 'IKU 11 - c') === 0) {
+                $formula = "Jumlah Laporan Pelanggaran Integritas Akademik pada 1 (satu) periode";
+                $sumber = "Majelis integritas akademik perguruan tinggi / laporan pengaduan internal";
+            } elseif (strpos($ikuCode, 'IKU 11 - d') === 0) {
+                $formula = "Tingkat Pencapaian IKU 11.d = (Jumlah kegiatan pencegahan & penanganan terlaksana / Total kegiatan direncanakan) * 100%";
+                $sumber = "Dokumen pelaksanaan PPKPT, laporan kegiatan, atau bukti sosialisasi";
+            } elseif (strpos($ikuCode, 'IKU 12') === 0) {
+                $formula = "Dokumen Perencanaan Peningkatan Kesejahteraan Dosen";
+                $sumber = "Dokumen perencanaan resmi (Renstra, RKAT/RKA, atau dokumen sejenis) yang disetujui";
             }
 
             $indId = DB::table('master_indikator')->insertGetId([

@@ -62,6 +62,8 @@ class MasterController extends Controller
             'satuan' => 'required|string',
             'base_line' => 'nullable|string',
             'target' => 'nullable|string',
+            'formula_text' => 'nullable|string',
+            'sumber_data' => 'nullable|string',
         ]);
 
         $parentIkuCode = null;
@@ -102,6 +104,8 @@ class MasterController extends Controller
             'satuan' => 'sometimes|string',
             'base_line' => 'nullable|string',
             'target' => 'nullable|string',
+            'formula_text' => 'nullable|string',
+            'sumber_data' => 'nullable|string',
             
             // targets level overrides (Menu 2)
             'target_d3' => 'nullable|string',

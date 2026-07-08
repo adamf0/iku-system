@@ -19,7 +19,9 @@ export default function Master() {
         id_sub: '',
         satuan: '',
         base_line: '',
-        target: ''
+        target: '',
+        formula_text: '',
+        sumber_data: ''
     });
 
     useEffect(() => {
@@ -53,7 +55,9 @@ export default function Master() {
             id_sub: '',
             satuan: '%',
             base_line: '',
-            target: ''
+            target: '',
+            formula_text: '',
+            sumber_data: ''
         });
     };
 
@@ -67,7 +71,9 @@ export default function Master() {
             id_sub: iku.id_sub || '',
             satuan: iku.satuan || '',
             base_line: iku.base_line || '',
-            target: iku.target || ''
+            target: iku.target || '',
+            formula_text: iku.formula_text || '',
+            sumber_data: iku.sumber_data || ''
         });
     };
 
@@ -312,6 +318,28 @@ export default function Master() {
                                         <option key={i.id} value={i.id}>{i.iku} - {i.kategori.substring(0, 50)}...</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Formula Perhitungan</label>
+                                <input 
+                                    type="text" 
+                                    value={formData.formula_text}
+                                    onChange={(e) => handleInputChange('formula_text', e.target.value)}
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                    placeholder="e.g. Tingkat Pencapaian = (Realisasi / Target) * 100%"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Sumber Data</label>
+                                <input 
+                                    type="text" 
+                                    value={formData.sumber_data}
+                                    onChange={(e) => handleInputChange('sumber_data', e.target.value)}
+                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
+                                    placeholder="e.g. Data tracer study, PDDikti, dsb."
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
