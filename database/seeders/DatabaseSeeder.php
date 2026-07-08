@@ -15,12 +15,14 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // 1. Reset all tables
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::table('log_aktivitas')->truncate();
         DB::table('template_capaian')->truncate();
         DB::table('master_indikator')->truncate();
         DB::table('master_konteks')->truncate();
         DB::table('users')->truncate();
         DB::table('units')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         // ---------- A. SEED UNITS ----------
         $units = [
