@@ -169,7 +169,7 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
             </header>
 
             {/* Main Content wrapper */}
-            <main className="pt-24 pb-12 md:ml-64 px-8 max-w-7xl mx-auto">
+            <main className={`pt-24 pb-12 md:ml-64 px-8 max-w-7xl mx-auto ${route().current('dashboard') ? 'flex flex-col gap-6' : ''}`}>
                 {children}
             </main>
         </div>
