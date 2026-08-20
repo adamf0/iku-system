@@ -226,8 +226,8 @@ class MasterController extends Controller
     public function saveJustifikasi(Request $request, $id)
     {
         $user = $request->user();
-        if ($user->role !== 'ADMIN') {
-            return response()->json(['error' => 'Hanya Admin yang dapat menyimpan justifikasi target.'], 403);
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
         $tahun = $request->input('tahun', $request->query('tahun', 2026));
@@ -245,7 +245,11 @@ class MasterController extends Controller
         if ($request->hasFile('file_justifikasi')) {
             $file = $request->file('file_justifikasi');
             $filename = time() . '_' . preg_replace('/[^A-Za-z0-9_\.-]/', '_', $file->getClientOriginalName());
-            $file->move(public_path('uploads/justifikasi'), $filename);
+            $uploadDir = public_path('uploads/justifikasi');
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            $file->move($uploadDir, $filename);
             $updateData['file_justifikasi'] = '/uploads/justifikasi/' . $filename;
         }
 
