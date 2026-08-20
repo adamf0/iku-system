@@ -247,6 +247,13 @@ class DatabaseSeeder extends Seeder
                 $sumber = "Dokumen perencanaan resmi (Renstra, RKAT/RKA, atau dokumen sejenis) yang disetujui";
             }
 
+            $jenisIku = 'WAJIB';
+            if (strpos($ikuCode, 'IKU 6') === 0 || strpos($ikuCode, 'IKU 7') === 0 || strpos($ikuCode, 'IKU 8') === 0) {
+                $jenisIku = 'PILIHAN';
+            } elseif (strpos($ikuCode, 'IKU 9') === 0 || strpos($ikuCode, 'IKU 10') === 0 || strpos($ikuCode, 'IKU 11') === 0 || strpos($ikuCode, 'IKU 12') === 0) {
+                $jenisIku = 'PARTISIPATIF';
+            }
+
             $indId = DB::table('master_indikator')->insertGetId([
                 'id_konteks' => $ctxId,
                 'iku' => $ind['iku'],
@@ -254,6 +261,7 @@ class DatabaseSeeder extends Seeder
                 'id_sub' => $parentDbId,
                 'full_kategori' => $fullKategori,
                 'satuan' => $ind['satuan'],
+                'jenis_iku' => $jenisIku,
                 'base_line' => $baseline,
                 'target' => $target,
                 'formula_text' => $formula,

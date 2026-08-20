@@ -59,6 +59,10 @@ Route::middleware(['auth'])->group(function () {
         return Inertia::render('PenugasanTarget');
     })->name('penugasan-target');
 
+    Route::get('/verifikasi', function () {
+        return Inertia::render('Verifikasi');
+    })->name('verifikasi');
+
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -67,6 +71,7 @@ Route::middleware(['auth'])->group(function () {
     // API - Dashboard
     Route::prefix('api/dashboard')->group(function () {
         Route::get('/summary', [DashboardController::class, 'summary']);
+        Route::get('/stream', [DashboardController::class, 'streamSummary']);
         Route::get('/rekap-matriks', [DashboardController::class, 'rekapMatriks']);
         Route::get('/antrean-verifikasi', [DashboardController::class, 'antreanVerifikasi']);
     });
@@ -97,6 +102,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/iku/assigned', [MasterController::class, 'assignedIku']);
         Route::post('/iku', [MasterController::class, 'createIku']);
         Route::post('/iku/{id}', [MasterController::class, 'updateIku']);
+        Route::post('/iku/{id}/justifikasi', [MasterController::class, 'saveJustifikasi']);
         Route::delete('/iku/{id}', [MasterController::class, 'deleteIku']);
         Route::get('/units', [MasterController::class, 'units']);
         Route::get('/users', [MasterController::class, 'users']);

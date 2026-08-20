@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function Rekap() {
     const [triwulan, setTriwulan] = useState('TW1');
@@ -41,17 +42,14 @@ export default function Rekap() {
                     <h2 className="text-xl font-bold text-[#181c23]">Heatmap Matriks Unit Kerja</h2>
                     <p className="text-sm text-[#535f71]">Visualisasi perbandingan pencapaian target IKU per unit.</p>
                 </div>
-                <div className="flex gap-2">
-                    <select 
-                        value={triwulan} 
-                        onChange={(e) => setTriwulan(e.target.value)}
-                        className="bg-white border border-[#c0c6d6] rounded-xl text-xs font-bold px-4 py-2 text-[#535f71]"
-                    >
-                        <option value="TW1">TW1</option>
-                        <option value="TW2">TW2</option>
-                        <option value="TW3">TW3</option>
-                        <option value="TW4">TW4</option>
-                    </select>
+                <div className="w-36">
+                    <SearchableSelect 
+                        options={['TW1', 'TW2', 'TW3', 'TW4'].map(t => ({ id: t, label: t }))}
+                        value={triwulan}
+                        onChange={(val) => setTriwulan(val)}
+                        placeholder="Pilih Triwulan"
+                        searchPlaceholder="Cari Triwulan..."
+                    />
                 </div>
             </div>
 

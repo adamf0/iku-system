@@ -101,6 +101,27 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                         </>
                     )}
 
+                    {['ADMIN', 'LPM'].includes(user.role) && (
+                        <>
+                            <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
+                            <div className="px-4 py-1">
+                                <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">VERIFIKASI & PENGESAHAN</span>
+                            </div>
+
+                            <Link 
+                                href={route().has('verifikasi') ? route('verifikasi') : '/verifikasi'} 
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                                    route().current('verifikasi') 
+                                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">verified</span>
+                                <span className="text-[13px]">Antrean Verifikasi LPM</span>
+                            </Link>
+                        </>
+                    )}
+
                     {user.role === 'ADMIN' && (
                         <>
                             <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
@@ -117,7 +138,7 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                                 }`}
                             >
                                 <span className="material-symbols-outlined text-lg">person</span>
-                                <span className="text-[13px]">Profil Perguruan Tinggi</span>
+                                <span className="text-[13px]">Profil</span>
                             </Link>
                         </>
                     )}
@@ -158,10 +179,6 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
             <header className="fixed top-0 left-0 md:left-64 right-0 h-16 bg-white/80 backdrop-blur-xl flex items-center justify-between px-8 z-40 shadow-sm border-b border-[#c0c6d6]/10">
                 <h1 className="text-lg text-[#005bb1] font-bold">{pageTitle || 'IKU Performance Portal'}</h1>
                 <div className="flex items-center gap-4">
-                    <button className="p-2 rounded-full hover:bg-[#e5e8f2] transition-colors relative">
-                        <span className="material-symbols-outlined text-[#535f71]">notifications</span>
-                        <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#ba1a1a] rounded-full"></span>
-                    </button>
                     <div className="w-8 h-8 rounded-full bg-[#d6e3ff] text-[#001b3d] flex items-center justify-center font-bold text-sm">
                         {getInitials(user?.name)}
                     </div>

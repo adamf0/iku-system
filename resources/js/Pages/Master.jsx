@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 export default function Master() {
     const user = usePage().props.auth.user;
     const [ikus, setIkus] = useState([]);
     const [contexts, setContexts] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [filterTab, setFilterTab] = useState('ALL');
 
     // Modal Edit/Create State
     const [editingIkuId, setEditingIkuId] = useState(null);
@@ -18,8 +21,7 @@ export default function Master() {
         kategori: '',
         id_sub: '',
         satuan: '',
-        base_line: '',
-        target: '',
+        jenis_iku: 'WAJIB',
         formula_text: '',
         sumber_data: ''
     });
@@ -54,8 +56,7 @@ export default function Master() {
             kategori: '',
             id_sub: '',
             satuan: '%',
-            base_line: '',
-            target: '',
+            jenis_iku: 'WAJIB',
             formula_text: '',
             sumber_data: ''
         });
@@ -70,8 +71,7 @@ export default function Master() {
             kategori: iku.kategori || '',
             id_sub: iku.id_sub || '',
             satuan: iku.satuan || '',
-            base_line: iku.base_line || '',
-            target: iku.target || '',
+            jenis_iku: iku.jenis_iku || 'WAJIB',
             formula_text: iku.formula_text || '',
             sumber_data: iku.sumber_data || ''
         });
@@ -113,9 +113,14 @@ export default function Master() {
     };
 
     // Helper: find context name by ID
-    const getContextName = (id) => {
-        const ctx = contexts.find(c => c.id === id);
-        return ctx ? ctx.nama : 'Lainnya';
+    const renderJenisBadge = (jenis) => {
+        const val = (jenis || 'WAJIB').toUpperCase();
+        if (val === 'PILIHAN') {
+            return <span className="text-[9px] font-extrabold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 border border-purple-200">PILIHAN</span>;
+        } else if (val === 'PARTISIPATIF') {
+            return <span className="text-[9px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 border border-amber-200">PARTISIPATIF</span>;
+        }
+        return <span className="text-[9px] font-extrabold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 border border-blue-200">WAJIB</span>;
     };
 
     return (
@@ -137,6 +142,28 @@ export default function Master() {
                 )}
             </div>
 
+            {/* Tab Filter Kelompok (Wajib, Pilihan, Partisipatif) */}
+            <div className="flex items-center gap-2 mb-6 bg-[#f1f3fe]/60 p-1.5 rounded-2xl w-fit border border-[#c0c6d6]/20">
+                {[
+                    { id: 'ALL', label: 'Semua Indikator' },
+                    { id: 'WAJIB', label: 'Wajib' },
+                    { id: 'PILIHAN', label: 'Pilihan' },
+                    { id: 'PARTISIPATIF', label: 'Partisipatif' }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setFilterTab(tab.id)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                            filterTab === tab.id
+                                ? 'bg-[#005bb1] text-white shadow-sm'
+                                : 'text-[#535f71] hover:text-[#181c23] hover:bg-white/50'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
             {loading ? (
                 <div className="flex items-center justify-center min-h-[300px]">
                     <span className="material-symbols-outlined animate-spin text-[#005bb1] text-3xl">progress_activity</span>
@@ -144,7 +171,11 @@ export default function Master() {
             ) : (
                 <div className="space-y-8">
                     {contexts.map(ctx => {
-                        const ctxIkus = ikus.filter(i => i.id_konteks === ctx.id && !i.id_sub);
+                        const ctxIkus = ikus.filter(i => {
+                            if (i.id_konteks !== ctx.id || i.id_sub) return false;
+                            if (filterTab !== 'ALL' && (i.jenis_iku || 'WAJIB').toUpperCase() !== filterTab) return false;
+                            return true;
+                        });
                         return (
                             <div key={ctx.id} className="bg-white rounded-2xl border border-[#c0c6d6]/20 shadow-sm p-8 space-y-6">
                                 <h3 className="text-base font-extrabold text-[#005bb1] border-b border-[#c0c6d6]/20 pb-3 uppercase tracking-wider">
@@ -165,7 +196,10 @@ export default function Master() {
                                                                 {iku.iku}
                                                             </span>
                                                             <div>
-                                                                <h4 className="text-sm font-bold text-[#181c23]">{iku.kategori}</h4>
+                                                                <div className="flex items-center">
+                                                                    <h4 className="text-sm font-bold text-[#181c23]">{iku.kategori}</h4>
+                                                                    {renderJenisBadge(iku.jenis_iku)}
+                                                                </div>
                                                                 <p className="text-[10px] text-[#717785] font-semibold uppercase mt-0.5">Satuan: {iku.satuan} • Baseline: {iku.base_line || '-'} • Target: {iku.target || '-'}</p>
                                                             </div>
                                                         </div>
@@ -188,7 +222,7 @@ export default function Master() {
                                                         )}
                                                     </div>
 
-                                                    {/* Sub indicators rendering (recursively or list childs) */}
+                                                    {/* Sub indicators rendering */}
                                                     {subRows.length > 0 && (
                                                         <div className="pl-8 space-y-2 border-l-2 border-[#f1f3fe] ml-4">
                                                             {subRows.map(sub => {
@@ -199,6 +233,7 @@ export default function Master() {
                                                                             <div>
                                                                                 <strong className="text-[#005bb1] mr-1.5">{sub.iku}</strong> 
                                                                                 <span className="text-[#535f71] font-semibold">{sub.kategori}</span>
+                                                                                {renderJenisBadge(sub.jenis_iku)}
                                                                                 <span className="text-[10px] text-[#717785] ml-2">(Satuan: {sub.satuan} • B: {sub.base_line || '-'} • T: {sub.target || '-'})</span>
                                                                             </div>
                                                                             {user.role === 'ADMIN' && (
@@ -209,7 +244,7 @@ export default function Master() {
                                                                             )}
                                                                         </div>
 
-                                                                        {/* Nested Level 3 (e.g. child rows under Sub IKU 1.1) */}
+                                                                        {/* Nested Level 3 */}
                                                                         {subSubs.length > 0 && (
                                                                             <div className="pl-8 space-y-1.5 border-l border-[#c0c6d6]/20 ml-3 pt-1">
                                                                                 {subSubs.map(ss => (
@@ -217,6 +252,7 @@ export default function Master() {
                                                                                         <div>
                                                                                             <span className="text-[#005bb1] font-bold mr-1.5">{ss.iku}</span>
                                                                                             <span className="text-[#535f71]">{ss.kategori}</span>
+                                                                                            {renderJenisBadge(ss.jenis_iku)}
                                                                                             <span className="text-[9px] text-[#717785] ml-2">(B: {ss.base_line || '-'} • T: {ss.target || '-'})</span>
                                                                                         </div>
                                                                                         {user.role === 'ADMIN' && (
@@ -261,14 +297,13 @@ export default function Master() {
                         <form onSubmit={handleSave} className="space-y-4">
                             <div className="space-y-1">
                                 <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Konteks Indikator</label>
-                                <select 
+                                <SearchableSelect 
+                                    options={contexts.map(c => ({ id: c.id, label: c.nama }))}
                                     value={formData.id_konteks}
-                                    onChange={(e) => handleInputChange('id_konteks', e.target.value)}
-                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
-                                    required
-                                >
-                                    {contexts.map(c => <option key={c.id} value={c.id}>{c.nama}</option>)}
-                                </select>
+                                    onChange={(val) => handleInputChange('id_konteks', val)}
+                                    placeholder="-- Pilih Konteks --"
+                                    searchPlaceholder="Cari Konteks..."
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -308,16 +343,31 @@ export default function Master() {
 
                             <div className="space-y-1">
                                 <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Parent Indikator (Sub Dari)</label>
-                                <select 
+                                <SearchableSelect 
+                                    options={[
+                                        { id: '', label: '-- Tanpa Induk (Top Level) --' },
+                                        ...ikus.filter(i => i.id !== editingIkuId).map(i => ({ id: i.id, label: `${i.iku} - ${i.kategori.substring(0, 50)}...` }))
+                                    ]}
                                     value={formData.id_sub}
-                                    onChange={(e) => handleInputChange('id_sub', e.target.value)}
-                                    className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
-                                >
-                                    <option value="">-- Tanpa Induk (Top Level) --</option>
-                                    {ikus.filter(i => i.id !== editingIkuId).map(i => (
-                                        <option key={i.id} value={i.id}>{i.iku} - {i.kategori.substring(0, 50)}...</option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => handleInputChange('id_sub', val)}
+                                    placeholder="-- Tanpa Induk (Top Level) --"
+                                    searchPlaceholder="Cari Indikator Induk..."
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Kelompok / Jenis Indikator</label>
+                                <SearchableSelect 
+                                    options={[
+                                        { id: 'WAJIB', label: 'Wajib' },
+                                        { id: 'PILIHAN', label: 'Pilihan' },
+                                        { id: 'PARTISIPATIF', label: 'Partisipatif' }
+                                    ]}
+                                    value={formData.jenis_iku}
+                                    onChange={(val) => handleInputChange('jenis_iku', val)}
+                                    placeholder="-- Pilih Kelompok --"
+                                    searchPlaceholder="Cari Kelompok..."
+                                />
                             </div>
 
                             <div className="space-y-1">
@@ -340,29 +390,6 @@ export default function Master() {
                                     className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1]"
                                     placeholder="e.g. Data tracer study, PDDikti, dsb."
                                 />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Baseline</label>
-                                    <input 
-                                        type="text" 
-                                        value={formData.base_line}
-                                        onChange={(e) => handleInputChange('base_line', e.target.value)}
-                                        className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs"
-                                        placeholder="-"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Target 2026</label>
-                                    <input 
-                                        type="text" 
-                                        value={formData.target}
-                                        onChange={(e) => handleInputChange('target', e.target.value)}
-                                        className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs"
-                                        placeholder="-"
-                                    />
-                                </div>
                             </div>
 
                             <div className="pt-6 border-t border-[#c0c6d6]/10 flex justify-end gap-3">

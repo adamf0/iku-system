@@ -20,12 +20,20 @@ export default function Reporting() {
             });
     }, [tahun]);
 
-    // Compute status count for triwulan (mock/calculated based on demo seed)
-    const getTwStatus = (tw) => {
-        if (tw === 'Q1' || tw === 'Q2') return 'SELESAI';
-        if (tw === 'Q3') return 'DIAJUKAN';
-        return 'IN_PROGRESS';
+    // Active Triwulan based on current month:
+    // TW1: Jan - Mar (1-3)
+    // TW2: Apr - Jun (4-6)
+    // TW3: Jul - Sep (7-9)
+    // TW4: Okt - Des (10-12)
+    const getActiveTriwulan = () => {
+        const month = new Date().getMonth() + 1;
+        if (month >= 1 && month <= 3) return 'TW1';
+        if (month >= 4 && month <= 6) return 'TW2';
+        if (month >= 7 && month <= 9) return 'TW3';
+        return 'TW4';
     };
+
+    const activeTw = getActiveTriwulan();
 
     return (
         <AuthenticatedLayout pageTitle="Capaian Kinerja">
@@ -53,54 +61,74 @@ export default function Reporting() {
                 </div>
             ) : (
                 <div className="space-y-8">
-                    {/* Annual progress banner */}
+                    {/* Annual progress banner (Mengambil data real dari DB) */}
                     <div className="bg-gradient-to-r from-[#005bb1] to-[#0073dd] rounded-2xl p-8 text-white shadow-lg flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="space-y-2">
                             <span className="text-[10px] font-bold bg-white/10 px-3 py-1 rounded-full uppercase tracking-wider">ANNUAL CYCLE {tahun}</span>
-                            <h3 className="text-2xl font-extrabold tracking-tight">Pelaporan Capaian Triwulan Q1 - Q4</h3>
+                            <h3 className="text-2xl font-extrabold tracking-tight">Pelaporan Capaian Triwulan TW1 - TW4</h3>
                             <p className="text-xs opacity-90">Laporkan realisasi dan data dukung bukti secara bertahap setiap periode triwulan.</p>
                         </div>
                         <div className="flex gap-4 text-center">
-                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 min-w-[120px]">
-                                <p className="text-[10px] opacity-75 font-bold uppercase">Rata Capaian</p>
-                                <p className="text-3xl font-extrabold mt-1">{summary?.persentase_iku_tercapai || '78.4'}%</p>
+                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 min-w-[130px]">
+                                <p className="text-[10px] opacity-75 font-bold uppercase tracking-wider">Rata Capaian</p>
+                                <p className="text-3xl font-extrabold mt-1">
+                                    {(summary?.persentase_iku_tercapai !== undefined ? summary.persentase_iku_tercapai : 0).toString().replace('.', ',')}%
+                                </p>
                             </div>
-                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 min-w-[120px]">
-                                <p className="text-[10px] opacity-75 font-bold uppercase">Laporan Masuk</p>
-                                <p className="text-3xl font-extrabold mt-1">{summary?.total_laporan || '0'}</p>
+                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 min-w-[130px]">
+                                <p className="text-[10px] opacity-75 font-bold uppercase tracking-wider">Laporan Masuk</p>
+                                <p className="text-3xl font-extrabold mt-1">{summary?.total_laporan ?? 0}</p>
                             </div>
                         </div>
                     </div>
 
                     {/* Quarters grid */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        {['Q1', 'Q2', 'Q3', 'Q4'].map((tw, idx) => {
-                            const status = getTwStatus(tw);
+                        {[
+                            { id: 'TW1', name: 'TW1 Reporting', dateRange: 'Januari – Maret' },
+                            { id: 'TW2', name: 'TW2 Reporting', dateRange: 'April – Juni' },
+                            { id: 'TW3', name: 'TW3 Reporting', dateRange: 'Juli – September' },
+                            { id: 'TW4', name: 'TW4 Reporting', dateRange: 'Oktober – Desember' }
+                        ].map((twItem, idx) => {
+                            const isActive = (twItem.id === activeTw);
                             return (
-                                <div key={tw} className="bg-white rounded-2xl border border-[#c0c6d6]/20 shadow-sm p-6 flex flex-col justify-between h-56 hover:border-[#005bb1]/30 transition-all">
+                                <div 
+                                    key={twItem.id} 
+                                    className={`bg-white rounded-2xl border shadow-sm p-6 flex flex-col justify-between h-60 transition-all ${
+                                        isActive ? 'border-[#005bb1] ring-2 ring-[#005bb1]/20' : 'border-[#c0c6d6]/20 opacity-85'
+                                    }`}
+                                >
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
                                             <span className="text-[10px] font-bold text-[#717785] uppercase tracking-wider">TRIWULAN {idx + 1}</span>
-                                            {status === 'SELESAI' && (
-                                                <span className="bg-green-100 text-green-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">SELESAI</span>
-                                            )}
-                                            {status === 'DIAJUKAN' && (
-                                                <span className="bg-orange-100 text-orange-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">VERIFIKASI</span>
-                                            )}
-                                            {status === 'IN_PROGRESS' && (
-                                                <span className="bg-[#d6e3ff] text-[#00468a] text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">IN PROGRESS</span>
+                                            {isActive ? (
+                                                <span className="bg-indigo-100 text-indigo-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">IN PROGRESS</span>
+                                            ) : (
+                                                <span className="bg-gray-100 text-gray-500 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[10px]">lock</span> TERKUNCI
+                                                </span>
                                             )}
                                         </div>
-                                        <h4 className="text-lg font-bold text-[#181c23]">{tw} Reporting</h4>
-                                        <p className="text-xs text-[#535f71]">Periode pengisian data capaian dan bukti pendukung untuk triwulan ke-{idx + 1}.</p>
+                                        <h4 className="text-lg font-bold text-[#181c23]">{twItem.name}</h4>
+                                        <p className="text-xs text-[#535f71]">Periode: <span className="font-semibold text-[#181c23]">{twItem.dateRange}</span></p>
                                     </div>
 
-                                    <Link 
-                                        href={route('capaian.edit') + `?triwulan=${tw}`}
-                                        className="w-full bg-[#f1f3fe] text-[#005bb1] text-xs font-bold py-2.5 rounded-xl block text-center hover:bg-[#005bb1]/5 transition-colors uppercase tracking-wider"
-                                    >
-                                        Isi Capaian {tw}
-                                    </Link>
+                                    {isActive ? (
+                                        <Link 
+                                            href={route('capaian.edit') + `?triwulan=${twItem.id}`}
+                                            className="w-full bg-[#005bb1] text-white text-xs font-extrabold py-3 rounded-xl block text-center hover:bg-[#0073dd] transition-all uppercase tracking-wider shadow-sm"
+                                        >
+                                            Isi Capaian {twItem.id}
+                                        </Link>
+                                    ) : (
+                                        <button 
+                                            disabled
+                                            className="w-full bg-gray-100 text-gray-400 text-xs font-bold py-3 rounded-xl block text-center uppercase tracking-wider cursor-not-allowed opacity-60"
+                                            title="Periode pengisian ini belum aktif atau telah ditutup."
+                                        >
+                                            Isi Capaian {twItem.id}
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })}

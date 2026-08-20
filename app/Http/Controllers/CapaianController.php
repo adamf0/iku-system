@@ -232,7 +232,8 @@ class CapaianController extends Controller
                 'penugasan_target.tahun',
                 'v_fakultas_unit.nama_fak_prod_unit as nama_unit',
                 'master_indikator.iku',
-                'master_indikator.full_kategori'
+                'master_indikator.full_kategori',
+                'master_indikator.jenis_iku'
             );
 
         if ($showDeleted) {
@@ -266,7 +267,8 @@ class CapaianController extends Controller
                 'penugasan_target.deleted_at',
                 'v_fakultas_unit.nama_fak_prod_unit as nama_unit',
                 'master_indikator.iku',
-                'master_indikator.full_kategori'
+                'master_indikator.full_kategori',
+                'master_indikator.jenis_iku'
             );
 
         if ($showDeleted) {
@@ -280,6 +282,9 @@ class CapaianController extends Controller
         }
         if ($request->filled('tahun')) {
             $query->where('penugasan_target.tahun', $request->query('tahun'));
+        }
+        if ($request->filled('jenis_iku')) {
+            $query->where('master_indikator.jenis_iku', $request->query('jenis_iku'));
         }
         if ($request->filled('iku')) {
             $kw = '%' . $request->query('iku') . '%';

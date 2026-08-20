@@ -15,10 +15,36 @@ class MasterController extends Controller
     }
 
     // List indicators
+    // List indicators with year-specific target parameter override
     public function iku(Request $request)
     {
-        $data = DB::table('master_indikator')->get();
-        return response()->json($data);
+        $tahun = $request->query('tahun', 2026);
+        $indicators = DB::table('master_indikator')->get();
+
+        $targets = DB::table('target_indikator_tahun')
+            ->where('tahun', $tahun)
+            ->get()
+            ->keyBy('id_indikator');
+
+        $result = $indicators->map(function ($iku) use ($targets) {
+            $t = $targets->get($iku->id);
+            $iku->base_line = $t ? $t->base_line : $iku->base_line;
+            $iku->target = $t ? $t->target : $iku->target;
+            $iku->target_d3 = $t ? $t->target_d3 : $iku->target_d3;
+            $iku->target_d4 = $t ? $t->target_d4 : $iku->target_d4;
+            $iku->target_s1 = $t ? $t->target_s1 : $iku->target_s1;
+            $iku->target_s2 = $t ? $t->target_s2 : $iku->target_s2;
+            $iku->target_s3 = $t ? $t->target_s3 : $iku->target_s3;
+            $iku->target_profesi = $t ? $t->target_profesi : $iku->target_profesi;
+            $iku->target_unit = $t ? $t->target_unit : $iku->target_unit;
+            $iku->target_fakultas = $t ? $t->target_fakultas : $iku->target_fakultas;
+            $iku->target_prodi = $t ? $t->target_prodi : $iku->target_prodi;
+            $iku->catatan_justifikasi = $t ? $t->catatan_justifikasi : $iku->catatan_justifikasi;
+            $iku->file_justifikasi = $t ? $t->file_justifikasi : $iku->file_justifikasi;
+            return $iku;
+        });
+
+        return response()->json($result);
     }
 
     // List indicators assigned to active user's unit
@@ -28,7 +54,12 @@ class MasterController extends Controller
         $unitId = $request->query('unit');
         $tahun = $request->query('tahun');
         
-        if (empty($unitId)) {
+        if ($user && !in_array($user->role, ['ADMIN', 'LPM'])) {
+            $allowedUnits = $user->scopeUnits();
+            if (empty($unitId) || !in_array((int)$unitId, $allowedUnits)) {
+                $unitId = $user->fakultas_unit;
+            }
+        } else if (empty($unitId) && $user) {
             $unitId = $user->fakultas_unit;
         }
         
@@ -41,9 +72,33 @@ class MasterController extends Controller
             $query->where('penugasan_target.tahun', $tahun);
         }
 
-        $data = $query->select('master_indikator.*')->get();
+        $indicators = $query->select('master_indikator.*')->get();
+
+        if ($indicators->isEmpty()) {
+            $indicators = DB::table('master_indikator')->get();
+        }
+        $targetYear = $tahun ?: 2026;
+
+        $targets = DB::table('target_indikator_tahun')
+            ->where('tahun', $targetYear)
+            ->get()
+            ->keyBy('id_indikator');
+
+        $result = $indicators->map(function ($iku) use ($targets) {
+            $t = $targets->get($iku->id);
+            if ($t) {
+                $iku->base_line = $t->base_line;
+                $iku->target = $t->target;
+                $iku->catatan_justifikasi = $t->catatan_justifikasi ?? ($iku->catatan_justifikasi ?? null);
+                $iku->file_justifikasi = $t->file_justifikasi ?? ($iku->file_justifikasi ?? null);
+            } else {
+                $iku->catatan_justifikasi = $iku->catatan_justifikasi ?? null;
+                $iku->file_justifikasi = $iku->file_justifikasi ?? null;
+            }
+            return $iku;
+        });
         
-        return response()->json($data);
+        return response()->json($result);
     }
 
     // Create indicator (Menu 1: Management Indikator)
@@ -60,6 +115,7 @@ class MasterController extends Controller
             'kategori' => 'nullable|string',
             'id_sub' => 'nullable|integer|exists:master_indikator,id',
             'satuan' => 'required|string',
+            'jenis_iku' => 'nullable|string',
             'base_line' => 'nullable|string',
             'target' => 'nullable|string',
             'formula_text' => 'nullable|string',
@@ -85,6 +141,17 @@ class MasterController extends Controller
             'updated_at' => now()
         ]));
 
+        // Insert default target in target_indikator_tahun for 2026
+        DB::table('target_indikator_tahun')->updateOrInsert(
+            ['id_indikator' => $id, 'tahun' => 2026],
+            [
+                'base_line' => $validated['base_line'] ?? null,
+                'target' => $validated['target'] ?? null,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );
+
         return response()->json(['message' => 'Indikator berhasil dibuat.', 'id' => $id]);
     }
 
@@ -96,34 +163,22 @@ class MasterController extends Controller
             return response()->json(['error' => 'Hanya Admin yang dapat mengubah master indikator.'], 403);
         }
 
-        $validated = $request->validate([
-            'id_konteks' => 'sometimes|integer|exists:master_konteks,id',
-            'iku' => 'sometimes|string',
-            'kategori' => 'nullable|string',
-            'id_sub' => 'nullable|integer|exists:master_indikator,id',
-            'satuan' => 'sometimes|string',
-            'base_line' => 'nullable|string',
-            'target' => 'nullable|string',
-            'formula_text' => 'nullable|string',
-            'sumber_data' => 'nullable|string',
-            
-            // targets level overrides (Menu 2)
-            'target_d3' => 'nullable|string',
-            'target_d4' => 'nullable|string',
-            'target_s1' => 'nullable|string',
-            'target_s2' => 'nullable|string',
-            'target_s3' => 'nullable|string',
-            'target_profesi' => 'nullable|string',
-            'target_unit' => 'nullable|string',
-            'target_fakultas' => 'nullable|string',
-            'target_prodi' => 'nullable|string',
+        $tahun = $request->input('tahun', $request->query('tahun', 2026));
+
+        $validatedMaster = $request->only([
+            'id_konteks', 'iku', 'kategori', 'id_sub', 'satuan', 'jenis_iku', 'formula_text', 'sumber_data'
+        ]);
+
+        $validatedTarget = $request->only([
+            'base_line', 'target', 'target_d3', 'target_d4', 'target_s1', 'target_s2', 
+            'target_s3', 'target_profesi', 'target_unit', 'target_fakultas', 'target_prodi'
         ]);
 
         $current = DB::table('master_indikator')->where('id', $id)->first();
         if ($current) {
-            $idSub = array_key_exists('id_sub', $validated) ? $validated['id_sub'] : $current->id_sub;
-            $kategori = array_key_exists('kategori', $validated) ? ($validated['kategori'] ?? '') : ($current->kategori ?? '');
-            $iku = isset($validated['iku']) ? $validated['iku'] : $current->iku;
+            $idSub = array_key_exists('id_sub', $validatedMaster) ? $validatedMaster['id_sub'] : $current->id_sub;
+            $kategori = array_key_exists('kategori', $validatedMaster) ? ($validatedMaster['kategori'] ?? '') : ($current->kategori ?? '');
+            $iku = isset($validatedMaster['iku']) ? $validatedMaster['iku'] : $current->iku;
 
             $parentIkuCode = null;
             if (!empty($idSub)) {
@@ -133,14 +188,23 @@ class MasterController extends Controller
                 }
             }
 
-            $validated['full_kategori'] = $parentIkuCode 
+            $validatedMaster['full_kategori'] = $parentIkuCode 
                 ? ($kategori ? $parentIkuCode . ' - ' . $kategori : $parentIkuCode)
                 : ($kategori ? $iku . ' - ' . $kategori : $iku);
         }
 
-        DB::table('master_indikator')
-            ->where('id', $id)
-            ->update(array_merge($validated, ['updated_at' => now()]));
+        if (!empty($validatedMaster)) {
+            DB::table('master_indikator')
+                ->where('id', $id)
+                ->update(array_merge($validatedMaster, ['updated_at' => now()]));
+        }
+
+        if (!empty($validatedTarget)) {
+            DB::table('target_indikator_tahun')->updateOrInsert(
+                ['id_indikator' => $id, 'tahun' => $tahun],
+                array_merge($validatedTarget, ['updated_at' => now()])
+            );
+        }
 
         return response()->json(['message' => 'Indikator berhasil diperbarui.']);
     }
@@ -154,12 +218,58 @@ class MasterController extends Controller
         }
 
         DB::table('master_indikator')->where('id', $id)->delete();
+        DB::table('target_indikator_tahun')->where('id_indikator', $id)->delete();
         return response()->json(['message' => 'Indikator berhasil dihapus.']);
     }
 
-    // Fetch units from v_fakultas_unit view
+    // Save justifikasi for indicator target per year (Menu 2: Management Target)
+    public function saveJustifikasi(Request $request, $id)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat menyimpan justifikasi target.'], 403);
+        }
+
+        $tahun = $request->input('tahun', $request->query('tahun', 2026));
+
+        $validated = $request->validate([
+            'catatan_justifikasi' => 'nullable|string',
+            'file_justifikasi' => 'nullable|file|max:20480',
+        ]);
+
+        $updateData = [
+            'catatan_justifikasi' => $validated['catatan_justifikasi'] ?? null,
+            'updated_at' => now()
+        ];
+
+        if ($request->hasFile('file_justifikasi')) {
+            $file = $request->file('file_justifikasi');
+            $filename = time() . '_' . preg_replace('/[^A-Za-z0-9_\.-]/', '_', $file->getClientOriginalName());
+            $file->move(public_path('uploads/justifikasi'), $filename);
+            $updateData['file_justifikasi'] = '/uploads/justifikasi/' . $filename;
+        }
+
+        DB::table('target_indikator_tahun')->updateOrInsert(
+            ['id_indikator' => $id, 'tahun' => $tahun],
+            $updateData
+        );
+
+        return response()->json([
+            'message' => 'Justifikasi target berhasil disimpan.',
+            'catatan_justifikasi' => $updateData['catatan_justifikasi'],
+            'file_justifikasi' => $updateData['file_justifikasi'] ?? null
+        ]);
+    }
+
+    // Fetch units from v_fakultas_unit view (Scoped per user role & unit)
     public function units(Request $request)
     {
+        $user = $request->user();
+        if ($user) {
+            $scope = $user->scopeUnits();
+            $data = DB::table('v_fakultas_unit')->whereIn('id', $scope)->get();
+            return response()->json($data);
+        }
         $data = DB::table('v_fakultas_unit')->get();
         return response()->json($data);
     }

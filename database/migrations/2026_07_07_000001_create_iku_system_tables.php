@@ -142,6 +142,7 @@ return new class extends Migration
             $table->unsignedBigInteger('id_sub')->nullable(); // Self-referencing parent
             $table->text('full_kategori')->nullable();
             $table->string('satuan');
+            $table->string('jenis_iku')->default('WAJIB'); // WAJIB, PILIHAN, PARTISIPATIF
             $table->string('base_line')->nullable();
             $table->string('target')->nullable();
             
