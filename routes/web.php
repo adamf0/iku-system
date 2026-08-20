@@ -95,6 +95,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{id}/restore', [CapaianController::class, 'restorePenugasan']);
     });
 
+    // Target Management routes (Bypasses WAF REST blocks)
+    Route::post('/target/justifikasi/{id}', [MasterController::class, 'saveJustifikasi']);
+    Route::post('/target/save/{id}', [MasterController::class, 'updateIku']);
+
     // API - Master Data
     Route::prefix('api/master')->group(function () {
         Route::get('/contexts', [MasterController::class, 'contexts']);

@@ -113,7 +113,9 @@ export default function ManagementTarget() {
     const handleSaveTarget = (e) => {
         e.preventDefault();
         
-        axios.post(`/api/master/iku/${editingTargetId}`, { ...formData, tahun: selectedTahun })
+        axios.post(`/target/save/${editingTargetId}`, { ...formData, tahun: selectedTahun }, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
         .then(() => {
             alert(`Target indikator tahun ${selectedTahun} berhasil diperbarui!`);
             setEditingTargetId(null);
@@ -137,7 +139,12 @@ export default function ManagementTarget() {
             data.append('file_justifikasi', fileJustifikasi);
         }
 
-        axios.post(`/api/master/iku/${justifikasiModalIku.id}/justifikasi`, data)
+        axios.post(`/target/justifikasi/${justifikasiModalIku.id}`, data, {
+            headers: { 
+                'Content-Type': 'multipart/form-data',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
         .then(() => {
             alert(`Justifikasi target tahun ${selectedTahun} berhasil disimpan!`);
             setJustifikasiModalIku(null);
