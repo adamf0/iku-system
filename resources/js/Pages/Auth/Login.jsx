@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
+import bgImage from './bg.png';
 
 export default function Login() {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -18,7 +19,7 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed bg-[#f9f9ff]">
+        <div className="min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed">
             <Head title="IKU Portal - Login" />
             
             <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-[#f9f9ff]/80 backdrop-blur-xl">
@@ -30,8 +31,8 @@ export default function Login() {
 
             <main className="flex-grow flex items-center justify-center pt-16 pb-12 px-6 relative overflow-hidden">
                 {/* Abstract Background Shapes */}
-                <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#0073dd]/10 rounded-full blur-3xl"></div>
-                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#d7e3f9]/10 rounded-full blur-3xl"></div>
+                {/* <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#0073dd]/10 rounded-full blur-3xl"></div> */}
+                {/* <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#d7e3f9]/10 rounded-full blur-3xl"></div> */}
                 
                 {/* Login Card Container */}
                 <div className="w-full max-w-5xl bg-white rounded-xl overflow-hidden flex flex-col md:flex-row shadow-xl relative z-10">
@@ -42,7 +43,7 @@ export default function Login() {
                         <div 
                             className="h-full w-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105" 
                             style={{ 
-                                backgroundImage: `url('https://lh3.googleusercontent.com/aida-public/AB6AXuB42DkGfZchTesoL0-RckVKn8KOEkVXhTBhpVtVQlaAsp7X15l8OL6W6NJcGTKFXSOsOpvSyqOp-DzGKRHfm3g0UG7mO6tbGSh0mK4fb3E3onwNIXiMD1hnkhAjzvaOapYELpQMoAycfzdvLoM0FCmO-oh2zYrL8RkNeWFMZ2cHzfaJRNZOGzGJNqyS0ab4H4ZkcOs-MXt0HUchzHdfpVIBQyg8ay7fO7TQukXaccmbOROhqUEBKTSlBlBa_DVBTZfjuqtC8Knd8Wc')`
+                                backgroundImage: `url(${bgImage})`
                             }}
                         ></div>
                         <div className="absolute bottom-10 left-10 right-10 z-20 text-white">
