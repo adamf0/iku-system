@@ -18,7 +18,9 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
 
     const items = data;
     const isAllYears = (selectedTahun === 'ALL');
-    const availableYears = isAllYears ? [2025, 2026] : [Number(selectedTahun)];
+    const availableYears = isAllYears
+        ? (items[0]?.years_data ? Object.keys(items[0].years_data).map(Number) : [2025, 2026])
+        : [Number(selectedTahun)];
 
     const yearColors = {
         2025: { bar: '#6366f1', targetLine: '#10b981', baseLine: '#f59e0b', label: '2025' },
@@ -48,12 +50,10 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
             let capPct = yData.capaian_pct || (yr === Number(selectedTahun) ? item.capaian_pct : 0);
 
             if (filterTw && filterTw !== 'ALL') {
-                if (yData && yData[filterTw] !== undefined && yData[filterTw] > 0) {
-                    capPct = yData[filterTw];
-                } else if (item[filterTw] !== undefined && item[filterTw] > 0) {
-                    capPct = item[filterTw];
-                } else if (yData && yData[filterTw] !== undefined) {
-                    capPct = yData[filterTw];
+                if (yData && yData[filterTw] !== undefined && yData[filterTw] !== null) {
+                    capPct = Number(yData[filterTw]) || 0;
+                } else if (item[filterTw] !== undefined && item[filterTw] !== null) {
+                    capPct = Number(item[filterTw]) || 0;
                 }
 
                 const twKeyLower = filterTw.toLowerCase();

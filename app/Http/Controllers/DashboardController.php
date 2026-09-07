@@ -148,11 +148,13 @@ class DashboardController extends Controller
 
                 $twPctsYr = [];
                 $targetYr = (float)$iku->target;
+                $effTargetYr = $targetYr > 0 ? $targetYr : 1;
+
                 foreach ($this->TRIWULAN as $tw) {
                     $rowsYrTw = $rowsYr->where('triwulan', $tw);
-                    if ($rowsYrTw->count() > 0 && $targetYr > 0) {
+                    if ($rowsYrTw->count() > 0) {
                         $sumRealisasiTw = $rowsYrTw->sum('nilai_capaian');
-                        $sumTargetTw = $rowsYrTw->count() * $targetYr;
+                        $sumTargetTw = $rowsYrTw->count() * $effTargetYr;
                         $twPctsYr[$tw] = min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1));
                     } else {
                         $twPctsYr[$tw] = 0;
@@ -162,9 +164,9 @@ class DashboardController extends Controller
                 $capaianYr = $rowsYr->count() > 0 ? (float)$rowsYr->avg('nilai_capaian') : null;
                 $baselineYr = (float)$iku->base_line;
 
-                if ($rowsYr->count() > 0 && $targetYr > 0) {
+                if ($rowsYr->count() > 0) {
                     $sumRealisasiYr = $rowsYr->sum('nilai_capaian');
-                    $sumTargetYr = $rowsYr->count() * $targetYr;
+                    $sumTargetYr = $rowsYr->count() * $effTargetYr;
                     $capaianPctYr = min(100, round(($sumRealisasiYr / $sumTargetYr) * 100, 1));
                 } else {
                     $capaianPctYr = 0;

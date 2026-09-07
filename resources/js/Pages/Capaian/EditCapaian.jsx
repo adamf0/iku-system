@@ -305,6 +305,7 @@ export default function EditCapaian() {
     const endIndex = Math.min(startIndex + 10, totalItems);
     const currentCapaianList = capaianList.slice(startIndex, endIndex);
 
+    console.log(currentCapaianList)
     return (
         <AuthenticatedLayout pageTitle={`Isi Capaian Kinerja`}>
             <Head title={`Isi Capaian Kinerja - IKU Portal`} />

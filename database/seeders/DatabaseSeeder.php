@@ -336,7 +336,7 @@ class DatabaseSeeder extends Seeder
                         'catatan' => 'Analisis performa triwulan untuk indikator ' . $ind->iku,
                         'file_url' => 'https://drive.google.com/test_doc_file',
                         'status_validasi' => $statusByTw[$tw],
-                        'diinput_oleh' => 'seed',
+                        'diinput_oleh' => '',
                         'diverifikasi_oleh' => $statusByTw[$tw] !== 'DRAFT' ? 'lpm' : null,
                         'created_at' => now(),
                         'updated_at' => now()
