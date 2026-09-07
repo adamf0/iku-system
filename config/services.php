@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'parent_folder_id' => env('GOOGLE_PARENT_FOLDER_ID'),
+        'redirect_uri' => env('GOOGLE_REDIRECT_URI', 'http://localhost:8000/gdrive-callback'),
+        'api_key' => env('GOOGLE_API_KEY'),
+    ],
+
 ];

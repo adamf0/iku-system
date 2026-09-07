@@ -316,8 +316,14 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
     );
 }
 
-// Capaian Semua Unit Bar Chart Component
+// Capaian Semua Unit Bar Chart Component with UX/UI Enhancements
 function CapaianSemuaUnitBarChart({ data }) {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedType, setSelectedType] = useState('ALL');
+    const [sortBy, setSortBy] = useState('CAPAIAN_DESC');
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+
     if (!data || data.length === 0) {
         return (
             <div className="p-8 text-center text-xs text-[#717785] italic">
@@ -326,49 +332,245 @@ function CapaianSemuaUnitBarChart({ data }) {
         );
     }
 
+    // Unique unit types for tabs
+    const unitTypes = ['ALL', ...Array.from(new Set(data.map(u => u.type).filter(Boolean)))];
+
+    // Counts by performance status
+    const highCount = data.filter(u => (Number(u.capaian) || 0) >= 80).length;
+    const medCount = data.filter(u => (Number(u.capaian) || 0) >= 50 && (Number(u.capaian) || 0) < 80).length;
+    const lowCount = data.filter(u => (Number(u.capaian) || 0) < 50).length;
+
+    // Filter & Sort logic
+    let filteredData = data.filter(unit => {
+        const matchSearch = (unit.nama_unit || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchType = selectedType === 'ALL' || unit.type === selectedType;
+        return matchSearch && matchType;
+    });
+
+    filteredData = [...filteredData].sort((a, b) => {
+        const capA = Number(a.capaian) || 0;
+        const capB = Number(b.capaian) || 0;
+        if (sortBy === 'CAPAIAN_DESC') return capB - capA;
+        if (sortBy === 'CAPAIAN_ASC') return capA - capB;
+        if (sortBy === 'NAME_ASC') return (a.nama_unit || '').localeCompare(b.nama_unit || '');
+        return 0;
+    });
+
+    const DEFAULT_LIMIT = 6;
+    const visibleData = isExpanded ? filteredData : filteredData.slice(0, DEFAULT_LIMIT);
+    const hiddenCount = filteredData.length - DEFAULT_LIMIT;
+
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.map(unit => {
-                const pct = Number(unit.capaian) || 0;
-                let barColor = 'bg-red-500';
-                let badgeColor = 'bg-red-100 text-red-700';
+        <div className="space-y-5">
+            {/* Status Summary Pill Badges & View Switcher */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-[#f9f9ff] p-3 rounded-2xl border border-[#c0c6d6]/20">
+                {/* Status Badges */}
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                    <span className="text-[#535f71] mr-1 font-extrabold uppercase text-[10px] tracking-wider">Ringkasan Status:</span>
+                    <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Tinggi (≥80%): <strong className="font-mono text-emerald-900">{highCount}</strong>
+                    </span>
+                    <span className="bg-blue-100 text-[#005bb1] px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#005bb1]"></span>
+                        Sedang (50-79%): <strong className="font-mono text-[#001b3d]">{medCount}</strong>
+                    </span>
+                    <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        Perlu Perhatian (&lt;50%): <strong className="font-mono text-red-900">{lowCount}</strong>
+                    </span>
+                </div>
 
-                if (pct >= 80) {
-                    barColor = 'bg-emerald-500';
-                    badgeColor = 'bg-emerald-100 text-emerald-700';
-                } else if (pct >= 50) {
-                    barColor = 'bg-[#005bb1]';
-                    badgeColor = 'bg-blue-100 text-[#005bb1]';
-                }
+                {/* View Mode Switcher */}
+                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#c0c6d6]/30 self-end md:self-auto shadow-2xs">
+                    <button 
+                        onClick={() => setViewMode('grid')}
+                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[#005bb1] text-white' : 'text-[#535f71] hover:bg-[#f1f3fe]'}`}
+                        title="Tampilan Grid Kartu"
+                    >
+                        <span className="material-symbols-outlined text-sm block">grid_view</span>
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('list')}
+                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[#005bb1] text-white' : 'text-[#535f71] hover:bg-[#f1f3fe]'}`}
+                        title="Tampilan Ranking List"
+                    >
+                        <span className="material-symbols-outlined text-sm block">format_list_bulleted</span>
+                    </button>
+                </div>
+            </div>
 
-                return (
-                    <div key={unit.id} className="bg-[#f9f9ff] border border-[#c0c6d6]/25 rounded-2xl p-4 space-y-3 hover:shadow-md transition-all">
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <h4 className="text-xs font-extrabold text-[#181c23] line-clamp-1">{unit.nama_unit}</h4>
-                                <span className="text-[9px] font-bold text-[#717785] uppercase tracking-wider">{unit.type}</span>
-                            </div>
-                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${badgeColor}`}>
-                                {pct}%
-                            </span>
-                        </div>
+            {/* Filtering & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                {/* Unit Type Filter Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
+                    {unitTypes.map(type => {
+                        const count = type === 'ALL' ? data.length : data.filter(u => u.type === type).length;
+                        const label = type === 'ALL' ? 'Semua Unit' : type;
+                        return (
+                            <button
+                                key={type}
+                                onClick={() => {
+                                    setSelectedType(type);
+                                    setIsExpanded(false);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all ${
+                                    selectedType === type
+                                        ? 'bg-[#005bb1] text-white shadow-xs'
+                                        : 'bg-[#f1f3fe] text-[#535f71] hover:bg-[#e5e8f2]'
+                                }`}
+                            >
+                                {label} ({count})
+                            </button>
+                        );
+                    })}
+                </div>
 
-                        {/* Progress bar container */}
-                        <div className="space-y-1">
-                            <div className="w-full bg-[#e8ecf4] h-2.5 rounded-full overflow-hidden">
-                                <div 
-                                    className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
-                                    style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                                ></div>
-                            </div>
-                            <div className="flex justify-between items-center text-[9px] text-[#717785] font-semibold">
-                                <span>Laporan: {unit.total_laporan || 0}</span>
-                                <span>Target 100%</span>
-                            </div>
-                        </div>
+                {/* Search & Sort Input Controls */}
+                <div className="flex items-center gap-2">
+                    <div className="relative flex-grow sm:w-48">
+                        <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[#717785] text-base pointer-events-none">search</span>
+                        <input
+                            type="text"
+                            placeholder="Cari Unit Kerja..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-white border border-[#c0c6d6]/40 rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium text-[#181c23] placeholder-[#717785] outline-none focus:border-[#005bb1] focus:ring-1 focus:ring-[#005bb1]"
+                        />
+                        {searchQuery && (
+                            <button 
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#717785] hover:text-[#181c23]"
+                            >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        )}
                     </div>
-                );
-            })}
+
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="bg-white border border-[#c0c6d6]/40 rounded-xl px-3 py-1.5 text-xs font-bold text-[#181c23] outline-none cursor-pointer focus:border-[#005bb1]"
+                    >
+                        <option value="CAPAIAN_DESC">Capaian Tertinggi</option>
+                        <option value="CAPAIAN_ASC">Capaian Terendah</option>
+                        <option value="NAME_ASC">Nama (A-Z)</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Empty Search Result State */}
+            {filteredData.length === 0 ? (
+                <div className="p-8 text-center bg-[#f9f9ff] rounded-2xl border border-[#c0c6d6]/20 space-y-2">
+                    <span className="material-symbols-outlined text-[#717785] text-3xl">search_off</span>
+                    <p className="text-xs text-[#535f71] font-medium">Tidak ada unit kerja yang sesuai dengan kata kunci "{searchQuery}".</p>
+                </div>
+            ) : viewMode === 'grid' ? (
+                /* GRID CARD VIEW */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {visibleData.map((unit, idx) => {
+                        const pct = Number(unit.capaian) || 0;
+                        let barColor = 'bg-red-500';
+                        let badgeColor = 'bg-red-100 text-red-700';
+
+                        if (pct >= 80) {
+                            barColor = 'bg-emerald-500';
+                            badgeColor = 'bg-emerald-100 text-emerald-700';
+                        } else if (pct >= 50) {
+                            barColor = 'bg-[#005bb1]';
+                            badgeColor = 'bg-blue-100 text-[#005bb1]';
+                        }
+
+                        return (
+                            <div key={unit.id} className="bg-[#f9f9ff] border border-[#c0c6d6]/25 rounded-2xl p-4 space-y-3 hover:shadow-md transition-all">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="text-xs font-extrabold text-[#181c23] truncate" title={unit.nama_unit}>{unit.nama_unit}</h4>
+                                        <span className="text-[9px] font-bold text-[#717785] uppercase tracking-wider">{unit.type}</span>
+                                    </div>
+                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase flex-shrink-0 ${badgeColor}`}>
+                                        {pct}%
+                                    </span>
+                                </div>
+
+                                {/* Progress bar container */}
+                                <div className="space-y-1">
+                                    <div className="w-full bg-[#e8ecf4] h-2.5 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
+                                            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                                        ></div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[9px] text-[#717785] font-semibold">
+                                        <span>Laporan: {unit.total_laporan || 0}</span>
+                                        <span>Target 100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                /* RANKING LIST VIEW */
+                <div className="bg-[#f9f9ff] border border-[#c0c6d6]/25 rounded-2xl divide-y divide-[#c0c6d6]/15 overflow-hidden">
+                    {visibleData.map((unit, idx) => {
+                        const pct = Number(unit.capaian) || 0;
+                        let barColor = 'bg-red-500';
+                        let badgeColor = 'bg-red-100 text-red-700';
+
+                        if (pct >= 80) {
+                            barColor = 'bg-emerald-500';
+                            badgeColor = 'bg-emerald-100 text-emerald-700';
+                        } else if (pct >= 50) {
+                            barColor = 'bg-[#005bb1]';
+                            badgeColor = 'bg-blue-100 text-[#005bb1]';
+                        }
+
+                        return (
+                            <div key={unit.id} className="p-3.5 flex items-center gap-4 hover:bg-white transition-colors">
+                                <span className="w-6 text-center text-xs font-black text-[#717785]">#{idx + 1}</span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <h4 className="text-xs font-bold text-[#181c23] truncate">{unit.nama_unit}</h4>
+                                            <span className="text-[9px] font-bold text-[#717785] bg-[#ebedf8] px-2 py-0.5 rounded uppercase flex-shrink-0">{unit.type}</span>
+                                        </div>
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`}>
+                                            {pct}%
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-[#e8ecf4] h-2 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
+                                            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Show More / Show Less Toggle Button */}
+            {filteredData.length > DEFAULT_LIMIT && (
+                <div className="flex justify-center pt-2">
+                    <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="inline-flex items-center gap-2 bg-[#f1f3fe] hover:bg-[#005bb1] text-[#005bb1] hover:text-white border border-[#005bb1]/20 px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all duration-200 shadow-2xs group"
+                    >
+                        <span>
+                            {isExpanded 
+                                ? 'Tampilkan Ringkas (Top 6 Unit)' 
+                                : `Tampilkan Selengkapnya (${hiddenCount} Unit Lainnya)`
+                            }
+                        </span>
+                        <span className="material-symbols-outlined text-base transition-transform group-hover:scale-110">
+                            {isExpanded ? 'expand_less' : 'expand_more'}
+                        </span>
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
@@ -390,6 +592,7 @@ export default function Dashboard() {
 
     const [activePeriod, setActivePeriod] = useState('TW3');
     const [chartTwFilter, setChartTwFilter] = useState('ALL');
+    const [unitTwFilter, setUnitTwFilter] = useState('ALL');
 
     useEffect(() => {
         Promise.all([
@@ -410,7 +613,7 @@ export default function Dashboard() {
     useEffect(() => {
         loadSummary();
 
-        let streamUrl = `/api/dashboard/summary?stream=1&tahun=${selectedTahun}&triwulan=${chartTwFilter}`;
+        let streamUrl = `/api/dashboard/summary?stream=1&tahun=${selectedTahun}&triwulan=${chartTwFilter}&unit_tw=${unitTwFilter}`;
         if (selectedUnit) streamUrl += `&unit=${selectedUnit}`;
 
         const eventSource = new EventSource(streamUrl);
@@ -444,11 +647,11 @@ export default function Dashboard() {
                 removeStartListener();
             }
         };
-    }, [selectedTahun, selectedUnit, chartTwFilter]);
+    }, [selectedTahun, selectedUnit, chartTwFilter, unitTwFilter]);
 
     const loadSummary = () => {
         setLoading(true);
-        let url = `/api/dashboard/summary?tahun=${selectedTahun}&triwulan=${chartTwFilter}`;
+        let url = `/api/dashboard/summary?tahun=${selectedTahun}&triwulan=${chartTwFilter}&unit_tw=${unitTwFilter}`;
         if (selectedUnit) url += `&unit=${selectedUnit}`;
 
         fetch(url)
@@ -523,6 +726,24 @@ export default function Dashboard() {
                     </div>
                     <p className="text-xs text-[#535f71] mt-0.5">Evaluasi realisasi capaian secara real-time</p>
                 </div>
+
+                {/* Single Filter Tahun Header Selector */}
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 bg-white border border-[#c0c6d6]/40 rounded-xl px-4 py-2 text-xs font-bold text-[#181c23] shadow-xs">
+                        <span className="material-symbols-outlined text-[#005bb1] text-lg">calendar_today</span>
+                        <span className="text-xs font-bold text-[#717785]">Tahun:</span>
+                        <select 
+                            value={selectedTahun} 
+                            onChange={(e) => setSelectedTahun(e.target.value)}
+                            className="bg-transparent border-none text-xs font-extrabold text-[#005bb1] outline-none cursor-pointer pr-2"
+                        >
+                            {years.map(y => (
+                                <option key={y.tahun} value={y.tahun}>Tahun {y.tahun}</option>
+                            ))}
+                            <option value="ALL">Semua Tahun</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             {loading ? (
@@ -532,7 +753,7 @@ export default function Dashboard() {
             ) : (
                 <div className="space-y-8">
                     {/* CARD 1: OVERALL CAPAIAN & 4 TRIWULAN CARDS (FULL WIDTH 1 COLUMN) */}
-                    <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-[#c0c6d6]/20 space-y-6">
+                    <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-8 shadow-sm border border-[#c0c6d6]/20 space-y-6">
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                             {/* Overall Capaian Banner */}
                             <div className="lg:col-span-4 bg-[#005bb1] text-white p-6 rounded-[1.8rem] shadow-lg relative overflow-hidden flex flex-col justify-between h-52">
@@ -551,7 +772,7 @@ export default function Dashboard() {
                             </div>
 
                             {/* 4 Triwulan Grid Cards */}
-                            <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 {['TW1', 'TW2', 'TW3', 'TW4'].map((twKey, idx) => {
                                     const twData = twSummary[twKey] || {
                                         capaian: 0,
@@ -606,9 +827,21 @@ export default function Dashboard() {
                                                 </span>
                                             </div>
 
-                                            <div className="mt-3 flex items-center gap-1.5">
-                                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                <span className="font-extrabold text-sm text-[#181c23]">TW {idx + 1}</span>
+                                            <div className="mt-3 flex items-center justify-between gap-1.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                                    <span className="font-extrabold text-sm text-[#181c23]">TW {idx + 1}</span>
+                                                </div>
+                                                <a 
+                                                    href={`/api/dashboard/export-tw-zip?tw=${twKey}&tahun=${selectedTahun}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title={`Export ${twKey} Google Drive Folder (ZIP)`}
+                                                    className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs"
+                                                >
+                                                    <span className="material-symbols-outlined text-[13px]">folder_zip</span>
+                                                    <span>Export</span>
+                                                </a>
                                             </div>
 
                                             <div className="mt-3 pt-3 border-t border-[#c0c6d6]/20 grid grid-cols-2 gap-2 text-center text-xs">
@@ -632,31 +865,16 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* CARD 2: SEBARAN CAPAIAN PER IKU CHART (FULL WIDTH 1 COLUMN WITH SIDE-BY-SIDE FILTERS) */}
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#c0c6d6]/20 space-y-6">
+                    {/* CARD 2: SEBARAN CAPAIAN PER IKU CHART (FULL WIDTH 1 COLUMN) */}
+                    <div className="bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm border border-[#c0c6d6]/20 space-y-6">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#c0c6d6]/15">
                             <div className="flex items-center gap-2 text-[#181c23] font-extrabold text-sm uppercase tracking-wider">
                                 <span className="material-symbols-outlined text-[#005bb1] text-xl">show_chart</span>
                                 SEBARAN CAPAIAN PER IKU (BASELINE, TARGET & REALISASI)
                             </div>
 
-                            {/* Side-by-side Filters: Filter Tahun & Filter Triwulan */}
+                            {/* Filter Triwulan Chart */}
                             <div className="flex items-center gap-3">
-                                {/* Filter Tahun */}
-                                <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
-                                    <span className="material-symbols-outlined text-[#005bb1] text-base">calendar_today</span>
-                                    <select 
-                                        value={selectedTahun} 
-                                        onChange={(e) => setSelectedTahun(e.target.value)}
-                                        className="bg-transparent border-none text-xs font-extrabold text-[#181c23] outline-none cursor-pointer pr-2"
-                                    >
-                                        <option value="2026">Tahun 2026</option>
-                                        <option value="2025">Tahun 2025</option>
-                                        <option value="ALL">Semua Tahun</option>
-                                    </select>
-                                </div>
-
-                                {/* Filter Triwulan */}
                                 <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
                                     <span className="material-symbols-outlined text-[#005bb1] text-base">filter_list</span>
                                     <select 
@@ -682,15 +900,28 @@ export default function Dashboard() {
                         />
                     </div>
 
-                    {/* CARD 3: CAPAIAN REALISASI SEMUA UNIT KERJA (BAR CHART FULL WIDTH) */}
-                    <section className="bg-white rounded-[2rem] shadow-sm p-8 border border-[#c0c6d6]/15 space-y-6">
+                    {/* CARD 3: CAPAIAN REALISASI SEMUA UNIT KERJA (BAR CHART FULL WIDTH WITH TW FILTER) */}
+                    <section className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm p-4 sm:p-8 border border-[#c0c6d6]/15 space-y-6">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c0c6d6]/15 pb-4">
                             <div>
                                 <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
                                 <p className="text-xs text-[#535f71]">Perbandingan persentase rata-rata capaian IKU untuk seluruh Fakultas & Unit Kerja.</p>
                             </div>
-                            <div className="text-xs font-bold text-[#005bb1] bg-[#ebedf8] px-3.5 py-1.5 rounded-full uppercase tracking-wider">
-                                {stats?.capaian_per_unit?.length || 0} Unit Terpantau
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
+                                    <span className="material-symbols-outlined text-[#005bb1] text-base">filter_list</span>
+                                    <select 
+                                        value={unitTwFilter}
+                                        onChange={(e) => setUnitTwFilter(e.target.value)}
+                                        className="bg-transparent border-none text-xs font-extrabold text-[#181c23] outline-none cursor-pointer pr-2"
+                                    >
+                                        <option value="ALL">Semua TW</option>
+                                        <option value="TW1">TW1</option>
+                                        <option value="TW2">TW2</option>
+                                        <option value="TW3">TW3</option>
+                                        <option value="TW4">TW4</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -698,8 +929,8 @@ export default function Dashboard() {
                     </section>
 
                     {/* CARD 4: PERFORMANCE DISTRIBUTION TABLE (FULL WIDTH) */}
-                    <section className="bg-white rounded-[2rem] shadow-sm overflow-hidden border border-[#c0c6d6]/10">
-                        <div className="p-8 border-b border-[#c0c6d6]/15 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <section className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm overflow-hidden border border-[#c0c6d6]/10">
+                        <div className="p-4 sm:p-8 border-b border-[#c0c6d6]/15 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h3 className="text-lg font-bold text-[#181c23]">Performance Distribution</h3>
                                 <p className="text-xs text-[#535f71]">Distribusi capaian performa realisasi IKU perguruan tinggi dari database.</p>

@@ -7,6 +7,60 @@ use App\Http\Controllers\MasterController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// Google Drive OAuth Callback
+Route::get('/gdrive-callback', function (\Illuminate\Http\Request $request) {
+    $code = $request->query('code');
+    if ($code) {
+        $pyPath = base_path('gdrive_folder_creator.py');
+        $redirectUri = config('services.google.redirect_uri', 'http://localhost:8000/gdrive-callback');
+        $cmd = 'python3 ' . escapeshellarg($pyPath) . ' --code ' . escapeshellarg($code) . ' --redirect-uri ' . escapeshellarg($redirectUri) . ' > /dev/null 2>&1 &';
+        exec($cmd);
+
+        // Store token in storage/app/gdrive_token.json for ZIP exports
+        $clientId = config('services.google.client_id');
+        $clientSecret = config('services.google.client_secret');
+        
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'code' => trim($code),
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'redirect_uri' => $redirectUri,
+            'grant_type' => 'authorization_code'
+        ]));
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        if ($response) {
+            $tokenData = json_decode($response, true);
+            if (isset($tokenData['access_token'])) {
+                $tokenData['created_at'] = time();
+                if (!file_exists(storage_path('app'))) {
+                    mkdir(storage_path('app'), 0777, true);
+                }
+                file_put_contents(storage_path('app/gdrive_token.json'), json_encode($tokenData, JSON_PRETTY_PRINT));
+            }
+        }
+
+        $state = $request->query('state');
+        if ($state) {
+            $decodedState = json_decode(urldecode($state), true);
+            if (isset($decodedState['tw']) && isset($decodedState['tahun'])) {
+                return redirect('/api/dashboard/export-tw-zip?tw=' . urlencode($decodedState['tw']) . '&tahun=' . urlencode($decodedState['tahun']));
+            }
+        }
+
+        return response('<html><body style="font-family:sans-serif; text-align:center; padding:50px; background:#f8fafc;">' .
+            '<div style="max-width:520px; margin:0 auto; background:white; padding:32px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.1);">' .
+            '<h2 style="color:#059669; margin-top:0;">Otentikasi Google Drive Berhasil!</h2>' .
+            '<p style="color:#475569; line-height:1.6;">Otentikasi Google Drive berhasil. Pembuatan & penyelarasan folder <strong>TW1 - TW4 (40 subfolder IKU)</strong> sedang diproses.</p>' .
+            '<p style="margin-top:20px;"><a href="/dashboard" style="display:inline-block; background:#005bb1; color:white; font-weight:bold; padding:10px 20px; border-radius:8px; text-decoration:none;">Kembali ke Dashboard</a></p>' .
+            '</div></body></html>');
+    }
+    return response('Kode otentikasi tidak ditemukan.', 400);
+});
+
 // Home redirect
 Route::get('/', function () {
     return redirect()->route('login');
@@ -74,6 +128,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/stream', [DashboardController::class, 'streamSummary']);
         Route::get('/rekap-matriks', [DashboardController::class, 'rekapMatriks']);
         Route::get('/antrean-verifikasi', [DashboardController::class, 'antreanVerifikasi']);
+        Route::get('/export-tw-zip', [DashboardController::class, 'exportTwZip']);
     });
 
     // API - Capaian & Penugasan

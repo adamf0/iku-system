@@ -335,17 +335,25 @@ class DashboardController extends Controller
         $totalCapaianSum = 0;
         $totalCapaianCount = 0;
 
+        // Executive TW Summary & Overall Capaian calculated across all units from template_capaian for selected year
+        $execCapaianRows = ($tahun !== 'ALL') ? $sebaranCapaianRows->where('tahun', $tahun) : $sebaranCapaianRows;
+
         foreach ($this->TRIWULAN as $tw) {
-            $rowsTw = $data->where('triwulan', $tw);
+            $rowsTw = $execCapaianRows->where('triwulan', $tw);
             $filledCount = $rowsTw->pluck('id_indikator')->unique()->count();
             $isianPct = round(($filledCount / $totalIkus) * 100, 1);
 
             $capaianPctList = [];
             foreach ($rowsTw as $r) {
                 $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
-                if ($ikuDef && (float)$ikuDef->target > 0) {
-                    $pct = min(100, round(((float)$r->nilai_capaian / (float)$ikuDef->target) * 100, 2));
-                    $capaianPctList[] = $pct;
+                if ($ikuDef) {
+                    $uObj = $unitsMap->get($r->fakultas_unit);
+                    $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
+                    $targetVal = $this->getUnitTarget($ikuDef, $uObj, $tObj);
+                    if ($targetVal > 0) {
+                        $pct = min(100, round(((float)$r->nilai_capaian / $targetVal) * 100, 2));
+                        $capaianPctList[] = $pct;
+                    }
                 }
             }
 
@@ -394,21 +402,35 @@ class DashboardController extends Controller
             $simakStats = collect();
         }
 
-        // Capaian Semua Unit (Evaluated from memory)
-        $unitsList = DB::table('v_fakultas_unit')->whereIn('id', $scope)->get();
+        // Capaian Semua Unit (Evaluated per year & triwulan filter)
+        $unitTwParam = strtoupper($request->query('unit_tw', 'ALL'));
+        $unitsList = DB::table('v_fakultas_unit');
+        if (!in_array($user->role ?? '', ['ADMIN', 'LPM'])) {
+            $unitsList->whereIn('id', $scope);
+        }
+        $unitsList = $unitsList->get();
+
         $capaianPerUnit = [];
         foreach ($unitsList as $u) {
-            $rowsUnit = $allCapaianRows->where('fakultas_unit', $u->id);
+            $rowsUnit = $sebaranCapaianRows->where('fakultas_unit', $u->id);
             if ($tahun !== 'ALL') {
                 $rowsUnit = $rowsUnit->where('tahun', $tahun);
+            }
+            if ($unitTwParam !== 'ALL') {
+                $rowsUnit = $rowsUnit->where('triwulan', $unitTwParam);
             }
 
             $unitPcts = [];
             foreach ($rowsUnit as $r) {
                 $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
-                if ($ikuDef && (float)$ikuDef->target > 0) {
-                    $pct = min(100, round(((float)$r->nilai_capaian / (float)$ikuDef->target) * 100, 1));
-                    $unitPcts[] = $pct;
+                if ($ikuDef) {
+                    $uObj = $unitsMap->get($r->fakultas_unit);
+                    $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
+                    $targetVal = $this->getUnitTarget($ikuDef, $uObj, $tObj);
+                    if ($targetVal > 0) {
+                        $pct = min(100, round(((float)$r->nilai_capaian / $targetVal) * 100, 1));
+                        $unitPcts[] = $pct;
+                    }
                 }
             }
 
@@ -606,5 +628,257 @@ class DashboardController extends Controller
         $data = $query->orderBy('template_capaian.created_at', 'desc')->get();
 
         return response()->json($data);
+    }
+
+    private function extractGdriveFileId($url) {
+        if (preg_match('/\/d\/([a-zA-Z0-9_-]+)/', $url, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/[?&]id=([a-zA-Z0-9_-]+)/', $url, $m)) {
+            return $m[1];
+        }
+        return null;
+    }
+
+    public function exportTwZip(Request $request)
+    {
+        $tw = strtoupper($request->query('tw', 'TW1'));
+        if (!in_array($tw, ['TW1', 'TW2', 'TW3', 'TW4'])) {
+            $tw = 'TW1';
+        }
+        $tahun = $request->query('tahun', date('Y'));
+        if ($tahun === 'ALL') {
+            $tahun = date('Y');
+        }
+
+        $clientId = config('services.google.client_id');
+        $clientSecret = config('services.google.client_secret');
+        $parentFolderId = config('services.google.parent_folder_id', '1T1W4rzlCHZUa8VYQ7qCbij7aRPyuJtNf');
+        $redirectUri = config('services.google.redirect_uri', 'http://localhost:8000/gdrive-callback');
+
+        $tokenFile = storage_path('app/gdrive_token.json');
+        $accessToken = null;
+
+        if (file_exists($tokenFile)) {
+            $tokenData = json_decode(file_get_contents($tokenFile), true);
+            $accessToken = $tokenData['access_token'] ?? null;
+            
+            // Check if token expired and refresh_token is present
+            if (isset($tokenData['created_at'], $tokenData['expires_in']) && (time() - $tokenData['created_at'] > $tokenData['expires_in'] - 60)) {
+                if (!empty($tokenData['refresh_token'])) {
+                    $ch = curl_init('https://oauth2.googleapis.com/token');
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+                        'client_id' => $clientId,
+                        'client_secret' => $clientSecret,
+                        'refresh_token' => $tokenData['refresh_token'],
+                        'grant_type' => 'refresh_token'
+                    ]));
+                    $res = curl_exec($ch);
+                    curl_close($ch);
+                    if ($res) {
+                        $newToken = json_decode($res, true);
+                        if (isset($newToken['access_token'])) {
+                            $accessToken = $newToken['access_token'];
+                            $tokenData['access_token'] = $accessToken;
+                            $tokenData['created_at'] = time();
+                            file_put_contents($tokenFile, json_encode($tokenData, JSON_PRETTY_PRINT));
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no access token, redirect user to Google OAuth consent
+        if (!$accessToken) {
+            $authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" . http_build_query([
+                'response_type' => 'code',
+                'client_id' => $clientId,
+                'redirect_uri' => $redirectUri,
+                'scope' => 'https://www.googleapis.com/auth/drive',
+                'access_type' => 'offline',
+                'prompt' => 'consent',
+                'state' => urlencode(json_encode(['tw' => $tw, 'tahun' => $tahun]))
+            ]);
+            return redirect($authUrl);
+        }
+
+        // 1. Resolve Year Folder (e.g. 2026) under parent
+        $yearFolderId = null;
+        $urlYear = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("'$parentFolderId' in parents and name = '$tahun' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+        $ch = curl_init($urlYear);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+        $resYear = json_decode(curl_exec($ch), true);
+        curl_close($ch);
+
+        if (!empty($resYear['files'][0]['id'])) {
+            $yearFolderId = $resYear['files'][0]['id'];
+        }
+
+        // 2. Resolve TW Folder (e.g. TW1) under year folder or parent folder
+        $twFolderId = null;
+        $searchParents = array_filter([$yearFolderId, $parentFolderId]);
+
+        foreach ($searchParents as $pId) {
+            $urlTw = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("'$pId' in parents and name = '$tw' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+            $ch = curl_init($urlTw);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+            $resTw = json_decode(curl_exec($ch), true);
+            curl_close($ch);
+
+            if (!empty($resTw['files'][0]['id'])) {
+                $twFolderId = $resTw['files'][0]['id'];
+                break;
+            }
+        }
+
+        // Fallback global search for TW folder if needed
+        if (!$twFolderId) {
+            $urlTwGlobal = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("name = '$tw' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+            $ch = curl_init($urlTwGlobal);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+            $resTwG = json_decode(curl_exec($ch), true);
+            curl_close($ch);
+            if (!empty($resTwG['files'][0]['id'])) {
+                $twFolderId = $resTwG['files'][0]['id'];
+            }
+        }
+
+        // Create ZIP Archive
+        $zipFileName = "IKU_System_{$tw}_{$tahun}.zip";
+        $tempDir = storage_path('app/temp');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0777, true);
+        }
+        $zipPath = $tempDir . '/' . $zipFileName;
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return response()->json(['error' => 'Gagal membuat archive ZIP.'], 500);
+        }
+
+        $baseDirName = "{$tw}-{$tahun}";
+
+        // Add 40 IKU empty subfolder structure to ZIP
+        $ikuList = DB::table('master_indikator')->orderBy('id', 'asc')->get();
+        foreach ($ikuList as $iku) {
+            $folderName = $iku->iku;
+            $zip->addEmptyDir("{$baseDirName}/{$folderName}");
+        }
+
+        // If Google Drive TW folder exists, pull subfolders and files
+        if ($twFolderId) {
+            $urlSub = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("'$twFolderId' in parents and trashed = false") . "&pageSize=1000";
+            $ch = curl_init($urlSub);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+            $resSub = json_decode(curl_exec($ch), true);
+            curl_close($ch);
+
+            foreach ($resSub['files'] ?? [] as $subItem) {
+                if ($subItem['mimeType'] === 'application/vnd.google-apps.folder') {
+                    $subName = $subItem['name'];
+                    $subFolderId = $subItem['id'];
+                    $zip->addEmptyDir("{$baseDirName}/{$subName}");
+
+                    // Fetch files inside this subfolder
+                    $urlFiles = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("'$subFolderId' in parents and trashed = false") . "&pageSize=1000";
+                    $chF = curl_init($urlFiles);
+                    curl_setopt($chF, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($chF, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+                    $resFiles = json_decode(curl_exec($chF), true);
+                    curl_close($chF);
+
+                    foreach ($resFiles['files'] ?? [] as $fileItem) {
+                        if ($fileItem['mimeType'] !== 'application/vnd.google-apps.folder') {
+                            $fId = $fileItem['id'];
+                            $fName = $fileItem['name'];
+
+                            // Check Google Workspace export
+                            if (str_contains($fileItem['mimeType'], 'google-apps.spreadsheet')) {
+                                $dlUrl = "https://www.googleapis.com/drive/v3/files/{$fId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                                if (!str_contains($fName, '.')) $fName .= '.xlsx';
+                            } elseif (str_contains($fileItem['mimeType'], 'google-apps.document')) {
+                                $dlUrl = "https://www.googleapis.com/drive/v3/files/{$fId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                                if (!str_contains($fName, '.')) $fName .= '.docx';
+                            } else {
+                                $dlUrl = "https://www.googleapis.com/drive/v3/files/{$fId}?alt=media";
+                            }
+
+                            $chDl = curl_init($dlUrl);
+                            curl_setopt($chDl, CURLOPT_RETURNTRANSFER, true);
+                            curl_setopt($chDl, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+                            curl_setopt($chDl, CURLOPT_FOLLOWLOCATION, true);
+                            $fContent = curl_exec($chDl);
+                            curl_close($chDl);
+
+                            if ($fContent) {
+                                $zip->addFromString("{$baseDirName}/{$subName}/{$fName}", $fContent);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check DB template_capaian for files submitted for this TW and year
+        $dbRows = DB::table('template_capaian')
+            ->join('master_indikator', 'template_capaian.id_indikator', '=', 'master_indikator.id')
+            ->where('template_capaian.triwulan', $tw)
+            ->where('template_capaian.tahun', $tahun)
+            ->whereNotNull('template_capaian.file_url')
+            ->select('template_capaian.*', 'master_indikator.iku as kode_iku')
+            ->get();
+
+        foreach ($dbRows as $row) {
+            $gdriveId = $this->extractGdriveFileId($row->file_url);
+            if ($gdriveId) {
+                // Fetch file metadata from Google Drive
+                $urlMeta = "https://www.googleapis.com/drive/v3/files/{$gdriveId}?fields=id,name,mimeType";
+                $chM = curl_init($urlMeta);
+                curl_setopt($chM, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($chM, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+                $resMeta = json_decode(curl_exec($chM), true);
+                curl_close($chM);
+
+                if (!empty($resMeta['name'])) {
+                    $fName = $resMeta['name'];
+                    $mime = $resMeta['mimeType'] ?? '';
+                    
+                    if (str_contains($mime, 'google-apps.spreadsheet')) {
+                        $dlUrl = "https://www.googleapis.com/drive/v3/files/{$gdriveId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                        if (!str_contains($fName, '.')) $fName .= '.xlsx';
+                    } elseif (str_contains($mime, 'google-apps.document')) {
+                        $dlUrl = "https://www.googleapis.com/drive/v3/files/{$gdriveId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                        if (!str_contains($fName, '.')) $fName .= '.docx';
+                    } else {
+                        $dlUrl = "https://www.googleapis.com/drive/v3/files/{$gdriveId}?alt=media";
+                    }
+
+                    $chDl = curl_init($dlUrl);
+                    curl_setopt($chDl, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($chDl, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+                    curl_setopt($chDl, CURLOPT_FOLLOWLOCATION, true);
+                    $fContent = curl_exec($chDl);
+                    curl_close($chDl);
+
+                    if ($fContent) {
+                        $zip->addFromString("{$baseDirName}/{$row->kode_iku}/{$fName}", $fContent);
+                        continue;
+                    }
+                }
+            }
+
+            if ($row->file_url && !str_contains($row->file_url, 'test_doc_file')) {
+                $zip->addFromString("{$baseDirName}/{$row->kode_iku}/drive_link.url", "[InternetShortcut]\nURL={$row->file_url}\n");
+            }
+        }
+
+        $zip->close();
+
+        return response()->download($zipPath, $zipFileName)->deleteFileAfterSend(true);
     }
 }

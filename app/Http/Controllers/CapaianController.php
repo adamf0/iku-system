@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Services\GoogleDriveService;
 
 class CapaianController extends Controller
 {
@@ -460,6 +462,17 @@ class CapaianController extends Controller
             ['tahun' => $tahun],
             ['created_at' => now(), 'updated_at' => now()]
         );
+
+        // Check and create Google Drive folder structure for the year if it doesn't exist
+        $ikuList = GoogleDriveService::defaultIkuList();
+        $twList = GoogleDriveService::defaultTwList();
+
+        try {
+            $driveService = new GoogleDriveService();
+            $driveService->ensureYearFolderStructure($tahun, $ikuList, $twList);
+        } catch (\Throwable $e) {
+            Log::error("Google Drive structure check/creation error: " . $e->getMessage());
+        }
 
         // Delete existing active/soft-deleted for this unit and year
         DB::table('penugasan_target')
