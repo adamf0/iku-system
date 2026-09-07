@@ -51,22 +51,28 @@ class CapaianController extends Controller
                 $twFolderId = $yearFolderId ? $driveService->findFolder($tw, $yearFolderId) : null;
 
                 try {
-                    $mQuery = DB::connection('simak')->table('m_mahasiswa')
+                    $mhsStatsQuery = DB::connection('simak')->table('m_mahasiswa')
+                        ->selectRaw("
+                            COALESCE(kode_prodi, '') as kode_prodi,
+                            COUNT(*) as total_mhs,
+                            SUM(CASE WHEN tanggal_lulus IS NOT NULL AND tanggal_masuk IS NOT NULL AND tanggal_lulus <= ? THEN 1 ELSE 0 END) as total_lulus,
+                            SUM(CASE WHEN tanggal_lulus IS NOT NULL AND tanggal_masuk IS NOT NULL AND tanggal_lulus <= ? AND DATEDIFF(tanggal_lulus, tanggal_masuk) <= 1461 THEN 1 ELSE 0 END) as lulus_tepat,
+                            SUM(CASE WHEN tanggal_lulus IS NOT NULL AND tanggal_masuk IS NOT NULL AND tanggal_lulus <= ? AND DATEDIFF(tanggal_lulus, tanggal_masuk) > 1461 THEN 1 ELSE 0 END) as lulus_tidak_tepat,
+                            SUM(CASE WHEN status_mhs IN ('DO', 'DROP OUT', 'KELUAR', 'Non-Aktif') THEN 1 ELSE 0 END) as drop_out
+                        ", [$cutOffDate, $cutOffDate, $cutOffDate])
                         ->where('kode_fak', $sijamuUnit->kode_fakultas);
-                    
+
                     if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
-                        $mQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                        $mhsStatsQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
                     }
 
-                    $totalMhs = (clone $mQuery)->count();
-                    $totalLulus = (clone $mQuery)
-                        ->whereNotNull('tanggal_lulus')
-                        ->whereNotNull('tanggal_masuk')
-                        ->where('tanggal_lulus', '<=', $cutOffDate)
-                        ->count();
+                    $simakStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
+                    $totalMhs = $simakStatsGrouped->sum('total_mhs');
+                    $totalLulus = $simakStatsGrouped->sum('total_lulus');
                 } catch (\Throwable $e) {
                     $totalMhs = 0;
                     $totalLulus = 0;
+                    $simakStatsGrouped = collect();
                 }
 
                 $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
@@ -84,52 +90,25 @@ class CapaianController extends Controller
                 $prodis = $prodiListQuery->select('v.nama_fak_prod_unit as nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type', 'v.jenjang')->get();
 
                 foreach ($prodis as $p) {
-                    try {
-                        $mhsP = DB::connection('simak')->table('m_mahasiswa')
-                            ->where('kode_fak', $p->kode_fakultas);
+                    $statP = $simakStatsGrouped->get($p->kode_prodi);
+                    $totMhsP = $statP ? (int)$statP->total_mhs : 0;
+                    $lulusTepatP = $statP ? (int)$statP->lulus_tepat : 0;
+                    $lulusTidakTepatP = $statP ? (int)$statP->lulus_tidak_tepat : 0;
+                    $dropOutP = $statP ? (int)$statP->drop_out : 0;
 
-                        if (!empty($p->kode_prodi)) {
-                            $mhsP->where('kode_prodi', $p->kode_prodi);
-                        }
-
-                        $totMhsP = (clone $mhsP)->count();
-                        $lulusTepatP = (clone $mhsP)
-                            ->whereNotNull('tanggal_lulus')
-                            ->whereNotNull('tanggal_masuk')
-                            ->where('tanggal_lulus', '<=', $cutOffDate)
-                            ->whereRaw('DATEDIFF(tanggal_lulus, tanggal_masuk)/365.25 <= 4.0')
-                            ->count();
-
-                        $lulusTidakTepatP = (clone $mhsP)
-                            ->whereNotNull('tanggal_lulus')
-                            ->whereNotNull('tanggal_masuk')
-                            ->where('tanggal_lulus', '<=', $cutOffDate)
-                            ->whereRaw('DATEDIFF(tanggal_lulus, tanggal_masuk)/365.25 > 4.0')
-                            ->count();
-
-                        $dropOutP = 0;
-                        try {
-                            $dropOutP = (clone $mhsP)
-                                ->whereIn('status_mhs', ['DO', 'DROP OUT', 'KELUAR', 'Non-Aktif'])
-                                ->count();
-                        } catch (\Throwable $eDo) {}
-
-                        $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
-                        if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
-                            $jenjang = strtoupper($mj[1]);
-                        }
-
-                        $excelRows[] = [
-                            $p->nama_prodi,
-                            $jenjang,
-                            $totMhsP,
-                            $lulusTepatP,
-                            $dropOutP,
-                            $lulusTidakTepatP
-                        ];
-                    } catch (\Throwable $eP) {
-                        $excelRows[] = [$p->nama_prodi, 'S1', 0, 0, 0, 0];
+                    $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
+                    if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
+                        $jenjang = strtoupper($mj[1]);
                     }
+
+                    $excelRows[] = [
+                        $p->nama_prodi,
+                        $jenjang,
+                        $totMhsP,
+                        $lulusTepatP,
+                        $dropOutP,
+                        $lulusTidakTepatP
+                    ];
                 }
 
                 $headers = ['prodi', 'jenjang', 'total mahasiswa', 'total lulus tepat waktu', 'total drop out', 'total lulus tidak tepat waktu'];
