@@ -66,10 +66,6 @@ export default function PenugasanTarget() {
             setUnits(unitsData);
             setContexts(ctxData);
             setIndicators(ikuData);
-            
-            if (unitsData.length > 0) {
-                setSelectedUnit(unitsData[0].id);
-            }
             setLoading(false);
         })
         .catch(err => {
