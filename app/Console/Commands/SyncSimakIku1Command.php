@@ -182,7 +182,13 @@ class SyncSimakIku1Command extends Command
 
                         $fileUrl = null;
                         if (!$skipDrive && $twFolderId && file_exists($tempPath)) {
-                            $fileUrl = $driveService->uploadFile($tempPath, $fileName, $twFolderId);
+                            $ikuFolderId = $driveService->findFolder($indikatorName, $twFolderId);
+                            if (!$ikuFolderId) {
+                                $ikuFolderId = $driveService->createFolder($indikatorName, $twFolderId);
+                            }
+                            $targetParentId = $ikuFolderId ?: $twFolderId;
+
+                            $fileUrl = $driveService->uploadFile($tempPath, $fileName, $targetParentId);
                             if ($fileUrl) {
                                 @unlink($tempPath);
                             }

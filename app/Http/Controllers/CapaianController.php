@@ -163,8 +163,16 @@ class CapaianController extends Controller
 
                     $fileUrl = null;
                     if ($twFolderId && file_exists($tempPath)) {
-                        $fileUrl = $driveService->uploadFile($tempPath, $fileName, $twFolderId);
-                        @unlink($tempPath);
+                        $ikuFolderId = $driveService->findFolder($indikatorName, $twFolderId);
+                        if (!$ikuFolderId) {
+                            $ikuFolderId = $driveService->createFolder($indikatorName, $twFolderId);
+                        }
+                        $targetParentId = $ikuFolderId ?: $twFolderId;
+
+                        $fileUrl = $driveService->uploadFile($tempPath, $fileName, $targetParentId);
+                        if ($fileUrl) {
+                            @unlink($tempPath);
+                        }
                     }
 
                     $exists = DB::table('template_capaian')

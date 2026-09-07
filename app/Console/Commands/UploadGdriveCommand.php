@@ -56,10 +56,14 @@ class UploadGdriveCommand extends Command
 
             $indObj = DB::table('master_indikator')->where('id', $indId)->first();
             $indikatorName = $indObj ? $indObj->iku : 'IKU 1';
-            $fileName = "{$indikatorName}.xlsx";
+            $ikuFolderId = $driveService->findFolder($indikatorName, $twFolderId);
+            if (!$ikuFolderId) {
+                $ikuFolderId = $driveService->createFolder($indikatorName, $twFolderId);
+            }
+            $targetParentId = $ikuFolderId ?: $twFolderId;
 
-            $this->line(" -> Uploading: {$fileName} (Tahun {$tahun}, {$tw})...");
-            $fileUrl = $driveService->uploadFile($filePath, $fileName, $twFolderId);
+            $this->line(" -> Uploading: {$fileName} (Tahun {$tahun}, {$tw} -> {$indikatorName})...");
+            $fileUrl = $driveService->uploadFile($filePath, $fileName, $targetParentId);
 
             if ($fileUrl) {
                 DB::table('template_capaian')
