@@ -22,7 +22,6 @@ class SyncSimakIku1Command extends Command
             $targetYears = [2025, 2026];
         }
 
-        $units = DB::table('v_fakultas_unit')->get();
         $triwulanCutOffs = [
             'TW1' => '-03-31 23:59:59',
             'TW2' => '-06-30 23:59:59',
@@ -35,148 +34,191 @@ class SyncSimakIku1Command extends Command
 
         foreach ($targetYears as $tahun) {
             $this->info("=== Memproses Sinkronisasi SIMAK IKU 1 Tahun {$tahun} ===");
-            
+
             $yearFolderId = null;
             if (!$skipDrive) {
-                // Ensure year folder structure exists in Google Drive
                 $driveService->ensureYearFolderStructure($tahun);
                 $yearFolderId = $driveService->findFolder((string)$tahun);
             }
 
-            foreach ($units as $vUnit) {
-                $unitId = $vUnit->id;
+            // Find all assigned IKU 1 indicators for this year across ALL units
+            $iku1Indicators = DB::table('penugasan_target')
+                ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
+                ->where('penugasan_target.tahun', $tahun)
+                ->where(function($q) {
+                    $q->where('master_indikator.iku', 'IKU 1')
+                      ->orWhere('master_indikator.iku', 'LIKE', 'IKU 1 -%')
+                      ->orWhere('master_indikator.iku', 'LIKE', 'Sub IKU 1%')
+                      ->orWhere('master_indikator.id', 1);
+                })
+                ->whereNull('penugasan_target.deleted_at')
+                ->distinct()
+                ->pluck('master_indikator.id');
 
-                // Find assigned IKU 1 indicators for this unit and year
-                $iku1Assigned = DB::table('penugasan_target')
-                    ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
-                    ->where('penugasan_target.fakultas_unit', $unitId)
-                    ->where('penugasan_target.tahun', $tahun)
-                    ->where(function($q) {
-                        $q->where('master_indikator.iku', 'IKU 1')
-                          ->orWhere('master_indikator.iku', 'LIKE', 'IKU 1 -%')
-                          ->orWhere('master_indikator.iku', 'LIKE', 'Sub IKU 1%')
-                          ->orWhere('master_indikator.id', 1);
-                    })
-                    ->whereNull('penugasan_target.deleted_at')
-                    ->pluck('master_indikator.id');
+            if ($iku1Indicators->isEmpty()) {
+                $this->line("Tidak ada penugasan IKU 1 untuk tahun {$tahun}.");
+                continue;
+            }
 
-                if ($iku1Assigned->isEmpty()) continue;
+            foreach ($triwulanCutOffs as $tw => $dateSuffix) {
+                $cutOffDate = $tahun . $dateSuffix;
+                $twFolderId = (!$skipDrive && $yearFolderId) ? $driveService->findFolder($tw, $yearFolderId) : null;
 
-                $sijamuUnit = DB::table('sijamu_fakultas_unit')->where('id', $unitId)->first();
-                if (!$sijamuUnit || empty($sijamuUnit->kode_fakultas)) continue;
+                foreach ($iku1Indicators as $indId) {
+                    $indObj = DB::table('master_indikator')->where('id', $indId)->first();
+                    $indikatorName = $indObj ? $indObj->iku : 'IKU 1';
+                    $fileName = "{$indikatorName}.xlsx";
 
-                $unitName = $vUnit->nama_fak_prod_unit ?? "Unit {$unitId}";
-                $this->line(" -> Processing {$unitName}...");
+                    // Get all assigned units for this indicator and year
+                    $assignedPenugasan = DB::table('penugasan_target')
+                        ->where('id_indikator', $indId)
+                        ->where('tahun', $tahun)
+                        ->whereNull('deleted_at')
+                        ->get();
 
-                foreach ($triwulanCutOffs as $tw => $dateSuffix) {
-                    $cutOffDate = $tahun . $dateSuffix;
-                    $twFolderId = $yearFolderId ? $driveService->findFolder($tw, $yearFolderId) : null;
+                    if ($assignedPenugasan->isEmpty()) continue;
 
-                    try {
-                        $mhsStatsQuery = DB::connection('simak')->table('m_mahasiswa')
-                            ->selectRaw("
-                                COALESCE(kode_prodi, '') as kode_prodi,
-                                COUNT(*) as total_mhs
-                            ")
-                            ->where('kode_fak', $sijamuUnit->kode_fakultas);
-
-                        if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
-                            $mhsStatsQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                        }
-                        $baseStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
-
-                        $dropOutGrouped = collect();
-                        try {
-                            $dropOutQuery = DB::connection('simak')->table('m_mahasiswa')
-                                ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, COUNT(*) as drop_out")
-                                ->where('kode_fak', $sijamuUnit->kode_fakultas)
-                                ->whereIn('status_mhs', ['DO', 'DROP OUT', 'KELUAR', 'Non-Aktif']);
-
-                            if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
-                                $dropOutQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                            }
-                            $dropOutGrouped = $dropOutQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
-                        } catch (\Throwable $eDo) {}
-
-                        $graduatesQuery = DB::connection('simak')->table('m_mahasiswa')
-                            ->selectRaw("
-                                COALESCE(kode_prodi, '') as kode_prodi,
-                                DATEDIFF(tanggal_lulus, tanggal_masuk) as masa_studi_hari
-                            ")
-                            ->where('kode_fak', $sijamuUnit->kode_fakultas)
-                            ->whereNotNull('tanggal_lulus')
-                            ->whereNotNull('tanggal_masuk')
-                            ->where('tanggal_lulus', '<=', $cutOffDate);
-
-                        if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
-                            $graduatesQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                        }
-                        $graduates = $graduatesQuery->get();
-                        $graduatesByProdi = $graduates->groupBy('kode_prodi');
-
-                        $totalMhs = $baseStatsGrouped->sum('total_mhs');
-                        $totalLulus = $graduates->count();
-                    } catch (\Throwable $e) {
-                        $this->warn("Akses SIMAK unit {$unitName} ({$unitId}) gagal: " . $e->getMessage());
-                        continue;
-                    }
-
-                    $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
-
-                    // Build detailed prodi breakdown for Excel export
                     $excelRows = [];
-                    $prodiListQuery = DB::table('sijamu_fakultas_unit as s')
-                        ->leftJoin('v_fakultas_unit as v', 's.id', '=', 'v.id')
-                        ->where('s.kode_fakultas', $sijamuUnit->kode_fakultas);
-
-                    if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
-                        $prodiListQuery->where('s.kode_prodi', $sijamuUnit->kode_prodi);
-                    }
-
-                    $prodis = $prodiListQuery->select('v.nama_fak_prod_unit as nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type', 'v.jenjang')->get();
-
-                    foreach ($prodis as $p) {
-                        $baseP = $baseStatsGrouped->get($p->kode_prodi);
-                        $totMhsP = $baseP ? (int)$baseP->total_mhs : 0;
-
-                        $doP = $dropOutGrouped->get($p->kode_prodi);
-                        $dropOutP = $doP ? (int)$doP->drop_out : 0;
-
-                        $prodiGrads = $graduatesByProdi->get($p->kode_prodi, collect());
-                        $maxHariTepat = $this->getMasaStudiTepatWaktuHari($p->jenjang, $p->nama_prodi);
-                        $lulusTepatP = 0;
-                        $lulusTidakTepatP = 0;
-
-                        foreach ($prodiGrads as $grad) {
-                            if ($grad->masa_studi_hari !== null && $grad->masa_studi_hari <= $maxHariTepat) {
-                                $lulusTepatP++;
-                            } else {
-                                $lulusTidakTepatP++;
-                            }
-                        }
-
-                        $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
-                        if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
-                            $jenjang = strtoupper($mj[1]);
-                        }
-
-                        $excelRows[] = [
-                            $p->nama_prodi,
-                            $jenjang,
-                            $totMhsP,
-                            $lulusTepatP,
-                            $dropOutP,
-                            $lulusTidakTepatP
-                        ];
-                    }
-
                     $headers = ['prodi', 'jenjang', 'total mahasiswa', 'total lulus tepat waktu', 'total drop out', 'total lulus tidak tepat waktu'];
+                    $assignedUnitIds = [];
 
-                    foreach ($iku1Assigned as $indId) {
-                        $indObj = DB::table('master_indikator')->where('id', $indId)->first();
-                        $indikatorName = $indObj ? $indObj->iku : 'IKU 1';
-                        $fileName = "{$indikatorName}.xlsx";
+                    foreach ($assignedPenugasan as $penugasan) {
+                        $unitId = $penugasan->fakultas_unit;
+                        $assignedUnitIds[] = $unitId;
+                        $vUnit = DB::table('v_fakultas_unit')->where('id', $unitId)->first();
+                        $sijamuUnit = DB::table('sijamu_fakultas_unit')->where('id', $unitId)->first();
 
+                        if (!$sijamuUnit || empty($sijamuUnit->kode_fakultas)) continue;
+
+                        $unitName = $vUnit->nama_fak_prod_unit ?? "Unit {$unitId}";
+                        $this->line(" -> Processing {$indikatorName} ({$tw}) - {$unitName}...");
+
+                        try {
+                            $mhsStatsQuery = DB::connection('simak')->table('m_mahasiswa')
+                                ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, COUNT(*) as total_mhs")
+                                ->where('kode_fak', $sijamuUnit->kode_fakultas);
+
+                            if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                                $mhsStatsQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                            }
+                            $baseStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
+
+                            $dropOutGrouped = collect();
+                            try {
+                                $dropOutQuery = DB::connection('simak')->table('m_mahasiswa')
+                                    ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, COUNT(*) as drop_out")
+                                    ->where('kode_fak', $sijamuUnit->kode_fakultas)
+                                    ->whereIn('status_mhs', ['DO', 'DROP OUT', 'KELUAR', 'Non-Aktif']);
+
+                                if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                                    $dropOutQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                                }
+                                $dropOutGrouped = $dropOutQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
+                            } catch (\Throwable $eDo) {}
+
+                            $graduatesQuery = DB::connection('simak')->table('m_mahasiswa')
+                                ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, DATEDIFF(tanggal_lulus, tanggal_masuk) as masa_studi_hari")
+                                ->where('kode_fak', $sijamuUnit->kode_fakultas)
+                                ->whereNotNull('tanggal_lulus')
+                                ->whereNotNull('tanggal_masuk')
+                                ->where('tanggal_lulus', '<=', $cutOffDate);
+
+                            if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                                $graduatesQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                            }
+                            $graduates = $graduatesQuery->get();
+                            $graduatesByProdi = $graduates->groupBy('kode_prodi');
+
+                            $unitTotalMhs = $baseStatsGrouped->sum('total_mhs');
+                            $unitTotalLulus = $graduates->count();
+                            $unitCapaianPct = $unitTotalMhs > 0 ? round(($unitTotalLulus / $unitTotalMhs) * 100, 2) : 0;
+
+                            // Update template_capaian for this specific unit
+                            $exists = DB::table('template_capaian')
+                                ->where('id_indikator', $indId)
+                                ->where('fakultas_unit', $unitId)
+                                ->where('tahun', $tahun)
+                                ->where('triwulan', $tw)
+                                ->first();
+
+                            $updatePayload = [
+                                'nilai_capaian' => $unitCapaianPct,
+                                'pembilang' => $unitTotalLulus,
+                                'penyebut' => $unitTotalMhs,
+                                'catatan' => "Perhitungan otomatis SIMAK (Cut-off {$tw} {$tahun}): Total Lulus {$unitTotalLulus} / Total Mahasiswa {$unitTotalMhs}",
+                                'updated_at' => now(),
+                            ];
+
+                            if (!$exists) {
+                                $updatePayload['id_indikator'] = $indId;
+                                $updatePayload['fakultas_unit'] = $unitId;
+                                $updatePayload['tahun'] = $tahun;
+                                $updatePayload['triwulan'] = $tw;
+                                $updatePayload['status_validasi'] = 'DIAJUKAN';
+                                $updatePayload['diinput_oleh'] = 'system_simak';
+                                $updatePayload['created_at'] = now();
+                                DB::table('template_capaian')->insert($updatePayload);
+                            } else {
+                                if (!in_array($exists->status_validasi, ['DIVERIFIKASI', 'DISAHKAN'])) {
+                                    DB::table('template_capaian')
+                                        ->where('id', $exists->id)
+                                        ->update($updatePayload);
+                                }
+                            }
+                            $syncedCount++;
+
+                            // Add prodis of this unit to $excelRows
+                            $prodiListQuery = DB::table('sijamu_fakultas_unit as s')
+                                ->leftJoin('v_fakultas_unit as v', 's.id', '=', 'v.id')
+                                ->where('s.kode_fakultas', $sijamuUnit->kode_fakultas);
+
+                            if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                                $prodiListQuery->where('s.kode_prodi', $sijamuUnit->kode_prodi);
+                            }
+
+                            $prodis = $prodiListQuery->select('v.nama_fak_prod_unit as nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type', 'v.jenjang')->get();
+
+                            foreach ($prodis as $p) {
+                                $baseP = $baseStatsGrouped->get($p->kode_prodi);
+                                $totMhsP = $baseP ? (int)$baseP->total_mhs : 0;
+
+                                $doP = $dropOutGrouped->get($p->kode_prodi);
+                                $dropOutP = $doP ? (int)$doP->drop_out : 0;
+
+                                $prodiGrads = $graduatesByProdi->get($p->kode_prodi, collect());
+                                $maxHariTepat = $this->getMasaStudiTepatWaktuHari($p->jenjang, $p->nama_prodi);
+                                $lulusTepatP = 0;
+                                $lulusTidakTepatP = 0;
+
+                                foreach ($prodiGrads as $grad) {
+                                    if ($grad->masa_studi_hari !== null && $grad->masa_studi_hari <= $maxHariTepat) {
+                                        $lulusTepatP++;
+                                    } else {
+                                        $lulusTidakTepatP++;
+                                    }
+                                }
+
+                                $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
+                                if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
+                                    $jenjang = strtoupper($mj[1]);
+                                }
+
+                                $excelRows[] = [
+                                    $p->nama_prodi,
+                                    $jenjang,
+                                    $totMhsP,
+                                    $lulusTepatP,
+                                    $dropOutP,
+                                    $lulusTidakTepatP
+                                ];
+                            }
+                        } catch (\Throwable $e) {
+                            $this->warn("Akses SIMAK unit {$unitName} ({$unitId}) gagal: " . $e->getMessage());
+                        }
+                    }
+
+                    // Write single aggregated Excel file containing ALL assigned units for this indicator
+                    if (!empty($excelRows)) {
                         $tempPath = storage_path("app/temp/simak_{$tahun}_{$tw}_{$indId}.xlsx");
                         \App\Services\SimpleXlsxWriter::create($tempPath, $headers, $excelRows);
 
@@ -187,49 +229,19 @@ class SyncSimakIku1Command extends Command
                                 $ikuFolderId = $driveService->createFolder($indikatorName, $twFolderId);
                             }
                             $targetParentId = $ikuFolderId ?: $twFolderId;
-
                             $fileUrl = $driveService->uploadFile($tempPath, $fileName, $targetParentId);
+
                             if ($fileUrl) {
                                 @unlink($tempPath);
-                            }
-                        }
-
-                        $exists = DB::table('template_capaian')
-                            ->where('id_indikator', $indId)
-                            ->where('fakultas_unit', $unitId)
-                            ->where('tahun', $tahun)
-                            ->where('triwulan', $tw)
-                            ->first();
-
-                        $updatePayload = [
-                            'nilai_capaian' => $capaianPct,
-                            'pembilang' => $totalLulus,
-                            'penyebut' => $totalMhs,
-                            'catatan' => "Perhitungan otomatis SIMAK (Cut-off {$tw} {$tahun}): Total Lulus {$totalLulus} / Total Mahasiswa {$totalMhs}",
-                            'updated_at' => now(),
-                        ];
-
-                        if ($fileUrl) {
-                            $updatePayload['file_url'] = $fileUrl;
-                        }
-
-                        if (!$exists) {
-                            $updatePayload['id_indikator'] = $indId;
-                            $updatePayload['fakultas_unit'] = $unitId;
-                            $updatePayload['tahun'] = $tahun;
-                            $updatePayload['triwulan'] = $tw;
-                            $updatePayload['status_validasi'] = 'DIAJUKAN';
-                            $updatePayload['diinput_oleh'] = 'system_simak';
-                            $updatePayload['created_at'] = now();
-                            DB::table('template_capaian')->insert($updatePayload);
-                        } else {
-                            if (!in_array($exists->status_validasi, ['DIVERIFIKASI', 'DISAHKAN'])) {
+                                // Update file_url in template_capaian for ALL assigned units of this indicator
                                 DB::table('template_capaian')
-                                    ->where('id', $exists->id)
-                                    ->update($updatePayload);
+                                    ->where('id_indikator', $indId)
+                                    ->where('tahun', $tahun)
+                                    ->where('triwulan', $tw)
+                                    ->whereIn('fakultas_unit', $assignedUnitIds)
+                                    ->update(['file_url' => $fileUrl, 'updated_at' => now()]);
                             }
                         }
-                        $syncedCount++;
                     }
                 }
             }

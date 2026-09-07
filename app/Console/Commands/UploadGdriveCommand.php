@@ -67,10 +67,17 @@ class UploadGdriveCommand extends Command
             $fileUrl = $driveService->uploadFile($filePath, $fileName, $targetParentId);
 
             if ($fileUrl) {
+                $assignedUnits = DB::table('penugasan_target')
+                    ->where('id_indikator', $indId)
+                    ->where('tahun', $tahun)
+                    ->whereNull('deleted_at')
+                    ->pluck('fakultas_unit');
+
                 DB::table('template_capaian')
                     ->where('id_indikator', $indId)
                     ->where('tahun', $tahun)
                     ->where('triwulan', $tw)
+                    ->whereIn('fakultas_unit', $assignedUnits)
                     ->update([
                         'file_url' => $fileUrl,
                         'updated_at' => now(),
