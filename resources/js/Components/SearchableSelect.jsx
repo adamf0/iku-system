@@ -15,7 +15,7 @@ export default function SearchableSelect({
     const [searchTerm, setSearchTerm] = useState('');
     const containerRef = useRef(null);
 
-    // Standardize options into array of objects { value, label, isGroupHeader, original }
+    // Standardize options into array of objects { value, label, isGroupHeader, disabled, original }
     const normalizedOptions = options.map(opt => {
         if (typeof opt === 'object' && opt !== null) {
             return {
@@ -23,6 +23,7 @@ export default function SearchableSelect({
                 label: getLabel(opt),
                 isGroupHeader: opt.isGroupHeader || false,
                 badge: opt.badge || null,
+                disabled: opt.disabled || false,
                 original: opt
             };
         }
@@ -31,6 +32,7 @@ export default function SearchableSelect({
             label: String(opt),
             isGroupHeader: false,
             badge: null,
+            disabled: false,
             original: opt
         };
     });
@@ -133,20 +135,31 @@ export default function SearchableSelect({
                                 }
 
                                 const isSelected = String(opt.value) === String(value);
+                                const isDisabled = opt.disabled || opt.original?.disabled;
+
                                 return (
                                     <div
                                         key={idx}
                                         onClick={() => {
+                                            if (isDisabled) return;
                                             onChange(opt.value);
                                             setIsOpen(false);
                                             setSearchTerm('');
                                         }}
-                                        className={`px-4 py-2 text-xs cursor-pointer hover:bg-[#f1f3fe] transition-colors flex items-center justify-between gap-2 ${
-                                            isSelected ? 'bg-[#ebedf8] text-[#005bb1] font-bold' : 'text-[#181c23]'
+                                        className={`px-4 py-2 text-xs flex items-center justify-between gap-2 transition-colors ${
+                                            isDisabled 
+                                                ? 'opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 select-none' 
+                                                : isSelected 
+                                                    ? 'bg-[#ebedf8] text-[#005bb1] font-bold cursor-pointer hover:bg-[#f1f3fe]' 
+                                                    : 'text-[#181c23] cursor-pointer hover:bg-[#f1f3fe]'
                                         }`}
                                     >
                                         <span className="truncate">{opt.label}</span>
-                                        {opt.original?.badge && (
+                                        {isDisabled ? (
+                                            <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 border bg-amber-50 text-amber-700 border-amber-200">
+                                                Otomatis SIMAK
+                                            </span>
+                                        ) : opt.original?.badge && (
                                             <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 border ${opt.original.badgeColor || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
                                                 {opt.original.badge}
                                             </span>

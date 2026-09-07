@@ -92,11 +92,15 @@ export default function EditCapaian() {
         fetch(`/api/master/iku/assigned?unit=${unitId}&tahun=${yearVal}`)
             .then(res => res.json())
             .then(data => {
-                const formatted = data.map(iku => ({
-                    ...iku,
-                    id: iku.id,
-                    label: `${iku.iku} - ${iku.kategori || iku.full_kategori}`
-                }));
+                const formatted = data.map(iku => {
+                    const isIku1 = (iku.iku && (iku.iku.trim() === 'IKU 1' || iku.iku.startsWith('IKU 1')));
+                    return {
+                        ...iku,
+                        id: iku.id,
+                        label: `${iku.iku} - ${iku.kategori || iku.full_kategori}`,
+                        disabled: isIku1
+                    };
+                });
                 setIndicators(formatted);
                 setSelectedIkuId('');
                 resetFormFields();

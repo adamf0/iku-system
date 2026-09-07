@@ -8,6 +8,86 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CapaianController extends Controller
 {
+    private function syncAutoIku1Data($scopeUnits, $tahun = 2026)
+    {
+        if (empty($scopeUnits)) return;
+
+        foreach ((array)$scopeUnits as $unitId) {
+            $iku1Assigned = DB::table('penugasan_target')
+                ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
+                ->where('penugasan_target.fakultas_unit', $unitId)
+                ->where('penugasan_target.tahun', $tahun)
+                ->where(function($q) {
+                    $q->where('master_indikator.iku', 'LIKE', 'IKU 1%')
+                      ->orWhere('master_indikator.id', 1);
+                })
+                ->whereNull('penugasan_target.deleted_at')
+                ->pluck('master_indikator.id');
+
+            if ($iku1Assigned->isEmpty()) continue;
+
+            $sijamuUnit = DB::table('sijamu_fakultas_unit')->where('id', $unitId)->first();
+            $vUnit = DB::table('v_fakultas_unit')->where('id', $unitId)->first();
+
+            $totalMhs = 0;
+            $totalLulus = 0;
+
+            if ($sijamuUnit && !empty($sijamuUnit->kode_fakultas)) {
+                $mQuery = DB::table('unpak_simak.m_mahasiswa')
+                    ->where('kode_fak', $sijamuUnit->kode_fakultas);
+                
+                if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                    $mQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                }
+
+                $totalMhs = (clone $mQuery)->count();
+                $totalLulus = (clone $mQuery)
+                    ->whereNotNull('tanggal_lulus')
+                    ->whereNotNull('tanggal_masuk')
+                    ->count();
+            }
+
+            $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
+
+            foreach ($iku1Assigned as $indId) {
+                foreach (['TW1', 'TW2', 'TW3', 'TW4'] as $tw) {
+                    $exists = DB::table('template_capaian')
+                        ->where('id_indikator', $indId)
+                        ->where('fakultas_unit', $unitId)
+                        ->where('tahun', $tahun)
+                        ->where('triwulan', $tw)
+                        ->first();
+
+                    if (!$exists) {
+                        DB::table('template_capaian')->insert([
+                            'id_indikator' => $indId,
+                            'fakultas_unit' => $unitId,
+                            'tahun' => $tahun,
+                            'triwulan' => $tw,
+                            'nilai_capaian' => $capaianPct,
+                            'pembilang' => $totalLulus,
+                            'penyebut' => $totalMhs,
+                            'catatan' => "Perhitungan otomatis dari SIMAK: Total Lulus {$totalLulus} / Total Mahasiswa {$totalMhs}",
+                            'status_validasi' => 'DIAJUKAN',
+                            'diinput_oleh' => 'system_simak',
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    } else {
+                        DB::table('template_capaian')
+                            ->where('id', $exists->id)
+                            ->update([
+                                'nilai_capaian' => $capaianPct,
+                                'pembilang' => $totalLulus,
+                                'penyebut' => $totalMhs,
+                                'updated_at' => now(),
+                            ]);
+                    }
+                }
+            }
+        }
+    }
+
     public function index(Request $request)
     {
         $tahun = $request->query('tahun', date('Y'));
@@ -15,6 +95,8 @@ class CapaianController extends Controller
         
         $user = $request->user();
         $scope = $user->scopeUnits();
+
+        $this->syncAutoIku1Data($scope, $tahun === 'ALL' ? 2026 : (int)$tahun);
 
         $data = DB::table('template_capaian')
             ->whereIn('fakultas_unit', $scope)
@@ -30,6 +112,9 @@ class CapaianController extends Controller
     {
         $user = $request->user();
         $scope = $user->scopeUnits();
+
+        $tahunParam = $request->query('tahun', date('Y'));
+        $this->syncAutoIku1Data($scope, $tahunParam === 'ALL' ? 2026 : (int)$tahunParam);
 
         $query = DB::table('template_capaian')
             ->join('v_fakultas_unit', 'template_capaian.fakultas_unit', '=', 'v_fakultas_unit.id')
@@ -99,6 +184,18 @@ class CapaianController extends Controller
         $user = $request->user();
         if (in_array($user->role, ['ADMIN', 'LPM'])) {
             return response()->json(['error' => 'Akses Ditolak: Admin atau LPM tidak dapat menginput capaian kinerja.'], 403);
+        }
+
+        $isIku1 = DB::table('master_indikator')
+            ->where('id', $validated['id_indikator'])
+            ->where(function($q) {
+                $q->where('iku', 'LIKE', 'IKU 1%')
+                  ->orWhere('id', 1);
+            })
+            ->exists();
+
+        if ($isIku1 && !in_array($user->role, ['ADMIN'])) {
+            return response()->json(['error' => 'IKU 1 dihitung secara otomatis dari SIMAK dan tidak dapat diinput manual.'], 422);
         }
 
         // Verify if this unit is indeed assigned to the requested indicator and year
