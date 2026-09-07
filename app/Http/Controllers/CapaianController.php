@@ -27,7 +27,9 @@ class CapaianController extends Controller
                 ->where('penugasan_target.fakultas_unit', $unitId)
                 ->where('penugasan_target.tahun', $tahun)
                 ->where(function($q) {
-                    $q->where('master_indikator.iku', 'LIKE', 'IKU 1%')
+                    $q->where('master_indikator.iku', 'IKU 1')
+                      ->orWhere('master_indikator.iku', 'LIKE', 'IKU 1 -%')
+                      ->orWhere('master_indikator.iku', 'LIKE', 'Sub IKU 1%')
                       ->orWhere('master_indikator.id', 1);
                 })
                 ->whereNull('penugasan_target.deleted_at')
@@ -210,7 +212,9 @@ class CapaianController extends Controller
         $isIku1 = DB::table('master_indikator')
             ->where('id', $validated['id_indikator'])
             ->where(function($q) {
-                $q->where('iku', 'LIKE', 'IKU 1%')
+                $q->where('iku', 'IKU 1')
+                  ->orWhere('iku', 'LIKE', 'IKU 1 -%')
+                  ->orWhere('iku', 'LIKE', 'Sub IKU 1%')
                   ->orWhere('id', 1);
             })
             ->exists();

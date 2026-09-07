@@ -41,7 +41,9 @@ class SyncSimakIku1Command extends Command
                     ->where('penugasan_target.fakultas_unit', $unitId)
                     ->where('penugasan_target.tahun', $tahun)
                     ->where(function($q) {
-                        $q->where('master_indikator.iku', 'LIKE', 'IKU 1%')
+                        $q->where('master_indikator.iku', 'IKU 1')
+                          ->orWhere('master_indikator.iku', 'LIKE', 'IKU 1 -%')
+                          ->orWhere('master_indikator.iku', 'LIKE', 'Sub IKU 1%')
                           ->orWhere('master_indikator.id', 1);
                     })
                     ->whereNull('penugasan_target.deleted_at')

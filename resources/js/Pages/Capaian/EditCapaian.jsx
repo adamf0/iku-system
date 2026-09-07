@@ -93,7 +93,12 @@ export default function EditCapaian() {
             .then(res => res.json())
             .then(data => {
                 const formatted = data.map(iku => {
-                    const isIku1 = (iku.iku && (iku.iku.trim() === 'IKU 1' || iku.iku.startsWith('IKU 1')));
+                    const ikuName = iku.iku ? iku.iku.trim() : '';
+                    const isIku1 = Boolean(ikuName && (
+                        ikuName === 'IKU 1' || 
+                        /^IKU 1\s*-/i.test(ikuName) || 
+                        /^Sub IKU 1/i.test(ikuName)
+                    ));
                     return {
                         ...iku,
                         id: iku.id,
