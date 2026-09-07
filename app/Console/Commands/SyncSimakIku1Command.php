@@ -76,8 +76,7 @@ class SyncSimakIku1Command extends Command
                         $mhsStatsQuery = DB::connection('simak')->table('m_mahasiswa')
                             ->selectRaw("
                                 COALESCE(kode_prodi, '') as kode_prodi,
-                                COUNT(*) as total_mhs,
-                                SUM(CASE WHEN status_mhs IN ('DO', 'DROP OUT', 'KELUAR', 'Non-Aktif') THEN 1 ELSE 0 END) as drop_out
+                                COUNT(*) as total_mhs
                             ")
                             ->where('kode_fak', $sijamuUnit->kode_fakultas);
 
@@ -85,6 +84,19 @@ class SyncSimakIku1Command extends Command
                             $mhsStatsQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
                         }
                         $baseStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
+
+                        $dropOutGrouped = collect();
+                        try {
+                            $dropOutQuery = DB::connection('simak')->table('m_mahasiswa')
+                                ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, COUNT(*) as drop_out")
+                                ->where('kode_fak', $sijamuUnit->kode_fakultas)
+                                ->whereIn('status_mhs', ['DO', 'DROP OUT', 'KELUAR', 'Non-Aktif']);
+
+                            if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
+                                $dropOutQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                            }
+                            $dropOutGrouped = $dropOutQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
+                        } catch (\Throwable $eDo) {}
 
                         $graduatesQuery = DB::connection('simak')->table('m_mahasiswa')
                             ->selectRaw("
@@ -105,8 +117,8 @@ class SyncSimakIku1Command extends Command
                         $totalMhs = $baseStatsGrouped->sum('total_mhs');
                         $totalLulus = $graduates->count();
                     } catch (\Throwable $e) {
-                        $this->warn("Akses tabel unpak_simak.m_mahasiswa ditolak/gagal: " . $e->getMessage());
-                        break 2;
+                        $this->warn("Akses SIMAK unit {$unitName} ({$unitId}) gagal: " . $e->getMessage());
+                        continue;
                     }
 
                     $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
@@ -126,7 +138,9 @@ class SyncSimakIku1Command extends Command
                     foreach ($prodis as $p) {
                         $baseP = $baseStatsGrouped->get($p->kode_prodi);
                         $totMhsP = $baseP ? (int)$baseP->total_mhs : 0;
-                        $dropOutP = $baseP ? (int)$baseP->drop_out : 0;
+
+                        $doP = $dropOutGrouped->get($p->kode_prodi);
+                        $dropOutP = $doP ? (int)$doP->drop_out : 0;
 
                         $prodiGrads = $graduatesByProdi->get($p->kode_prodi, collect());
                         $maxHariTepat = $this->getMasaStudiTepatWaktuHari($p->jenjang, $p->nama_prodi);
