@@ -79,21 +79,30 @@ class DashboardController extends Controller
                 return $item->id_indikator === $iku->id;
             });
 
-            // Get triwulan specific values
+            // Get triwulan specific values across all reporting prodis/units
             $twDetails = [];
             $twPcts = [];
-            foreach ($this->TRIWULAN as $tw) {
-                $found = $rows->where('triwulan', $tw)->first();
-                $nilai = $found ? (float)$found->nilai_capaian : null;
-                $twDetails[$tw] = [
-                    'nilai' => $nilai,
-                    'status_validasi' => $found ? $found->status_validasi : null
-                ];
+            $targetVal = (float)$iku->target;
 
-                $targetVal = (float)$iku->target;
-                if ($nilai !== null && $targetVal > 0) {
-                    $twPcts[$tw] = min(100, round(($nilai / $targetVal) * 100, 1));
+            foreach ($this->TRIWULAN as $tw) {
+                $rowsTw = $rows->where('triwulan', $tw);
+                if ($rowsTw->count() > 0) {
+                    $avgNilai = round($rowsTw->avg('nilai_capaian'), 2);
+                    $firstSah = $rowsTw->where('status_validasi', 'DISAHKAN')->first();
+                    $statusVal = $firstSah ? 'DISAHKAN' : ($rowsTw->first() ? $rowsTw->first()->status_validasi : null);
+                    $twDetails[$tw] = [
+                        'nilai' => $avgNilai,
+                        'status_validasi' => $statusVal
+                    ];
+
+                    $sumRealisasi = $rowsTw->sum('nilai_capaian');
+                    $sumTarget = $rowsTw->count() * ($targetVal > 0 ? $targetVal : 1);
+                    $twPcts[$tw] = min(100, round(($sumRealisasi / $sumTarget) * 100, 1));
                 } else {
+                    $twDetails[$tw] = [
+                        'nilai' => null,
+                        'status_validasi' => null
+                    ];
                     $twPcts[$tw] = 0;
                 }
             }
@@ -114,14 +123,16 @@ class DashboardController extends Controller
 
             $hasData = ($rows->count() > 0 && $capaianRata !== null);
 
-            // Normalized 0-100% values
+            // Normalized 0-100% values (Ratio of sum of realisasi over sum of targets)
             $targetPct = ($target > 0) ? 100 : 0;
             $baselinePct = ($target > 0 && $baseLine > 0) ? min(100, round(($baseLine / $target) * 100, 1)) : min(100, $baseLine);
             
-            $validPcts = array_filter($twPcts, function($v) { return $v > 0; });
-            $allPct = count($validPcts) > 0 ? round(array_sum($validPcts) / count($validPcts), 1) : 0;
-            if ($allPct == 0 && $capaianRata !== null && $target > 0) {
-                $allPct = min(100, round(($capaianRata / $target) * 100, 1));
+            if ($rows->count() > 0 && $target > 0) {
+                $sumRealisasiTotal = $rows->sum('nilai_capaian');
+                $sumTargetTotal = $rows->count() * $target;
+                $allPct = min(100, round(($sumRealisasiTotal / $sumTargetTotal) * 100, 1));
+            } else {
+                $allPct = 0;
             }
 
             // Generate multi-year breakdown from in-memory collection (NO subqueries!)
@@ -138,10 +149,11 @@ class DashboardController extends Controller
                 $twPctsYr = [];
                 $targetYr = (float)$iku->target;
                 foreach ($this->TRIWULAN as $tw) {
-                    $foundYrTw = $rowsYr->where('triwulan', $tw)->first();
-                    $valYrTw = $foundYrTw ? (float)$foundYrTw->nilai_capaian : null;
-                    if ($valYrTw !== null && $targetYr > 0) {
-                        $twPctsYr[$tw] = min(100, round(($valYrTw / $targetYr) * 100, 1));
+                    $rowsYrTw = $rowsYr->where('triwulan', $tw);
+                    if ($rowsYrTw->count() > 0 && $targetYr > 0) {
+                        $sumRealisasiTw = $rowsYrTw->sum('nilai_capaian');
+                        $sumTargetTw = $rowsYrTw->count() * $targetYr;
+                        $twPctsYr[$tw] = min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1));
                     } else {
                         $twPctsYr[$tw] = 0;
                     }
@@ -150,7 +162,14 @@ class DashboardController extends Controller
                 $capaianYr = $rowsYr->count() > 0 ? (float)$rowsYr->avg('nilai_capaian') : null;
                 $baselineYr = (float)$iku->base_line;
 
-                $capaianPctYr = ($capaianYr !== null && $targetYr > 0) ? min(100, round(($capaianYr / $targetYr) * 100, 1)) : 0;
+                if ($rowsYr->count() > 0 && $targetYr > 0) {
+                    $sumRealisasiYr = $rowsYr->sum('nilai_capaian');
+                    $sumTargetYr = $rowsYr->count() * $targetYr;
+                    $capaianPctYr = min(100, round(($sumRealisasiYr / $sumTargetYr) * 100, 1));
+                } else {
+                    $capaianPctYr = 0;
+                }
+
                 $baselinePctYr = ($targetYr > 0 && $baselineYr > 0) ? min(100, round(($baselineYr / $targetYr) * 100, 1)) : min(100, $baselineYr);
 
                 $yearsData[$yr] = [
@@ -471,7 +490,9 @@ class DashboardController extends Controller
                 'master_indikator.jenis_iku',
                 DB::raw('COALESCE(target_indikator_tahun.base_line, master_indikator.base_line) as base_line'),
                 DB::raw('COALESCE(target_indikator_tahun.target, master_indikator.target) as target')
-            );
+            )
+            ->orderBy("template_capaian.triwulan","asc")
+            ->orderBy("template_capaian.tahun","asc");
 
         if ($request->filled('tahun') && $request->query('tahun') !== 'ALL') {
             $query->where('template_capaian.tahun', $request->query('tahun'));
