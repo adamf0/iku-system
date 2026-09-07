@@ -137,6 +137,10 @@ class CapaianController extends Controller
             ->select(
                 'template_capaian.*',
                 'v_fakultas_unit.nama_fak_prod_unit as nama_unit',
+                'v_fakultas_unit.type as type_unit',
+                'v_fakultas_unit.jenjang',
+                'v_fakultas_unit.kode_jenjang',
+                'v_fakultas_unit.fakultas',
                 'master_indikator.iku',
                 'master_indikator.kategori',
                 'master_indikator.full_kategori',
@@ -378,6 +382,10 @@ class CapaianController extends Controller
                 'penugasan_target.tahun',
                 'penugasan_target.deleted_at',
                 'v_fakultas_unit.nama_fak_prod_unit as nama_unit',
+                'v_fakultas_unit.type as type_unit',
+                'v_fakultas_unit.jenjang',
+                'v_fakultas_unit.kode_jenjang',
+                'v_fakultas_unit.fakultas',
                 'master_indikator.iku',
                 'master_indikator.full_kategori',
                 'master_indikator.jenis_iku'

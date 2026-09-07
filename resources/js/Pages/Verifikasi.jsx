@@ -297,10 +297,22 @@ export default function Verifikasi() {
                                         return (
                                             <tr key={item.id_capaian} className="hover:bg-[#f1f3fe]/20 transition-colors">
                                                 <td className="p-4 font-bold text-[#181c23]">
-                                                    {item.nama_unit}
-                                                    {item.type_unit && (
-                                                        <span className="text-[10px] text-[#717785] block font-normal uppercase">{item.type_unit}</span>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        {item.jenjang && (
+                                                            <span className="bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase">
+                                                                {item.jenjang}
+                                                            </span>
+                                                        )}
+                                                        <span>{item.nama_unit}</span>
+                                                    </div>
+                                                    {item.fakultas && (
+                                                        <span className="text-[11px] font-medium text-[#535f71] block mt-0.5">
+                                                            Fak. {item.fakultas}
+                                                        </span>
                                                     )}
+                                                    <span className="text-[9px] text-[#717785] block font-bold uppercase tracking-wider mt-0.5">
+                                                        {item.type_unit === 'prodi' && item.jenjang ? `PRODI ${item.jenjang.toUpperCase()}` : (item.type_unit ? item.type_unit.toUpperCase() : 'UNIT')}
+                                                    </span>
                                                 </td>
                                                 <td className="p-4 space-y-1">
                                                     <div className="flex items-center gap-1.5 flex-wrap">
