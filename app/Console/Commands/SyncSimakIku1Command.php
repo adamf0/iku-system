@@ -94,7 +94,7 @@ class SyncSimakIku1Command extends Command
                         $prodiListQuery->where('s.kode_prodi', $sijamuUnit->kode_prodi);
                     }
 
-                    $prodis = $prodiListQuery->select('s.nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type')->get();
+                    $prodis = $prodiListQuery->select('v.nama_fak_prod_unit as nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type', 'v.jenjang')->get();
 
                     foreach ($prodis as $p) {
                         try {
@@ -127,8 +127,8 @@ class SyncSimakIku1Command extends Command
                                     ->count();
                             } catch (\Throwable $eDo) {}
 
-                            $jenjang = 'S1';
-                            if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi, $mj)) {
+                            $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
+                            if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
                                 $jenjang = strtoupper($mj[1]);
                             }
 
