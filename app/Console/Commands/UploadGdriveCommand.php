@@ -56,6 +56,7 @@ class UploadGdriveCommand extends Command
 
             $indObj = DB::table('master_indikator')->where('id', $indId)->first();
             $indikatorName = $indObj ? $indObj->iku : 'IKU 1';
+            $fileName = "{$indikatorName}.xlsx";
             $ikuFolderId = $driveService->findFolder($indikatorName, $twFolderId);
             if (!$ikuFolderId) {
                 $ikuFolderId = $driveService->createFolder($indikatorName, $twFolderId);
