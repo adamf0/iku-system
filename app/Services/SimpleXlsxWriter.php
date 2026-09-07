@@ -11,7 +11,11 @@ class SimpleXlsxWriter
     {
         $dir = dirname($outputPath);
         if (!file_exists($dir)) {
-            mkdir($dir, 0777, true);
+            @mkdir($dir, 0777, true);
+            @chmod($dir, 0777);
+        }
+        if (file_exists($outputPath)) {
+            @unlink($outputPath);
         }
 
         $zip = new \ZipArchive();
