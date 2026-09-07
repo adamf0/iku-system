@@ -10,6 +10,7 @@ class GoogleDriveService
     protected $clientSecret;
     protected $parentFolderId;
     protected $tokenFile;
+    protected static $folderCache = [];
 
     public static function defaultIkuList()
     {
@@ -87,6 +88,8 @@ class GoogleDriveService
             if (!empty($tokenData['refresh_token'])) {
                 $ch = curl_init('https://oauth2.googleapis.com/token');
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
                 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
                     'client_id' => $this->clientId,
                     'client_secret' => $this->clientSecret,
@@ -112,25 +115,39 @@ class GoogleDriveService
     }
 
     /**
-     * Check if a folder exists by name under a parent folder
+     * Check if a folder exists by name under a parent folder (with memory cache)
      */
     public function findFolder($name, $parentId = null)
     {
+        $parentId = $parentId ?: $this->parentFolderId;
+        $cacheKey = "{$parentId}_{$name}";
+
+        if (isset(self::$folderCache[$cacheKey])) {
+            return self::$folderCache[$cacheKey];
+        }
+
         $accessToken = $this->getAccessToken();
         if (!$accessToken) return null;
 
-        $parentId = $parentId ?: $this->parentFolderId;
         $q = urlencode("'$parentId' in parents and name = '$name' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
         $url = "https://www.googleapis.com/drive/v3/files?q={$q}";
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
         $res = curl_exec($ch);
         curl_close($ch);
 
         $data = json_decode($res, true);
-        return $data['files'][0]['id'] ?? null;
+        $folderId = $data['files'][0]['id'] ?? null;
+
+        if ($folderId) {
+            self::$folderCache[$cacheKey] = $folderId;
+        }
+
+        return $folderId;
     }
 
     /**
@@ -138,12 +155,17 @@ class GoogleDriveService
      */
     public function createFolder($name, $parentId = null)
     {
+        $parentId = $parentId ?: $this->parentFolderId;
+        $cacheKey = "{$parentId}_{$name}";
+
+        if (isset(self::$folderCache[$cacheKey])) {
+            return self::$folderCache[$cacheKey];
+        }
+
         $accessToken = $this->getAccessToken();
         if (!$accessToken) return null;
 
-        $parentId = $parentId ?: $this->parentFolderId;
         $url = "https://www.googleapis.com/drive/v3/files";
-
         $body = json_encode([
             'name' => $name,
             'mimeType' => 'application/vnd.google-apps.folder',
@@ -152,6 +174,8 @@ class GoogleDriveService
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -162,7 +186,13 @@ class GoogleDriveService
         curl_close($ch);
 
         $data = json_decode($res, true);
-        return $data['id'] ?? null;
+        $folderId = $data['id'] ?? null;
+
+        if ($folderId) {
+            self::$folderCache[$cacheKey] = $folderId;
+        }
+
+        return $folderId;
     }
 
     /**
@@ -188,6 +218,8 @@ class GoogleDriveService
                     'parents' => [$parentId]
                 ]);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
                 curl_setopt($ch, CURLOPT_POST, true);
                 curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -201,7 +233,7 @@ class GoogleDriveService
             $running = null;
             do {
                 curl_multi_exec($mh, $running);
-                curl_multi_select($mh);
+                curl_multi_select($mh, 1);
             } while ($running > 0);
 
             foreach ($handles as $name => $ch) {
@@ -209,6 +241,7 @@ class GoogleDriveService
                 $data = json_decode($content, true);
                 if (!empty($data['id'])) {
                     $createdIds[$name] = $data['id'];
+                    self::$folderCache["{$parentId}_{$name}"] = $data['id'];
                 }
                 curl_multi_remove_handle($mh, $ch);
                 curl_close($ch);
@@ -233,6 +266,8 @@ class GoogleDriveService
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
         $res = curl_exec($ch);
         curl_close($ch);
@@ -241,6 +276,7 @@ class GoogleDriveService
         $names = [];
         foreach ($data['files'] ?? [] as $file) {
             $names[] = $file['name'];
+            self::$folderCache["{$parentId}_{$file['name']}"] = $file['id'];
         }
         return $names;
     }
@@ -301,90 +337,102 @@ class GoogleDriveService
         $accessToken = $this->getAccessToken();
         if (!$accessToken || !file_exists($filePath)) return null;
 
-        // Check if file already exists in parent folder
-        $existingFileId = null;
-        $q = urlencode("'$parentId' in parents and name = '$fileName' and trashed = false");
-        $urlSearch = "https://www.googleapis.com/drive/v3/files?q={$q}";
-        $chS = curl_init($urlSearch);
-        curl_setopt($chS, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($chS, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
-        $resS = curl_exec($chS);
-        curl_close($chS);
-        $dataS = json_decode($resS, true);
-        if (!empty($dataS['files'][0]['id'])) {
-            $existingFileId = $dataS['files'][0]['id'];
-        }
+        try {
+            // Check if file already exists in parent folder
+            $existingFileId = null;
+            $q = urlencode("'$parentId' in parents and name = '$fileName' and trashed = false");
+            $urlSearch = "https://www.googleapis.com/drive/v3/files?q={$q}";
+            $chS = curl_init($urlSearch);
+            curl_setopt($chS, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($chS, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($chS, CURLOPT_TIMEOUT, 15);
+            curl_setopt($chS, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+            $resS = curl_exec($chS);
+            curl_close($chS);
+            $dataS = json_decode($resS, true);
+            if (!empty($dataS['files'][0]['id'])) {
+                $existingFileId = $dataS['files'][0]['id'];
+            }
 
-        $fileData = file_get_contents($filePath);
+            $fileData = file_get_contents($filePath);
 
-        if ($existingFileId) {
-            // Update existing file content
-            $urlUpload = "https://www.googleapis.com/upload/drive/v3/files/{$existingFileId}?uploadType=media";
-            $ch = curl_init($urlUpload);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $fileData);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                "Authorization: Bearer {$accessToken}",
-                "Content-Type: {$mimeType}"
-            ]);
-            $res = curl_exec($ch);
-            curl_close($ch);
-            $fileId = $existingFileId;
-        } else {
-            // Multipart upload for new file
-            $boundary = '-------' . microtime(true);
-            $delimiter = "\r\n--" . $boundary . "\r\n";
-            $closeDelimiter = "\r\n--" . $boundary . "--";
+            if ($existingFileId) {
+                // Update existing file content
+                $urlUpload = "https://www.googleapis.com/upload/drive/v3/files/{$existingFileId}?uploadType=media";
+                $ch = curl_init($urlUpload);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $fileData);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    "Authorization: Bearer {$accessToken}",
+                    "Content-Type: {$mimeType}"
+                ]);
+                $res = curl_exec($ch);
+                curl_close($ch);
+                $fileId = $existingFileId;
+            } else {
+                // Multipart upload for new file
+                $boundary = '-------' . microtime(true);
+                $delimiter = "\r\n--" . $boundary . "\r\n";
+                $closeDelimiter = "\r\n--" . $boundary . "--";
 
-            $metadata = [
-                'name' => $fileName,
-                'parents' => [$parentId]
-            ];
+                $metadata = [
+                    'name' => $fileName,
+                    'parents' => [$parentId]
+                ];
 
-            $postData = $delimiter .
-                "Content-Type: application/json; charset=UTF-8\r\n\r\n" .
-                json_encode($metadata) .
-                $delimiter .
-                "Content-Type: {$mimeType}\r\n\r\n" .
-                $fileData .
-                $closeDelimiter;
+                $postData = $delimiter .
+                    "Content-Type: application/json; charset=UTF-8\r\n\r\n" .
+                    json_encode($metadata) .
+                    $delimiter .
+                    "Content-Type: {$mimeType}\r\n\r\n" .
+                    $fileData .
+                    $closeDelimiter;
 
-            $urlUpload = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
-            $ch = curl_init($urlUpload);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                "Authorization: Bearer {$accessToken}",
-                "Content-Type: multipart/related; boundary=" . $boundary,
-                "Content-Length: " . strlen($postData)
-            ]);
-            $res = curl_exec($ch);
-            curl_close($ch);
+                $urlUpload = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+                $ch = curl_init($urlUpload);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    "Authorization: Bearer {$accessToken}",
+                    "Content-Type: multipart/related; boundary=" . $boundary,
+                    "Content-Length: " . strlen($postData)
+                ]);
+                $res = curl_exec($ch);
+                curl_close($ch);
 
-            $data = json_decode($res, true);
-            $fileId = $data['id'] ?? null;
-        }
+                $data = json_decode($res, true);
+                $fileId = $data['id'] ?? null;
+            }
 
-        if ($fileId) {
-            // Make file readable to anyone with link
-            $urlPerm = "https://www.googleapis.com/drive/v3/files/{$fileId}/permissions";
-            $chP = curl_init($urlPerm);
-            curl_setopt($chP, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($chP, CURLOPT_POST, true);
-            curl_setopt($chP, CURLOPT_POSTFIELDS, json_encode([
-                'role' => 'reader',
-                'type' => 'anyone'
-            ]));
-            curl_setopt($chP, CURLOPT_HTTPHEADER, [
-                "Authorization: Bearer {$accessToken}",
-                "Content-Type: application/json"
-            ]);
-            curl_exec($chP);
-            curl_close($chP);
+            if ($fileId) {
+                // Make file readable to anyone with link
+                $urlPerm = "https://www.googleapis.com/drive/v3/files/{$fileId}/permissions";
+                $chP = curl_init($urlPerm);
+                curl_setopt($chP, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($chP, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($chP, CURLOPT_TIMEOUT, 10);
+                curl_setopt($chP, CURLOPT_POST, true);
+                curl_setopt($chP, CURLOPT_POSTFIELDS, json_encode([
+                    'role' => 'reader',
+                    'type' => 'anyone'
+                ]));
+                curl_setopt($chP, CURLOPT_HTTPHEADER, [
+                    "Authorization: Bearer {$accessToken}",
+                    "Content-Type: application/json"
+                ]);
+                curl_exec($chP);
+                curl_close($chP);
 
-            return "https://drive.google.com/file/d/{$fileId}/view?usp=sharing";
+                return "https://drive.google.com/file/d/{$fileId}/view?usp=sharing";
+            }
+        } catch (\Throwable $e) {
+            Log::error("Google Drive Upload Exception: " . $e->getMessage());
         }
 
         return null;

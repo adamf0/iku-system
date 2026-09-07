@@ -7,12 +7,13 @@ use Illuminate\Support\Facades\DB;
 
 class SyncSimakIku1Command extends Command
 {
-    protected $signature = 'iku:sync-simak-iku1 {--tahun= : Tahun spesifik untuk sinkronisasi}';
+    protected $signature = 'iku:sync-simak-iku1 {--tahun= : Tahun spesifik untuk sinkronisasi} {--skip-drive : Lewati upload Google Drive (upload via cronjob terpisah)}';
     protected $description = 'Sinkronisasi otomatis data IKU 1 dari SIMAK dengan cut-off tanggal per triwulan';
 
     public function handle()
     {
         $tahunParam = $this->option('tahun');
+        $skipDrive = $this->option('skip-drive');
         $targetYears = $tahunParam 
             ? [(int)$tahunParam] 
             : DB::table('master_tahun')->pluck('tahun')->toArray();
@@ -33,9 +34,14 @@ class SyncSimakIku1Command extends Command
         $syncedCount = 0;
 
         foreach ($targetYears as $tahun) {
-            // Ensure year folder structure exists in Google Drive
-            $driveService->ensureYearFolderStructure($tahun);
-            $yearFolderId = $driveService->findFolder((string)$tahun);
+            $this->info("=== Memproses Sinkronisasi SIMAK IKU 1 Tahun {$tahun} ===");
+            
+            $yearFolderId = null;
+            if (!$skipDrive) {
+                // Ensure year folder structure exists in Google Drive
+                $driveService->ensureYearFolderStructure($tahun);
+                $yearFolderId = $driveService->findFolder((string)$tahun);
+            }
 
             foreach ($units as $vUnit) {
                 $unitId = $vUnit->id;
@@ -58,6 +64,9 @@ class SyncSimakIku1Command extends Command
 
                 $sijamuUnit = DB::table('sijamu_fakultas_unit')->where('id', $unitId)->first();
                 if (!$sijamuUnit || empty($sijamuUnit->kode_fakultas)) continue;
+
+                $unitName = $vUnit->nama_fak_prod_unit ?? "Unit {$unitId}";
+                $this->line(" -> Processing {$unitName}...");
 
                 foreach ($triwulanCutOffs as $tw => $dateSuffix) {
                     $cutOffDate = $tahun . $dateSuffix;
@@ -156,9 +165,11 @@ class SyncSimakIku1Command extends Command
                         \App\Services\SimpleXlsxWriter::create($tempPath, $headers, $excelRows);
 
                         $fileUrl = null;
-                        if ($twFolderId && file_exists($tempPath)) {
+                        if (!$skipDrive && $twFolderId && file_exists($tempPath)) {
                             $fileUrl = $driveService->uploadFile($tempPath, $fileName, $twFolderId);
-                            @unlink($tempPath);
+                            if ($fileUrl) {
+                                @unlink($tempPath);
+                            }
                         }
 
                         $exists = DB::table('template_capaian')
