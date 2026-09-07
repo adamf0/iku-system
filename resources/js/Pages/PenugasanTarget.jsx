@@ -386,11 +386,11 @@ export default function PenugasanTarget() {
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold text-[#535f71] uppercase tracking-wider block">Filter Unit</label>
                             <SearchableSelect 
-                                options={[{ id: '', label: 'Semua Unit' }, ...units.map(u => ({ id: u.id, label: u.nama_fak_prod_unit }))]}
+                                options={buildGroupedUnitOptions(units, 'Semua Unit')}
                                 value={filterUnit}
                                 onChange={(val) => setFilterUnit(val)}
                                 placeholder="Semua Unit"
-                                searchPlaceholder="Cari Unit..."
+                                searchPlaceholder="Cari Unit (Fakultas, Prodi + Jenjang, Unit)..."
                             />
                         </div>
 

@@ -12,7 +12,7 @@ export function buildGroupedUnitOptions(units = [], defaultOptionLabel = 'Semua 
 
     units.forEach(u => {
         const type = (u.type || '').toLowerCase();
-        const jenjangStr = u.jenjang ? u.jenjang.toUpperCase() : '';
+        const jenjangStr = u.jenjang ? u.jenjang.toUpperCase() : (u.kode_jenjang ? u.kode_jenjang.toUpperCase() : '');
         const fakStr = u.fakultas ? ` (Fak. ${u.fakultas})` : '';
 
         if (type === 'fakultas') {
@@ -39,13 +39,17 @@ export function buildGroupedUnitOptions(units = [], defaultOptionLabel = 'Semua 
                 searchStr: `${label} prodi ${jenjangStr} ${u.fakultas || ''}`.toLowerCase()
             });
         } else {
+            const label = u.nama_fak_prod_unit.toUpperCase().startsWith('UNIT') || u.nama_fak_prod_unit.toUpperCase().startsWith('LEMBAGA')
+                ? u.nama_fak_prod_unit
+                : `UNIT - ${u.nama_fak_prod_unit}`;
+
             unitItems.push({
                 id: u.id,
-                label: u.nama_fak_prod_unit,
+                label: label,
                 badge: 'UNIT KERJA',
                 badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
                 group: 'UNIT KERJA / LEMBAGA',
-                searchStr: `${u.nama_fak_prod_unit} unit kerja lembaga`.toLowerCase()
+                searchStr: `${label} unit kerja lembaga`.toLowerCase()
             });
         }
     });
