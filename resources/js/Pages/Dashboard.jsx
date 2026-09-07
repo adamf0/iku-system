@@ -832,16 +832,18 @@ export default function Dashboard() {
                                                     <span className="w-2 h-2 rounded-full bg-red-500"></span>
                                                     <span className="font-extrabold text-sm text-[#181c23]">TW {idx + 1}</span>
                                                 </div>
-                                                <a 
-                                                    href={`/api/dashboard/export-tw-zip?tw=${twKey}&tahun=${selectedTahun}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    title={`Export ${twKey} Google Drive Folder (ZIP)`}
-                                                    className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs"
-                                                >
-                                                    <span className="material-symbols-outlined text-[13px]">folder_zip</span>
-                                                    <span>Export</span>
-                                                </a>
+                                                {user?.role === 'ADMIN' && (
+                                                    <a 
+                                                        href={`/api/dashboard/export-tw-zip?tw=${twKey}&tahun=${selectedTahun}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title={`Export ${twKey} Google Drive Folder (ZIP)`}
+                                                        className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[13px]">folder_zip</span>
+                                                        <span>Export</span>
+                                                    </a>
+                                                )}
                                             </div>
 
                                             <div className="mt-3 pt-3 border-t border-[#c0c6d6]/20 grid grid-cols-2 gap-2 text-center text-xs">

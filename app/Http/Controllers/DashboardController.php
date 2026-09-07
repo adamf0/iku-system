@@ -656,6 +656,11 @@ class DashboardController extends Controller
 
     public function exportTwZip(Request $request)
     {
+        $user = $request->user();
+        if (!$user || $user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Akses ditolak. Fitur export ZIP hanya untuk Admin.'], 403);
+        }
+
         $tw = strtoupper($request->query('tw', 'TW1'));
         if (!in_array($tw, ['TW1', 'TW2', 'TW3', 'TW4'])) {
             $tw = 'TW1';
