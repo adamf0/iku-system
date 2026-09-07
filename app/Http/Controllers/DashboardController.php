@@ -270,6 +270,25 @@ class DashboardController extends Controller
 
         $overallCapaian = $totalCapaianCount > 0 ? round($totalCapaianSum / $totalCapaianCount, 2) : 0;
 
+        // Fetch SIMAK student study duration statistics (tanggal_lulus - tanggal_masuk) per unit
+        $simakStats = DB::table('sijamu_fakultas_unit as s')
+            ->select(
+                's.id as unit_id',
+                's.kode_fakultas',
+                's.kode_prodi',
+                DB::raw('COUNT(m.NIM) as total_lulusan'),
+                DB::raw('ROUND(AVG(DATEDIFF(m.tanggal_lulus, m.tanggal_masuk)/365.25), 2) as avg_lama_kuliah')
+            )
+            ->leftJoin('unpak_simak.m_mahasiswa as m', function($j) {
+                $j->on('m.kode_fak', '=', 's.kode_fakultas')
+                  ->on('m.kode_prodi', '=', 's.kode_prodi');
+            })
+            ->whereNotNull('m.tanggal_lulus')
+            ->whereNotNull('m.tanggal_masuk')
+            ->groupBy('s.id', 's.kode_fakultas', 's.kode_prodi')
+            ->get()
+            ->keyBy('unit_id');
+
         // Capaian Semua Unit (Evaluated from memory)
         $unitsList = DB::table('v_fakultas_unit')->whereIn('id', $scope)->get();
         $capaianPerUnit = [];
@@ -289,13 +308,16 @@ class DashboardController extends Controller
             }
 
             $capaianAvg = count($unitPcts) > 0 ? round(array_sum($unitPcts) / count($unitPcts), 1) : 0;
+            $stat = $simakStats->get($u->id);
 
             $capaianPerUnit[] = [
                 'id' => $u->id,
                 'nama_unit' => $u->nama_fak_prod_unit,
                 'type' => strtoupper($u->type),
                 'capaian' => $capaianAvg,
-                'total_laporan' => $rowsUnit->count()
+                'total_laporan' => $rowsUnit->count(),
+                'total_lulusan' => $stat ? (int)$stat->total_lulusan : 0,
+                'avg_lama_kuliah' => $stat ? (float)$stat->avg_lama_kuliah : null,
             ];
         }
 
