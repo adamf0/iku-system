@@ -5,6 +5,7 @@ namespace App\Services;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class SimpleXlsxWriter
 {
@@ -32,8 +33,8 @@ class SimpleXlsxWriter
         if (!empty($headers)) {
             $colIdx = 1;
             foreach ($headers as $h) {
-                $cell = $sheet->getCellByColumnAndRow($colIdx, 1);
-                $cell->setValue((string)$h);
+                $cellRef = Coordinate::stringFromColumnIndex($colIdx) . '1';
+                $sheet->setCellValue($cellRef, (string)$h);
                 $colIdx++;
             }
 
@@ -51,11 +52,11 @@ class SimpleXlsxWriter
         foreach ($rows as $row) {
             $colIdx = 1;
             foreach ($row as $val) {
-                $cell = $sheet->getCellByColumnAndRow($colIdx, $rowIdx);
+                $cellRef = Coordinate::stringFromColumnIndex($colIdx) . $rowIdx;
                 if (is_numeric($val) && !preg_match('/^0\d+/', (string)$val)) {
-                    $cell->setValue((float)$val);
+                    $sheet->setCellValue($cellRef, (float)$val);
                 } else {
-                    $cell->setValue((string)($val ?? ''));
+                    $sheet->setCellValue($cellRef, (string)($val ?? ''));
                 }
                 $colIdx++;
             }
@@ -65,7 +66,8 @@ class SimpleXlsxWriter
         // Auto-fit column widths
         $maxCols = !empty($headers) ? count($headers) : 6;
         for ($col = 1; $col <= $maxCols; $col++) {
-            $sheet->getColumnDimensionByColumn($col)->setAutoSize(true);
+            $colLetter = Coordinate::stringFromColumnIndex($col);
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
         $writer = new Xlsx($spreadsheet);
