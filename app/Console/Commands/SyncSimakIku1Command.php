@@ -56,7 +56,7 @@ class SyncSimakIku1Command extends Command
                     $cutOffDate = $tahun . $dateSuffix;
 
                     try {
-                        $mQuery = DB::table('unpak_simak.m_mahasiswa')
+                        $mQuery = DB::connection('simak')->table('m_mahasiswa')
                             ->where('kode_fak', $sijamuUnit->kode_fakultas);
 
                         if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {

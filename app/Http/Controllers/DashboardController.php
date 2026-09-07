@@ -381,23 +381,37 @@ class DashboardController extends Controller
 
         // Fetch SIMAK student study duration statistics (tanggal_lulus - tanggal_masuk) per unit
         try {
-            $simakStats = DB::table('sijamu_fakultas_unit as s')
+            $mStats = DB::connection('simak')->table('m_mahasiswa')
                 ->select(
-                    's.id as unit_id',
-                    's.kode_fakultas',
-                    's.kode_prodi',
-                    DB::raw('COUNT(m.NIM) as total_lulusan'),
-                    DB::raw('ROUND(AVG(DATEDIFF(m.tanggal_lulus, m.tanggal_masuk)/365.25), 2) as avg_lama_kuliah')
+                    'kode_fak',
+                    'kode_prodi',
+                    DB::raw('COUNT(NIM) as total_lulusan'),
+                    DB::raw('ROUND(AVG(DATEDIFF(tanggal_lulus, tanggal_masuk)/365.25), 2) as avg_lama_kuliah')
                 )
-                ->leftJoin('unpak_simak.m_mahasiswa as m', function($j) {
-                    $j->on('m.kode_fak', '=', 's.kode_fakultas')
-                      ->on('m.kode_prodi', '=', 's.kode_prodi');
-                })
-                ->whereNotNull('m.tanggal_lulus')
-                ->whereNotNull('m.tanggal_masuk')
-                ->groupBy('s.id', 's.kode_fakultas', 's.kode_prodi')
-                ->get()
-                ->keyBy('unit_id');
+                ->whereNotNull('tanggal_lulus')
+                ->whereNotNull('tanggal_masuk')
+                ->groupBy('kode_fak', 'kode_prodi')
+                ->get();
+
+            $sijamuUnits = DB::table('sijamu_fakultas_unit')->get();
+            $simakStats = collect();
+
+            foreach ($sijamuUnits as $s) {
+                $stat = $mStats->first(function($item) use ($s) {
+                    if (!empty($s->kode_prodi)) {
+                        return $item->kode_fak == $s->kode_fakultas && $item->kode_prodi == $s->kode_prodi;
+                    }
+                    return $item->kode_fak == $s->kode_fakultas;
+                });
+
+                if ($stat) {
+                    $simakStats->put($s->id, (object)[
+                        'unit_id' => $s->id,
+                        'total_lulusan' => (int)$stat->total_lulusan,
+                        'avg_lama_kuliah' => (float)$stat->avg_lama_kuliah
+                    ]);
+                }
+            }
         } catch (\Throwable $e) {
             $simakStats = collect();
         }
