@@ -291,4 +291,102 @@ class GoogleDriveService
 
         return true;
     }
+
+    /**
+     * Upload or update a file on Google Drive in [tahun] > [TW] folder structure
+     * Returns Google Drive webViewLink or null
+     */
+    public function uploadFile($filePath, $fileName, $parentId, $mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    {
+        $accessToken = $this->getAccessToken();
+        if (!$accessToken || !file_exists($filePath)) return null;
+
+        // Check if file already exists in parent folder
+        $existingFileId = null;
+        $q = urlencode("'$parentId' in parents and name = '$fileName' and trashed = false");
+        $urlSearch = "https://www.googleapis.com/drive/v3/files?q={$q}";
+        $chS = curl_init($urlSearch);
+        curl_setopt($chS, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($chS, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+        $resS = curl_exec($chS);
+        curl_close($chS);
+        $dataS = json_decode($resS, true);
+        if (!empty($dataS['files'][0]['id'])) {
+            $existingFileId = $dataS['files'][0]['id'];
+        }
+
+        $fileData = file_get_contents($filePath);
+
+        if ($existingFileId) {
+            // Update existing file content
+            $urlUpload = "https://www.googleapis.com/upload/drive/v3/files/{$existingFileId}?uploadType=media";
+            $ch = curl_init($urlUpload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $fileData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer {$accessToken}",
+                "Content-Type: {$mimeType}"
+            ]);
+            $res = curl_exec($ch);
+            curl_close($ch);
+            $fileId = $existingFileId;
+        } else {
+            // Multipart upload for new file
+            $boundary = '-------' . microtime(true);
+            $delimiter = "\r\n--" . $boundary . "\r\n";
+            $closeDelimiter = "\r\n--" . $boundary . "--";
+
+            $metadata = [
+                'name' => $fileName,
+                'parents' => [$parentId]
+            ];
+
+            $postData = $delimiter .
+                "Content-Type: application/json; charset=UTF-8\r\n\r\n" .
+                json_encode($metadata) .
+                $delimiter .
+                "Content-Type: {$mimeType}\r\n\r\n" .
+                $fileData .
+                $closeDelimiter;
+
+            $urlUpload = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+            $ch = curl_init($urlUpload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer {$accessToken}",
+                "Content-Type: multipart/related; boundary=" . $boundary,
+                "Content-Length: " . strlen($postData)
+            ]);
+            $res = curl_exec($ch);
+            curl_close($ch);
+
+            $data = json_decode($res, true);
+            $fileId = $data['id'] ?? null;
+        }
+
+        if ($fileId) {
+            // Make file readable to anyone with link
+            $urlPerm = "https://www.googleapis.com/drive/v3/files/{$fileId}/permissions";
+            $chP = curl_init($urlPerm);
+            curl_setopt($chP, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($chP, CURLOPT_POST, true);
+            curl_setopt($chP, CURLOPT_POSTFIELDS, json_encode([
+                'role' => 'reader',
+                'type' => 'anyone'
+            ]));
+            curl_setopt($chP, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer {$accessToken}",
+                "Content-Type: application/json"
+            ]);
+            curl_exec($chP);
+            curl_close($chP);
+
+            return "https://drive.google.com/file/d/{$fileId}/view?usp=sharing";
+        }
+
+        return null;
+    }
 }
