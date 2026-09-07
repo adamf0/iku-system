@@ -96,13 +96,14 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
             {/* Combo Chart Legend */}
             <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-bold px-2 border-b border-[#c0c6d6]/15 pb-3">
                 <div className="flex flex-wrap items-center gap-6">
-                    {/* Bars Legend (Realisasi) */}
+                    {/* Realisasi Legend (Line & Bar) */}
                     <div className="flex items-center gap-3 border-r border-[#c0c6d6]/30 pr-4">
-                        <span className="text-[#535f71] uppercase tracking-wider text-[10px]">Realisasi (Bar):</span>
+                        <span className="text-[#535f71] uppercase tracking-wider text-[10px]">Realisasi (Line & Bar):</span>
                         {availableYears.map(yr => (
-                            <span key={`bar-leg-${yr}`} className="flex items-center gap-1.5" style={{ color: yearColors[yr]?.bar || '#6366f1' }}>
-                                <span className="w-3 h-3 rounded-xs" style={{ backgroundColor: yearColors[yr]?.bar || '#6366f1' }}></span>
-                                {yr}
+                            <span key={`bar-leg-${yr}`} className="flex items-center gap-1.5" style={{ color: yearColors[yr]?.bar || '#a855f7' }}>
+                                <span className="w-3.5 h-1 rounded-full" style={{ backgroundColor: yearColors[yr]?.bar || '#a855f7' }}></span>
+                                <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: yearColors[yr]?.bar || '#a855f7' }}></span>
+                                Realisasi {yr}
                             </span>
                         ))}
                     </div>
@@ -113,11 +114,11 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
                         {availableYears.map(yr => (
                             <React.Fragment key={`line-leg-${yr}`}>
                                 <span className="flex items-center gap-1.5" style={{ color: yearColors[yr]?.targetLine || '#10b981' }}>
-                                    <span className="w-3 h-1 rounded-full" style={{ backgroundColor: yearColors[yr]?.targetLine || '#10b981' }}></span>
+                                    <span className="w-3.5 h-1 rounded-full" style={{ backgroundColor: yearColors[yr]?.targetLine || '#10b981' }}></span>
                                     Target {yr}
                                 </span>
                                 <span className="flex items-center gap-1.5" style={{ color: yearColors[yr]?.baseLine || '#f59e0b' }}>
-                                    <span className="w-3 h-1 rounded-full border-t border-dashed" style={{ backgroundColor: yearColors[yr]?.baseLine || '#f59e0b' }}></span>
+                                    <span className="w-3.5 h-1 rounded-full border-t border-dashed" style={{ backgroundColor: yearColors[yr]?.baseLine || '#f59e0b' }}></span>
                                     Baseline {yr}
                                 </span>
                             </React.Fragment>
@@ -170,7 +171,7 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
                                         const barX = startX + yIdx * singleBarWidth;
                                         const barHeight = chartHeight * (Math.min(100, Math.max(0, ym.capPct)) / 100);
                                         const barY = paddingTop + chartHeight - barHeight;
-                                        const color = yearColors[yr]?.bar || '#4f46e5';
+                                        const color = yearColors[yr]?.bar || '#a855f7';
 
                                         return (
                                             <rect
@@ -181,7 +182,7 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
                                                 height={barHeight}
                                                 fill={color}
                                                 rx="2"
-                                                opacity={hoverIndex === idx ? "1" : "0.85"}
+                                                opacity={hoverIndex === idx ? "0.85" : "0.35"}
                                                 className="transition-all duration-200"
                                             />
                                         );
@@ -220,6 +221,48 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
                                             <circle cx={p.x} cy={p.yearMetrics[yr]?.yTarget} r="3.5" fill={tgtColor} />
                                         </g>
                                     ))}
+                                </g>
+                            );
+                        })}
+
+                        {/* 3. REALISASI CAPAIAN SOLID LINE & DOTS */}
+                        {availableYears.map(yr => {
+                            const realPath = points.reduce((acc, p, i) => {
+                                const y = p.yearMetrics[yr]?.yCapaian || (paddingTop + chartHeight);
+                                return i === 0 ? `M ${p.x} ${y}` : `${acc} L ${p.x} ${y}`;
+                            }, '');
+
+                            const realColor = yearColors[yr]?.bar || '#a855f7';
+
+                            return (
+                                <g key={`realisasi-lines-${yr}`}>
+                                    {/* Realisasi Solid Line */}
+                                    <path 
+                                        d={realPath} 
+                                        fill="none" 
+                                        stroke={realColor} 
+                                        strokeWidth="3" 
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        opacity="0.95" 
+                                    />
+
+                                    {/* Realisasi Data Point Circles */}
+                                    {points.map((p, i) => {
+                                        const ym = p.yearMetrics[yr];
+                                        if (!ym) return null;
+                                        return (
+                                            <circle 
+                                                key={`real-pts-${yr}-${i}`}
+                                                cx={p.x} 
+                                                cy={ym.yCapaian} 
+                                                r="4.5" 
+                                                fill={realColor} 
+                                                stroke="#ffffff"
+                                                strokeWidth="2"
+                                            />
+                                        );
+                                    })}
                                 </g>
                             );
                         })}
