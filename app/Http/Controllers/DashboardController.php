@@ -111,17 +111,6 @@ class DashboardController extends Controller
 
             // Clean code label for X-axis
             $kodeLabel = $iku->iku;
-            if (preg_match('/^Sub\s+IKU\s+(.+)$/i', $kodeLabel, $match)) {
-                $kodeLabel = $match[1];
-            } else if (!empty($iku->id_sub)) {
-                $parentDef = $allIkuList->firstWhere('id', $iku->id_sub);
-                $parentCode = $parentDef ? $parentDef->iku : 'IKU';
-                if (preg_match('/([a-z0-9]+)\.?\*/i', $iku->full_kategori, $m)) {
-                    $kodeLabel = str_replace('Sub IKU ', '', $parentCode) . '.' . strtolower($m[1]);
-                } else {
-                    $kodeLabel = str_replace('Sub IKU ', '', $parentCode) . '.' . $iku->id;
-                }
-            }
 
             $hasData = ($rows->count() > 0 && $capaianRata !== null);
 
