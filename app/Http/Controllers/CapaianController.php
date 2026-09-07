@@ -12,6 +12,13 @@ class CapaianController extends Controller
     {
         if (empty($scopeUnits)) return;
 
+        $triwulanCutOffs = [
+            'TW1' => '-03-31 23:59:59',
+            'TW2' => '-06-30 23:59:59',
+            'TW3' => '-09-30 23:59:59',
+            'TW4' => '-12-31 23:59:59',
+        ];
+
         foreach ((array)$scopeUnits as $unitId) {
             $iku1Assigned = DB::table('penugasan_target')
                 ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
@@ -29,10 +36,11 @@ class CapaianController extends Controller
             $sijamuUnit = DB::table('sijamu_fakultas_unit')->where('id', $unitId)->first();
             $vUnit = DB::table('v_fakultas_unit')->where('id', $unitId)->first();
 
-            $totalMhs = 0;
-            $totalLulus = 0;
+            if (!$sijamuUnit || empty($sijamuUnit->kode_fakultas)) continue;
 
-            if ($sijamuUnit && !empty($sijamuUnit->kode_fakultas)) {
+            foreach ($triwulanCutOffs as $tw => $dateSuffix) {
+                $cutOffDate = $tahun . $dateSuffix;
+
                 $mQuery = DB::table('unpak_simak.m_mahasiswa')
                     ->where('kode_fak', $sijamuUnit->kode_fakultas);
                 
@@ -44,13 +52,12 @@ class CapaianController extends Controller
                 $totalLulus = (clone $mQuery)
                     ->whereNotNull('tanggal_lulus')
                     ->whereNotNull('tanggal_masuk')
+                    ->where('tanggal_lulus', '<=', $cutOffDate)
                     ->count();
-            }
 
-            $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
+                $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
 
-            foreach ($iku1Assigned as $indId) {
-                foreach (['TW1', 'TW2', 'TW3', 'TW4'] as $tw) {
+                foreach ($iku1Assigned as $indId) {
                     $exists = DB::table('template_capaian')
                         ->where('id_indikator', $indId)
                         ->where('fakultas_unit', $unitId)
@@ -67,21 +74,24 @@ class CapaianController extends Controller
                             'nilai_capaian' => $capaianPct,
                             'pembilang' => $totalLulus,
                             'penyebut' => $totalMhs,
-                            'catatan' => "Perhitungan otomatis dari SIMAK: Total Lulus {$totalLulus} / Total Mahasiswa {$totalMhs}",
+                            'catatan' => "Perhitungan otomatis SIMAK (Cut-off {$tw} {$tahun}): Total Lulus {$totalLulus} / Total Mahasiswa {$totalMhs}",
                             'status_validasi' => 'DIAJUKAN',
                             'diinput_oleh' => 'system_simak',
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
                     } else {
-                        DB::table('template_capaian')
-                            ->where('id', $exists->id)
-                            ->update([
-                                'nilai_capaian' => $capaianPct,
-                                'pembilang' => $totalLulus,
-                                'penyebut' => $totalMhs,
-                                'updated_at' => now(),
-                            ]);
+                        if (!in_array($exists->status_validasi, ['DIVERIFIKASI', 'DISAHKAN'])) {
+                            DB::table('template_capaian')
+                                ->where('id', $exists->id)
+                                ->update([
+                                    'nilai_capaian' => $capaianPct,
+                                    'pembilang' => $totalLulus,
+                                    'penyebut' => $totalMhs,
+                                    'catatan' => "Perhitungan otomatis SIMAK (Cut-off {$tw} {$tahun}): Total Lulus {$totalLulus} / Total Mahasiswa {$totalMhs}",
+                                    'updated_at' => now(),
+                                ]);
+                        }
                     }
                 }
             }
@@ -96,7 +106,7 @@ class CapaianController extends Controller
         $user = $request->user();
         $scope = $user->scopeUnits();
 
-        $this->syncAutoIku1Data($scope, $tahun === 'ALL' ? 2026 : (int)$tahun);
+        $this->syncAutoIku1Data($scope, $tahun === 'ALL' ? 2000 : (int)$tahun);
 
         $data = DB::table('template_capaian')
             ->whereIn('fakultas_unit', $scope)
@@ -114,7 +124,7 @@ class CapaianController extends Controller
         $scope = $user->scopeUnits();
 
         $tahunParam = $request->query('tahun', date('Y'));
-        $this->syncAutoIku1Data($scope, $tahunParam === 'ALL' ? 2026 : (int)$tahunParam);
+        $this->syncAutoIku1Data($scope, $tahunParam === 'ALL' ? 2000 : (int)$tahunParam);
 
         $query = DB::table('template_capaian')
             ->join('v_fakultas_unit', 'template_capaian.fakultas_unit', '=', 'v_fakultas_unit.id')
