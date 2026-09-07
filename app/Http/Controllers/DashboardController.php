@@ -106,10 +106,10 @@ class DashboardController extends Controller
             $data = $data->where('tahun', $tahun);
         }
 
-        // Fetch ALL template_capaian for executive multi-prodi aggregate chart
+        // Fetch ALL template_capaian across all units for executive multi-prodi aggregate chart
         $sebaranQuery = DB::table('template_capaian');
-        if ($request->filled('unit')) {
-            $sebaranQuery->where('fakultas_unit', $request->query('unit'));
+        if ($request->filled('chart_unit')) {
+            $sebaranQuery->where('fakultas_unit', $request->query('chart_unit'));
         }
         $sebaranCapaianRows = $sebaranQuery->get();
 
