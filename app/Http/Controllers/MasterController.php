@@ -55,34 +55,14 @@ class MasterController extends Controller
         $tahun = $request->query('tahun');
         
         if ($user && !in_array($user->role, ['ADMIN', 'LPM'])) {
-            $allowedUnits = $user->scopeUnits();
-            if (empty($unitId) || !in_array((int)$unitId, $allowedUnits)) {
-                $unitId = $user->fakultas_unit;
-            }
+            $unitId = $user->fakultas_unit;
         } else if (empty($unitId) && $user) {
             $unitId = $user->fakultas_unit;
         }
-
-        // Build target unit IDs including parent faculty IDs & scope
-        $targetUnitIds = [(int)$unitId];
-        $unitInfo = DB::table('v_fakultas_unit')->where('id', $unitId)->first();
-        if ($unitInfo && !empty($unitInfo->fakultas)) {
-            $parentFacId = DB::table('v_fakultas_unit')
-                ->where('type', 'fakultas')
-                ->where('fakultas', $unitInfo->fakultas)
-                ->value('id');
-            if ($parentFacId) {
-                $targetUnitIds[] = (int)$parentFacId;
-            }
-        }
-        if ($user) {
-            $targetUnitIds = array_merge($targetUnitIds, array_map('intval', $user->scopeUnits()));
-        }
-        $targetUnitIds = array_unique(array_filter($targetUnitIds));
         
         $query = DB::table('master_indikator')
             ->join('penugasan_target', 'master_indikator.id', '=', 'penugasan_target.id_indikator')
-            ->whereIn('penugasan_target.fakultas_unit', $targetUnitIds)
+            ->where('penugasan_target.fakultas_unit', $unitId)
             ->whereNull('penugasan_target.deleted_at');
 
         if (!empty($tahun)) {
@@ -91,9 +71,6 @@ class MasterController extends Controller
 
         $indicators = $query->select('master_indikator.*')->distinct()->get();
 
-        if ($indicators->isEmpty()) {
-            $indicators = DB::table('master_indikator')->get();
-        }
         $targetYear = $tahun ?: 2026;
 
         $targets = DB::table('target_indikator_tahun')
