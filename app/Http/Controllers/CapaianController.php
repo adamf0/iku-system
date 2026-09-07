@@ -41,19 +41,24 @@ class CapaianController extends Controller
             foreach ($triwulanCutOffs as $tw => $dateSuffix) {
                 $cutOffDate = $tahun . $dateSuffix;
 
-                $mQuery = DB::table('unpak_simak.m_mahasiswa')
-                    ->where('kode_fak', $sijamuUnit->kode_fakultas);
-                
-                if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
-                    $mQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                }
+                try {
+                    $mQuery = DB::table('unpak_simak.m_mahasiswa')
+                        ->where('kode_fak', $sijamuUnit->kode_fakultas);
+                    
+                    if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                        $mQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                    }
 
-                $totalMhs = (clone $mQuery)->count();
-                $totalLulus = (clone $mQuery)
-                    ->whereNotNull('tanggal_lulus')
-                    ->whereNotNull('tanggal_masuk')
-                    ->where('tanggal_lulus', '<=', $cutOffDate)
-                    ->count();
+                    $totalMhs = (clone $mQuery)->count();
+                    $totalLulus = (clone $mQuery)
+                        ->whereNotNull('tanggal_lulus')
+                        ->whereNotNull('tanggal_masuk')
+                        ->where('tanggal_lulus', '<=', $cutOffDate)
+                        ->count();
+                } catch (\Throwable $e) {
+                    $totalMhs = 0;
+                    $totalLulus = 0;
+                }
 
                 $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
 

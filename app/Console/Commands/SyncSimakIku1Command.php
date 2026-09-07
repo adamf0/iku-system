@@ -55,19 +55,24 @@ class SyncSimakIku1Command extends Command
                 foreach ($triwulanCutOffs as $tw => $dateSuffix) {
                     $cutOffDate = $tahun . $dateSuffix;
 
-                    $mQuery = DB::table('unpak_simak.m_mahasiswa')
-                        ->where('kode_fak', $sijamuUnit->kode_fakultas);
+                    try {
+                        $mQuery = DB::table('unpak_simak.m_mahasiswa')
+                            ->where('kode_fak', $sijamuUnit->kode_fakultas);
 
-                    if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
-                        $mQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                        if (!empty($sijamuUnit->kode_prodi) && (strtolower($vUnit->type) === 'prodi')) {
+                            $mQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                        }
+
+                        $totalMhs = (clone $mQuery)->count();
+                        $totalLulus = (clone $mQuery)
+                            ->whereNotNull('tanggal_lulus')
+                            ->whereNotNull('tanggal_masuk')
+                            ->where('tanggal_lulus', '<=', $cutOffDate)
+                            ->count();
+                    } catch (\Throwable $e) {
+                        $this->warn("Akses tabel unpak_simak.m_mahasiswa ditolak/gagal: " . $e->getMessage());
+                        break 2;
                     }
-
-                    $totalMhs = (clone $mQuery)->count();
-                    $totalLulus = (clone $mQuery)
-                        ->whereNotNull('tanggal_lulus')
-                        ->whereNotNull('tanggal_masuk')
-                        ->where('tanggal_lulus', '<=', $cutOffDate)
-                        ->count();
 
                     $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
 
