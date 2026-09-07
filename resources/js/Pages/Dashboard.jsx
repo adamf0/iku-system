@@ -93,16 +93,15 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
 
     return (
         <div className="space-y-4">
-            {/* Combo Chart Legend */}
+            {/* Line Chart Legend */}
             <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-bold px-2 border-b border-[#c0c6d6]/15 pb-3">
                 <div className="flex flex-wrap items-center gap-6">
-                    {/* Realisasi Legend (Line & Bar) */}
+                    {/* Realisasi Legend (Line) */}
                     <div className="flex items-center gap-3 border-r border-[#c0c6d6]/30 pr-4">
-                        <span className="text-[#535f71] uppercase tracking-wider text-[10px]">Realisasi (Line & Bar):</span>
+                        <span className="text-[#535f71] uppercase tracking-wider text-[10px]">Realisasi (Line):</span>
                         {availableYears.map(yr => (
                             <span key={`bar-leg-${yr}`} className="flex items-center gap-1.5" style={{ color: yearColors[yr]?.bar || '#a855f7' }}>
-                                <span className="w-3.5 h-1 rounded-full" style={{ backgroundColor: yearColors[yr]?.bar || '#a855f7' }}></span>
-                                <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: yearColors[yr]?.bar || '#a855f7' }}></span>
+                                <span className="w-4 h-1 rounded-full" style={{ backgroundColor: yearColors[yr]?.bar || '#a855f7' }}></span>
                                 Realisasi {yr}
                             </span>
                         ))}
@@ -157,41 +156,7 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
                             );
                         })}
 
-                        {/* 1. REALISASI CAPAIAN BARS (Grouped Bars per IKU column) */}
-                        {points.map((p, idx) => {
-                            const totalBars = availableYears.length;
-                            const barGroupWidth = isAllYears ? 36 : 24;
-                            const singleBarWidth = barGroupWidth / totalBars;
-                            const startX = p.x - barGroupWidth / 2;
-
-                            return (
-                                <g key={`bars-${idx}`}>
-                                    {availableYears.map((yr, yIdx) => {
-                                        const ym = p.yearMetrics[yr];
-                                        const barX = startX + yIdx * singleBarWidth;
-                                        const barHeight = chartHeight * (Math.min(100, Math.max(0, ym.capPct)) / 100);
-                                        const barY = paddingTop + chartHeight - barHeight;
-                                        const color = yearColors[yr]?.bar || '#a855f7';
-
-                                        return (
-                                            <rect
-                                                key={`b-${idx}-${yr}`}
-                                                x={barX}
-                                                y={barY}
-                                                width={singleBarWidth - 1}
-                                                height={barHeight}
-                                                fill={color}
-                                                rx="2"
-                                                opacity={hoverIndex === idx ? "0.85" : "0.35"}
-                                                className="transition-all duration-200"
-                                            />
-                                        );
-                                    })}
-                                </g>
-                            );
-                        })}
-
-                        {/* 2. TARGET & BASELINE THRESHOLD LINES */}
+                        {/* 1. TARGET & BASELINE THRESHOLD LINES */}
                         {availableYears.map(yr => {
                             const targetPath = points.reduce((acc, p, i) => {
                                 const y = p.yearMetrics[yr]?.yTarget || (paddingTop + chartHeight);
@@ -225,7 +190,7 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
                             );
                         })}
 
-                        {/* 3. REALISASI CAPAIAN SOLID LINE & DOTS */}
+                        {/* 2. REALISASI CAPAIAN SOLID LINE & DOTS */}
                         {availableYears.map(yr => {
                             const realPath = points.reduce((acc, p, i) => {
                                 const y = p.yearMetrics[yr]?.yCapaian || (paddingTop + chartHeight);
