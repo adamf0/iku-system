@@ -55,24 +55,38 @@ class CapaianController extends Controller
                         ->selectRaw("
                             COALESCE(kode_prodi, '') as kode_prodi,
                             COUNT(*) as total_mhs,
-                            SUM(CASE WHEN tanggal_lulus IS NOT NULL AND tanggal_masuk IS NOT NULL AND tanggal_lulus <= ? THEN 1 ELSE 0 END) as total_lulus,
-                            SUM(CASE WHEN tanggal_lulus IS NOT NULL AND tanggal_masuk IS NOT NULL AND tanggal_lulus <= ? AND DATEDIFF(tanggal_lulus, tanggal_masuk) <= 1461 THEN 1 ELSE 0 END) as lulus_tepat,
-                            SUM(CASE WHEN tanggal_lulus IS NOT NULL AND tanggal_masuk IS NOT NULL AND tanggal_lulus <= ? AND DATEDIFF(tanggal_lulus, tanggal_masuk) > 1461 THEN 1 ELSE 0 END) as lulus_tidak_tepat,
                             SUM(CASE WHEN status_mhs IN ('DO', 'DROP OUT', 'KELUAR', 'Non-Aktif') THEN 1 ELSE 0 END) as drop_out
-                        ", [$cutOffDate, $cutOffDate, $cutOffDate])
+                        ")
                         ->where('kode_fak', $sijamuUnit->kode_fakultas);
 
                     if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
                         $mhsStatsQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
                     }
+                    $baseStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
 
-                    $simakStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
-                    $totalMhs = $simakStatsGrouped->sum('total_mhs');
-                    $totalLulus = $simakStatsGrouped->sum('total_lulus');
+                    $graduatesQuery = DB::connection('simak')->table('m_mahasiswa')
+                        ->selectRaw("
+                            COALESCE(kode_prodi, '') as kode_prodi,
+                            DATEDIFF(tanggal_lulus, tanggal_masuk) as masa_studi_hari
+                        ")
+                        ->where('kode_fak', $sijamuUnit->kode_fakultas)
+                        ->whereNotNull('tanggal_lulus')
+                        ->whereNotNull('tanggal_masuk')
+                        ->where('tanggal_lulus', '<=', $cutOffDate);
+
+                    if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
+                        $graduatesQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
+                    }
+                    $graduates = $graduatesQuery->get();
+                    $graduatesByProdi = $graduates->groupBy('kode_prodi');
+
+                    $totalMhs = $baseStatsGrouped->sum('total_mhs');
+                    $totalLulus = $graduates->count();
                 } catch (\Throwable $e) {
                     $totalMhs = 0;
                     $totalLulus = 0;
-                    $simakStatsGrouped = collect();
+                    $baseStatsGrouped = collect();
+                    $graduatesByProdi = collect();
                 }
 
                 $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
@@ -90,11 +104,22 @@ class CapaianController extends Controller
                 $prodis = $prodiListQuery->select('v.nama_fak_prod_unit as nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type', 'v.jenjang')->get();
 
                 foreach ($prodis as $p) {
-                    $statP = $simakStatsGrouped->get($p->kode_prodi);
-                    $totMhsP = $statP ? (int)$statP->total_mhs : 0;
-                    $lulusTepatP = $statP ? (int)$statP->lulus_tepat : 0;
-                    $lulusTidakTepatP = $statP ? (int)$statP->lulus_tidak_tepat : 0;
-                    $dropOutP = $statP ? (int)$statP->drop_out : 0;
+                    $baseP = $baseStatsGrouped->get($p->kode_prodi);
+                    $totMhsP = $baseP ? (int)$baseP->total_mhs : 0;
+                    $dropOutP = $baseP ? (int)$baseP->drop_out : 0;
+
+                    $prodiGrads = $graduatesByProdi->get($p->kode_prodi, collect());
+                    $maxHariTepat = $this->getMasaStudiTepatWaktuHari($p->jenjang, $p->nama_prodi);
+                    $lulusTepatP = 0;
+                    $lulusTidakTepatP = 0;
+
+                    foreach ($prodiGrads as $grad) {
+                        if ($grad->masa_studi_hari !== null && $grad->masa_studi_hari <= $maxHariTepat) {
+                            $lulusTepatP++;
+                        } else {
+                            $lulusTidakTepatP++;
+                        }
+                    }
 
                     $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
                     if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
@@ -596,5 +621,27 @@ class CapaianController extends Controller
         ]);
 
         return response()->json(['message' => 'Penugasan berhasil dipulihkan.']);
+    }
+
+    protected function getMasaStudiTepatWaktuHari($jenjang, $namaProdi)
+    {
+        $j = strtoupper($jenjang ?? '');
+        $nama = strtoupper($namaProdi ?? '');
+
+        if (str_contains($j, 'PROFESI') || str_contains($nama, 'PROFESI')) {
+            return 366; // 1 tahun (Profesi)
+        }
+        if (str_contains($j, 'S2') || str_contains($j, 'MAGISTER') || str_contains($nama, 'S2') || str_contains($nama, 'MAGISTER')) {
+            return 731; // 2 tahun (Magister / S2)
+        }
+        if (str_contains($j, 'D3') || str_contains($j, 'DIPLOMA TIGA') || str_contains($nama, 'D3') || str_contains($nama, 'D-III')) {
+            return 1096; // 3 tahun (Diploma 3 / D3)
+        }
+        if (str_contains($j, 'S3') || str_contains($j, 'DOKTOR') || str_contains($nama, 'S3') || str_contains($nama, 'DOKTOR')) {
+            return 1096; // 3 tahun (Doktor / S3)
+        }
+
+        // Default S1 / D4
+        return 1461; // 4 tahun (Sarjana / S1 / D4)
     }
 }
