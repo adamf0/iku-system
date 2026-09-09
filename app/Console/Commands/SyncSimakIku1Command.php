@@ -66,7 +66,7 @@ class SyncSimakIku1Command extends Command
 
                 foreach ($iku1Indicators as $indId) {
                     $indObj = DB::table('master_indikator')->where('id', $indId)->first();
-                    $indikatorName = $indObj ? $indObj->iku : 'IKU 1';
+                    $indikatorName = $indObj ? trim($indObj->iku) : 'IKU 1';
                     $fileName = "{$indikatorName}.xlsx";
 
                     // Get all assigned units for this indicator and year

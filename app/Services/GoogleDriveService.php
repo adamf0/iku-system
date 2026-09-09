@@ -119,7 +119,10 @@ class GoogleDriveService
      */
     public function findFolder($name, $parentId = null)
     {
+        $name = trim($name);
         $parentId = $parentId ?: $this->parentFolderId;
+        if (empty($parentId)) return null;
+
         $cacheKey = "{$parentId}_{$name}";
 
         if (isset(self::$folderCache[$cacheKey])) {
@@ -129,7 +132,8 @@ class GoogleDriveService
         $accessToken = $this->getAccessToken();
         if (!$accessToken) return null;
 
-        $q = urlencode("'$parentId' in parents and name = '$name' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+        $escapedName = str_replace("'", "\\'", $name);
+        $q = urlencode("'$parentId' in parents and name = '$escapedName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
         $url = "https://www.googleapis.com/drive/v3/files?q={$q}";
 
         $ch = curl_init($url);
@@ -151,15 +155,25 @@ class GoogleDriveService
     }
 
     /**
-     * Create a single folder in Google Drive
+     * Create a single folder in Google Drive (checks for existing folder first to prevent duplicates)
      */
     public function createFolder($name, $parentId = null)
     {
+        $name = trim($name);
         $parentId = $parentId ?: $this->parentFolderId;
+        if (empty($parentId)) return null;
+
         $cacheKey = "{$parentId}_{$name}";
 
         if (isset(self::$folderCache[$cacheKey])) {
             return self::$folderCache[$cacheKey];
+        }
+
+        // Always check if folder already exists in Google Drive before creating
+        $existingId = $this->findFolder($name, $parentId);
+        if ($existingId) {
+            self::$folderCache[$cacheKey] = $existingId;
+            return $existingId;
         }
 
         $accessToken = $this->getAccessToken();
@@ -200,11 +214,39 @@ class GoogleDriveService
      */
     public function createSubfoldersParallel(array $folderNames, $parentId)
     {
-        $accessToken = $this->getAccessToken();
-        if (!$accessToken || empty($folderNames) || !$parentId) return [];
+        if (empty($parentId)) return [];
 
+        $accessToken = $this->getAccessToken();
+        if (!$accessToken || empty($folderNames)) return [];
+
+        // Filter out folders that already exist under parentId
+        $existingSubfolders = $this->listChildFolderNames($parentId);
+        $toCreate = [];
         $createdIds = [];
-        $chunks = array_chunk($folderNames, 15);
+
+        foreach ($folderNames as $name) {
+            $name = trim($name);
+            $cacheKey = "{$parentId}_{$name}";
+
+            if (isset(self::$folderCache[$cacheKey])) {
+                $createdIds[$name] = self::$folderCache[$cacheKey];
+            } elseif (in_array($name, $existingSubfolders)) {
+                $existingId = $this->findFolder($name, $parentId);
+                if ($existingId) {
+                    $createdIds[$name] = $existingId;
+                } else {
+                    $toCreate[] = $name;
+                }
+            } else {
+                $toCreate[] = $name;
+            }
+        }
+
+        if (empty($toCreate)) {
+            return $createdIds;
+        }
+
+        $chunks = array_chunk($toCreate, 15);
 
         foreach ($chunks as $chunk) {
             $mh = curl_multi_init();
@@ -258,26 +300,37 @@ class GoogleDriveService
      */
     public function listChildFolderNames($parentId)
     {
+        if (empty($parentId)) return [];
+
         $accessToken = $this->getAccessToken();
         if (!$accessToken) return [];
 
-        $q = urlencode("'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-        $url = "https://www.googleapis.com/drive/v3/files?q={$q}&pageSize=1000";
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
-        $res = curl_exec($ch);
-        curl_close($ch);
-
-        $data = json_decode($res, true);
         $names = [];
-        foreach ($data['files'] ?? [] as $file) {
-            $names[] = $file['name'];
-            self::$folderCache["{$parentId}_{$file['name']}"] = $file['id'];
-        }
+        $pageToken = null;
+
+        do {
+            $q = urlencode("'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+            $url = "https://www.googleapis.com/drive/v3/files?q={$q}&pageSize=1000";
+            if ($pageToken) {
+                $url .= "&pageToken=" . urlencode($pageToken);
+            }
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+            $res = curl_exec($ch);
+            curl_close($ch);
+
+            $data = json_decode($res, true);
+            foreach ($data['files'] ?? [] as $file) {
+                $names[] = $file['name'];
+                self::$folderCache["{$parentId}_{$file['name']}"] = $file['id'];
+            }
+            $pageToken = $data['nextPageToken'] ?? null;
+        } while ($pageToken);
+
         return $names;
     }
 
@@ -292,8 +345,8 @@ class GoogleDriveService
             return false;
         }
 
-        $ikuList = $ikuList ?: self::defaultIkuList();
-        $twList = $twList ?: self::defaultTwList();
+        $ikuList = array_map('trim', $ikuList ?: self::defaultIkuList());
+        $twList = array_map('trim', $twList ?: self::defaultTwList());
 
         // 1. Check if Year Folder exists under Parent Folder
         $yearFolderId = $this->findFolder((string)$tahun);
