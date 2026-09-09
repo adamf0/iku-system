@@ -241,7 +241,7 @@ class CapaianController extends Controller
         $scope = $user->scopeUnits();
 
         $tahunParam = $request->query('tahun', date('Y'));
-        $this->syncAutoIku1Data($scope, $tahunParam === 'ALL' ? 2000 : (int)$tahunParam);
+        // $this->syncAutoIku1Data($scope, $tahunParam === 'ALL' ? 2000 : (int)$tahunParam);
 
         $query = DB::table('template_capaian')
             ->join('v_fakultas_unit', 'template_capaian.fakultas_unit', '=', 'v_fakultas_unit.id')
