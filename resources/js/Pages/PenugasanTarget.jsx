@@ -247,35 +247,8 @@ export default function PenugasanTarget() {
                     <h3 className="text-base font-extrabold text-[#005bb1] uppercase tracking-wider mb-6">Form Penugasan IKU ke Unit</h3>
                     
                     <form onSubmit={handleSave} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Fakultas Unit */}
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Fakultas / Prodi / Unit Kerja</label>
-                                <SearchableSelect 
-                                    options={buildGroupedUnitOptions(units, '-- Pilih Fakultas / Prodi / Unit --')}
-                                    value={selectedUnits}
-                                    onChange={(vals) => setSelectedUnits(vals)}
-                                    isMulti={true}
-                                    placeholder="-- Pilih Fakultas / Prodi / Unit --"
-                                    searchPlaceholder="Cari Unit (Fakultas, Prodi + Jenjang, Unit)..."
-                                />
-                            </div>
-
-                            {/* Tahun */}
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Tahun Penugasan</label>
-                                <SearchableSelect 
-                                    options={['2026', '2027', '2028', '2029', '2030'].map(y => ({ id: y, label: y }))}
-                                    value={selectedYear}
-                                    onChange={(val) => setSelectedYear(val)}
-                                    placeholder="-- Pilih Tahun --"
-                                    searchPlaceholder="Cari Tahun..."
-                                />
-                            </div>
-                        </div>
-
                         {/* Indicators checklist grouped by Context */}
-                        <div className="space-y-6 pt-4 border-t border-[#c0c6d6]/10">
+                        <div className="space-y-6">
                             <div className="flex flex-wrap items-center justify-between gap-4">
                                 <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider">Checklist Indikator Kinerja Utama (IKU)</label>
                                 
@@ -354,6 +327,33 @@ export default function PenugasanTarget() {
                                         </div>
                                     );
                                 })}
+                            </div>
+                        </div>
+
+                        <div className="border-t border-[#c0c6d6]/10 pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Fakultas Unit */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Fakultas / Prodi / Unit Kerja</label>
+                                <SearchableSelect 
+                                    options={buildGroupedUnitOptions(units, '-- Pilih Fakultas / Prodi / Unit --')}
+                                    value={selectedUnits}
+                                    onChange={(vals) => setSelectedUnits(vals)}
+                                    isMulti={true}
+                                    placeholder="-- Pilih Fakultas / Prodi / Unit --"
+                                    searchPlaceholder="Cari Unit (Fakultas, Prodi + Jenjang, Unit)..."
+                                />
+                            </div>
+
+                            {/* Tahun */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Tahun Penugasan</label>
+                                <SearchableSelect 
+                                    options={['2026', '2027', '2028', '2029', '2030'].map(y => ({ id: y, label: y }))}
+                                    value={selectedYear}
+                                    onChange={(val) => setSelectedYear(val)}
+                                    placeholder="-- Pilih Tahun --"
+                                    searchPlaceholder="Cari Tahun..."
+                                />
                             </div>
                         </div>
 
