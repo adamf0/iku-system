@@ -26,9 +26,11 @@ export default function PenugasanTarget() {
     const [streaming, setStreaming] = useState(false);
 
     // Form states
-    const [selectedUnit, setSelectedUnit] = useState('');
+    const [selectedUnits, setSelectedUnits] = useState([]);
     const [selectedYear, setSelectedYear] = useState('2026');
     const [checkedIndicators, setCheckedIndicators] = useState([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveProgress, setSaveProgress] = useState(null);
 
     // Table search & advanced filters
     const [filterUnit, setFilterUnit] = useState('');
@@ -36,7 +38,6 @@ export default function PenugasanTarget() {
     const [filterIku, setFilterIku] = useState('');
     const [filterJenis, setFilterJenis] = useState('');
     const [showDeleted, setShowDeleted] = useState(false);
-
 
     const [checklistTab, setChecklistTab] = useState('ALL');
     const [currentPage, setCurrentPage] = useState(1);
@@ -81,10 +82,10 @@ export default function PenugasanTarget() {
 
     // Handle fetching assignments when unit/year changes on the form checkboxes
     useEffect(() => {
-        if (selectedUnit && selectedYear) {
-            fetchAssignmentsForCheckbox(selectedUnit, selectedYear);
+        if (selectedUnits && selectedUnits.length === 1 && selectedYear) {
+            fetchAssignmentsForCheckbox(selectedUnits[0], selectedYear);
         }
-    }, [selectedUnit, selectedYear]);
+    }, [selectedUnits, selectedYear]);
 
     const fetchAssignmentsForCheckbox = (unitId, yearVal) => {
         fetch(`/api/master/iku/assigned?unit=${unitId}&tahun=${yearVal}`)
@@ -153,31 +154,50 @@ export default function PenugasanTarget() {
         }
     };
 
-    const handleSave = (e) => {
+    const handleSave = async (e) => {
         e.preventDefault();
-        if (!selectedUnit || !selectedYear) {
-            alert('Silakan pilih unit dan tahun penugasan.');
+        if (!selectedUnits || selectedUnits.length === 0 || !selectedYear) {
+            alert('Silakan pilih minimal 1 Fakultas / Prodi / Unit Kerja dan tahun penugasan.');
             return;
         }
 
-        axios.post('/api/penugasan', {
-            fakultas_unit: selectedUnit,
-            tahun: selectedYear,
-            id_indikator: checkedIndicators
-        })
-        .then(() => {
-            alert('Penugasan target berhasil disimpan!');
-            loadStreamedAssignments();
-        })
-        .catch(err => {
-            console.error(err);
-            alert('Gagal menyimpan penugasan.');
-        });
+        setIsSaving(true);
+        const total = selectedUnits.length;
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let i = 0; i < total; i++) {
+            const unitId = selectedUnits[i];
+            setSaveProgress({ current: i + 1, total });
+
+            try {
+                await axios.post('/api/penugasan', {
+                    fakultas_unit: unitId,
+                    tahun: selectedYear,
+                    id_indikator: checkedIndicators
+                });
+                successCount++;
+            } catch (err) {
+                console.error(`Gagal menyimpan penugasan untuk unit ${unitId}:`, err);
+                failCount++;
+            }
+        }
+
+        setIsSaving(false);
+        setSaveProgress(null);
+
+        if (failCount === 0) {
+            alert(`Penugasan target berhasil disimpan untuk ${successCount} unit!`);
+        } else {
+            alert(`Proses simpan selesai. Berhasil: ${successCount} unit, Gagal: ${failCount} unit.`);
+        }
+
+        loadStreamedAssignments();
     };
 
     // Load assignment for editing inside the checklist form
     const handleEditAssignment = (item) => {
-        setSelectedUnit(item.fakultas_unit);
+        setSelectedUnits([item.fakultas_unit]);
         setSelectedYear(item.tahun.toString());
         fetchAssignmentsForCheckbox(item.fakultas_unit, item.tahun);
         
@@ -188,7 +208,7 @@ export default function PenugasanTarget() {
     const handleDeleteAssignment = (id, mode) => {
         const confirmMsg = mode === 'hard' 
             ? 'Apakah Anda yakin ingin menghapus penugasan ini secara permanen? Tindakan ini tidak dapat dibatalkan.'
-            : 'Apakah Anda yakin ingin menghapus sementara penugasan ini?';
+            : 'Apakah Anda yakin ingin menghapus sementara penugasan me-referensi ke penugasan ini?';
 
         if (!confirm(confirmMsg)) return;
 
@@ -233,8 +253,9 @@ export default function PenugasanTarget() {
                                 <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Fakultas / Prodi / Unit Kerja</label>
                                 <SearchableSelect 
                                     options={buildGroupedUnitOptions(units, '-- Pilih Fakultas / Prodi / Unit --')}
-                                    value={selectedUnit}
-                                    onChange={(val) => setSelectedUnit(val)}
+                                    value={selectedUnits}
+                                    onChange={(vals) => setSelectedUnits(vals)}
+                                    isMulti={true}
                                     placeholder="-- Pilih Fakultas / Prodi / Unit --"
                                     searchPlaceholder="Cari Unit (Fakultas, Prodi + Jenjang, Unit)..."
                                 />
@@ -336,12 +357,25 @@ export default function PenugasanTarget() {
                             </div>
                         </div>
 
-                        <div className="pt-4 border-t border-[#c0c6d6]/10 flex justify-end">
+                        <div className="pt-4 border-t border-[#c0c6d6]/10 flex items-center justify-end gap-3">
+                            {isSaving && saveProgress && (
+                                <span className="text-xs font-bold text-[#005bb1] bg-[#005bb1]/10 px-3 py-1.5 rounded-lg animate-pulse">
+                                    Menyimpan {saveProgress.current} dari {saveProgress.total} unit...
+                                </span>
+                            )}
                             <button 
                                 type="submit"
-                                className="bg-[#005bb1] text-white px-6 py-2.5 rounded-lg text-xs font-bold hover:bg-[#0073dd] shadow-sm uppercase tracking-wider"
+                                disabled={isSaving}
+                                className="bg-[#005bb1] text-white px-6 py-2.5 rounded-lg text-xs font-bold hover:bg-[#0073dd] shadow-sm uppercase tracking-wider disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                             >
-                                Simpan Penugasan
+                                {isSaving ? (
+                                    <>
+                                        <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                        <span>Memproses...</span>
+                                    </>
+                                ) : (
+                                    'Simpan Penugasan'
+                                )}
                             </button>
                         </div>
                     </form>

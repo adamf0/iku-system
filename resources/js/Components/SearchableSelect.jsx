@@ -9,7 +9,8 @@ export default function SearchableSelect({
     getValue = (opt) => opt?.value !== undefined ? opt.value : (opt?.id !== undefined ? opt.id : opt),
     disabled = false,
     className = "",
-    searchPlaceholder = "Cari..."
+    searchPlaceholder = "Cari...",
+    isMulti = false
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -37,7 +38,17 @@ export default function SearchableSelect({
         };
     });
 
-    const selectedOption = normalizedOptions.find(opt => !opt.isGroupHeader && String(opt.value) === String(value));
+    const selectedValues = isMulti 
+        ? (Array.isArray(value) ? value.map(v => String(v)) : (value ? [String(value)] : []))
+        : [];
+
+    const selectedOption = !isMulti 
+        ? normalizedOptions.find(opt => !opt.isGroupHeader && String(opt.value) === String(value))
+        : null;
+
+    const selectedOptionsMulti = isMulti
+        ? normalizedOptions.filter(opt => !opt.isGroupHeader && selectedValues.includes(String(opt.value)))
+        : [];
 
     const searchLower = searchTerm.toLowerCase();
 
@@ -65,6 +76,19 @@ export default function SearchableSelect({
         });
     }
 
+    const selectableOptions = normalizedOptions.filter(opt => !opt.isGroupHeader && !opt.disabled && opt.value !== '');
+
+    const handleSelectAll = () => {
+        if (!isMulti) return;
+        const allVals = selectableOptions.map(opt => opt.value);
+        onChange(allVals);
+    };
+
+    const handleClearAll = () => {
+        if (!isMulti) return;
+        onChange([]);
+    };
+
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -74,6 +98,33 @@ export default function SearchableSelect({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const renderTriggerLabel = () => {
+        if (isMulti) {
+            if (selectedOptionsMulti.length === 0) {
+                return <span className="text-[#717785] italic truncate">{placeholder}</span>;
+            } else if (selectedOptionsMulti.length === 1) {
+                return <span className="text-[#181c23] font-semibold truncate">{selectedOptionsMulti[0].label}</span>;
+            } else {
+                return (
+                    <div className="flex items-center gap-2 truncate">
+                        <span className="bg-[#005bb1] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full flex-shrink-0">
+                            {selectedOptionsMulti.length} Dipilih
+                        </span>
+                        <span className="text-[#181c23] font-semibold truncate">
+                            {selectedOptionsMulti.map(o => o.label).join(', ')}
+                        </span>
+                    </div>
+                );
+            }
+        }
+
+        return (
+            <span className={selectedOption ? 'text-[#181c23] font-semibold truncate' : 'text-[#717785] italic truncate'}>
+                {selectedOption ? selectedOption.label : placeholder}
+            </span>
+        );
+    };
 
     return (
         <div className={`relative w-full ${className}`} ref={containerRef}>
@@ -87,17 +138,15 @@ export default function SearchableSelect({
                     disabled ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
                 }`}
             >
-                <span className={selectedOption ? 'text-[#181c23] font-semibold truncate' : 'text-[#717785] italic truncate'}>
-                    {selectedOption ? selectedOption.label : placeholder}
-                </span>
+                {renderTriggerLabel()}
                 <span className={`material-symbols-outlined text-[#535f71] text-[20px] ml-2 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#005bb1]' : ''}`}>
                     expand_more
                 </span>
             </button>
 
             {isOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#c0c6d6]/60 rounded-xl shadow-xl z-50 overflow-hidden py-2 max-h-72 flex flex-col">
-                    <div className="px-3 pb-2 border-b border-[#c0c6d6]/20">
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#c0c6d6]/60 rounded-xl shadow-xl z-50 overflow-hidden py-2 max-h-80 flex flex-col">
+                    <div className="px-3 pb-2 border-b border-[#c0c6d6]/20 space-y-2">
                         <div className="relative flex items-center">
                             <span className="material-symbols-outlined absolute left-2.5 text-[#717785] text-[16px]">search</span>
                             <input
@@ -109,6 +158,31 @@ export default function SearchableSelect({
                                 className="w-full pl-8 pr-3 py-1.5 bg-[#f1f3fe]/60 border border-[#c0c6d6]/40 rounded-lg text-xs outline-none focus:ring-1 focus:ring-[#005bb1] text-[#181c23]"
                             />
                         </div>
+
+                        {isMulti && (
+                            <div className="flex items-center justify-between pt-1">
+                                <span className="text-[10px] font-bold text-[#535f71]">
+                                    {selectedValues.length} / {selectableOptions.length} Dipilih
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleSelectAll}
+                                        className="text-[10px] font-extrabold text-[#005bb1] hover:underline"
+                                    >
+                                        Pilih Semua
+                                    </button>
+                                    <span className="text-gray-300">|</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleClearAll}
+                                        className="text-[10px] font-extrabold text-red-600 hover:underline"
+                                    >
+                                        Hapus Semua
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="overflow-y-auto flex-1 divide-y divide-[#c0c6d6]/10">
@@ -134,18 +208,41 @@ export default function SearchableSelect({
                                     );
                                 }
 
-                                const isSelected = String(opt.value) === String(value);
+                                const optValStr = String(opt.value);
+                                const isSelected = isMulti 
+                                    ? selectedValues.includes(optValStr)
+                                    : optValStr === String(value);
+
                                 const isDisabled = opt.disabled || opt.original?.disabled;
+
+                                const handleItemClick = () => {
+                                    if (isDisabled) return;
+
+                                    if (isMulti) {
+                                        if (opt.value === '') {
+                                            // Selected empty default option ("-- Pilih --")
+                                            onChange([]);
+                                            return;
+                                        }
+
+                                        let updated;
+                                        if (isSelected) {
+                                            updated = selectedValues.filter(v => v !== optValStr);
+                                        } else {
+                                            updated = [...selectedValues, opt.value];
+                                        }
+                                        onChange(updated);
+                                    } else {
+                                        onChange(opt.value);
+                                        setIsOpen(false);
+                                        setSearchTerm('');
+                                    }
+                                };
 
                                 return (
                                     <div
                                         key={idx}
-                                        onClick={() => {
-                                            if (isDisabled) return;
-                                            onChange(opt.value);
-                                            setIsOpen(false);
-                                            setSearchTerm('');
-                                        }}
+                                        onClick={handleItemClick}
                                         className={`px-4 py-2 text-xs flex items-center justify-between gap-2 transition-colors ${
                                             isDisabled 
                                                 ? 'opacity-50 cursor-not-allowed bg-gray-50 text-gray-400 select-none' 
@@ -154,7 +251,18 @@ export default function SearchableSelect({
                                                     : 'text-[#181c23] cursor-pointer hover:bg-[#f1f3fe]'
                                         }`}
                                     >
-                                        <span className="truncate">{opt.label}</span>
+                                        <div className="flex items-center gap-2 truncate">
+                                            {isMulti && opt.value !== '' && (
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => {}} // Handled by parent div onClick
+                                                    className="rounded border-gray-300 text-[#005bb1] focus:ring-[#005bb1] h-3.5 w-3.5 pointer-events-none"
+                                                />
+                                            )}
+                                            <span className="truncate">{opt.label}</span>
+                                        </div>
+
                                         {isDisabled ? (
                                             <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 border bg-amber-50 text-amber-700 border-amber-200">
                                                 Otomatis SIMAK
@@ -174,3 +282,4 @@ export default function SearchableSelect({
         </div>
     );
 }
+
