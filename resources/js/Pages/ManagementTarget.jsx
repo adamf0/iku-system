@@ -35,7 +35,7 @@ export default function ManagementTarget() {
     const [fileJustifikasi, setFileJustifikasi] = useState(null);
     const [submittingJustif, setSubmittingJustif] = useState(false);
 
-    const [years, setYears] = useState([{ tahun: 2026 }, { tahun: 2025 }]);
+    const [years, setYears] = useState([]);
     const [selectedTahun, setSelectedTahun] = useState(2026);
 
     useEffect(() => {

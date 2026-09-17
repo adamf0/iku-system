@@ -48,6 +48,15 @@ export default function EditCapaian() {
     const [targetCapaian, setTargetCapaian] = useState('');
     const [catatan, setCatatan] = useState('');
     const [fileUrl, setFileUrl] = useState('');
+    const [formErrors, setFormErrors] = useState({});
+    const [toast, setToast] = useState(null);
+
+    const showToast = (message, type = 'error') => {
+        setToast({ message, type });
+        setTimeout(() => {
+            setToast(null);
+        }, 4500);
+    };
 
     // Table filters & pagination
     const [filterIku, setFilterIku] = useState('');
@@ -140,6 +149,9 @@ export default function EditCapaian() {
                 setNilaiCapaian(row.nilai_capaian);
                 setCatatan(row.catatan || '');
                 setFileUrl(row.file_url || '');
+                if (!row.file_url) {
+                    fetchDriveLink(selectedUnitId, tahun, triwulan, row.id_indikator);
+                }
             }
         });
 
@@ -160,6 +172,19 @@ export default function EditCapaian() {
         originalSelectedIkuIdRef.current = selectedIkuId;
     }, [selectedIkuId]);
 
+    const fetchDriveLink = (unitId, yr, tw, ikuId) => {
+        const effUnit = unitId || user.fakultas_unit;
+        if (!effUnit || !ikuId) return;
+        fetch(`/api/capaian/drive-link?unit=${effUnit}&tahun=${yr}&triwulan=${tw}&id_indikator=${ikuId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.drive_url) {
+                    setFileUrl(data.drive_url);
+                }
+            })
+            .catch(err => console.error(err));
+    };
+
     const loadExistingRecord = (ikuId, capList, ikuList) => {
         if (!ikuId) {
             resetFormFields();
@@ -173,11 +198,15 @@ export default function EditCapaian() {
             setCatatan(found.catatan || '');
             setFileUrl(found.file_url || '');
             setTargetCapaian(activeIku ? activeIku.target : '');
+
+            if (!found.file_url) {
+                fetchDriveLink(selectedUnitId, tahun, triwulan, ikuId);
+            }
         } else {
             setNilaiCapaian('');
             setCatatan('');
-            setFileUrl('');
             setTargetCapaian(activeIku ? activeIku.target : '');
+            fetchDriveLink(selectedUnitId, tahun, triwulan, ikuId);
         }
     };
 
@@ -186,9 +215,11 @@ export default function EditCapaian() {
         setCatatan('');
         setFileUrl('');
         setTargetCapaian('');
+        setFormErrors({});
     };
 
     const handleIkuSelect = (id) => {
+        setFormErrors({});
         setSelectedIkuId(id);
         if (id) {
             loadExistingRecord(id, capaianList, indicators);
@@ -198,6 +229,7 @@ export default function EditCapaian() {
     };
 
     const handleEditFromTable = (item) => {
+        setFormErrors({});
         setSelectedIkuId(item.id_indikator);
         setNilaiCapaian(item.nilai_capaian);
         setCatatan(item.catatan || '');
@@ -205,12 +237,18 @@ export default function EditCapaian() {
         
         const actIku = indicators.find(i => Number(i.id) === Number(item.id_indikator));
         setTargetCapaian(actIku ? actIku.target : '');
+
+        if (!item.file_url) {
+            fetchDriveLink(selectedUnitId, tahun, triwulan, item.id_indikator);
+        }
     };
 
     const handleSave = (e) => {
         e.preventDefault();
+        setFormErrors({});
+
         if (!selectedIkuId) {
-            alert('Silakan pilih Indikator Kinerja Utama terlebih dahulu.');
+            showToast('Silakan pilih Indikator Kinerja Utama terlebih dahulu.', 'warning');
             return;
         }
 
@@ -227,15 +265,19 @@ export default function EditCapaian() {
         axios.post('/api/capaian', payload)
         .then(res => {
             if (res.data.error) {
-                alert(res.data.error);
+                showToast(res.data.error, 'error');
                 return;
             }
-            alert('Capaian berhasil disimpan sebagai Draft!');
+            showToast('Capaian berhasil disimpan sebagai Draft!', 'success');
+            setFormErrors({});
             loadStreamedCapaian();
         })
         .catch(err => {
-            console.error(err);
-            alert('Gagal menyimpan capaian.');
+            console.error('Save error:', err);
+            if (err.response && err.response.data && err.response.data.errors) {
+                setFormErrors(err.response.data.errors);
+            }
+            showToast('gagal simpan karena data tidak lengkap', 'error');
         });
     };
 
@@ -246,15 +288,18 @@ export default function EditCapaian() {
 
         axios.post(`/api/capaian/${id}/submit`)
         .then(() => {
-            alert('Capaian berhasil diajukan!');
+            showToast('Capaian berhasil diajukan!', 'success');
             loadStreamedCapaian();
         })
-        .catch(err => console.error(err));
+        .catch(err => {
+            console.error(err);
+            showToast('Gagal mengajukan capaian.', 'error');
+        });
     };
 
     const handleExportXlsx = () => {
         if (capaianList.length === 0) {
-            alert('Tidak ada data capaian untuk diexport.');
+            showToast('Tidak ada data capaian untuk diexport.', 'warning');
             return;
         }
 
@@ -341,6 +386,23 @@ export default function EditCapaian() {
                     </div>
 
                     <form onSubmit={handleSave} className="p-8 space-y-6">
+                        {Object.keys(formErrors).length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700 space-y-2">
+                                <div className="font-bold flex items-center gap-1.5 text-red-800">
+                                    <span className="material-symbols-outlined text-[18px]">error</span>
+                                    <span>Gagal Menyimpan Capaian. Periksa Kesalahan Berikut:</span>
+                                </div>
+                                <ul className="list-disc list-inside space-y-0.5 pl-1">
+                                    {Object.entries(formErrors).map(([field, msgs]) => (
+                                        <li key={field}>
+                                            <strong className="capitalize">{field.replace('_', ' ')}:</strong>{' '}
+                                            <span>{Array.isArray(msgs) ? msgs.join(', ') : msgs}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Unit Pelapor */}
                             <div className="space-y-1">
@@ -362,7 +424,15 @@ export default function EditCapaian() {
                                     options={indicators}
                                     value={selectedIkuId}
                                     onChange={handleIkuSelect}
+                                    placeholder="-- Pilih Indikator Kinerja Utama --"
+                                    searchPlaceholder="Cari Indikator..."
                                 />
+                                {formErrors.id_indikator && (
+                                    <p className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px]">warning</span>
+                                        {Array.isArray(formErrors.id_indikator) ? formErrors.id_indikator.join(', ') : formErrors.id_indikator}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Tahun */}
@@ -401,6 +471,12 @@ export default function EditCapaian() {
                                     required
                                     className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1] disabled:bg-gray-100 disabled:cursor-not-allowed"
                                 />
+                                {formErrors.nilai_capaian && (
+                                    <p className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px]">warning</span>
+                                        {Array.isArray(formErrors.nilai_capaian) ? formErrors.nilai_capaian.join(', ') : formErrors.nilai_capaian}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Target Capaian */}
@@ -425,19 +501,43 @@ export default function EditCapaian() {
                                 placeholder="Contoh: rincian sumber data, metode penghitungan, dsb."
                                 className="w-full bg-white border border-[#c0c6d6] rounded-xl p-4 text-xs h-28 resize-none outline-none focus:ring-1 focus:ring-[#005bb1] disabled:bg-gray-100 disabled:cursor-not-allowed"
                             />
+                            {formErrors.catatan && (
+                                <p className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">warning</span>
+                                    {Array.isArray(formErrors.catatan) ? formErrors.catatan.join(', ') : formErrors.catatan}
+                                </p>
+                            )}
                         </div>
 
                         {/* Link Bukti Dukung */}
                         <div className="space-y-1">
-                            <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Link Bukti Dukung (Google Drive, dll)</label>
+                            <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Link Bukti Dukung (Google Drive Unit)</label>
+                                {fileUrl && (
+                                    <a 
+                                        href={fileUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#005bb1] hover:underline bg-[#005bb1]/10 px-2.5 py-1 rounded-md transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">folder_open</span>
+                                        <span>Buka Folder Google Drive Unit</span>
+                                    </a>
+                                )}
+                            </div>
                             <input 
                                 type="text" 
                                 value={fileUrl}
-                                onChange={(e) => setFileUrl(e.target.value)}
-                                disabled={!isTriwulanActive}
-                                placeholder="https://drive.google.com/..."
-                                className="w-full bg-white border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#005bb1] disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                readOnly={true}
+                                placeholder="Link folder otomatis terisi dari Google Drive"
+                                className="w-full bg-gray-100 border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#005bb1] outline-none cursor-not-allowed select-all"
                             />
+                            {formErrors.file_url && (
+                                <p className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">warning</span>
+                                    {Array.isArray(formErrors.file_url) ? formErrors.file_url.join(', ') : formErrors.file_url}
+                                </p>
+                            )}
                         </div>
 
                         {/* Bottom Metadata Summary Panel */}
@@ -632,6 +732,29 @@ export default function EditCapaian() {
                     )}
                 </div>
             </div>
+
+            {/* Toast Notification Floating Card */}
+            {toast && (
+                <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl transition-all ${
+                    toast.type === 'error' 
+                        ? 'bg-[#ba1a1a] text-white border border-red-700' 
+                        : toast.type === 'success'
+                            ? 'bg-[#10b981] text-white border border-emerald-600'
+                            : 'bg-[#f59e0b] text-white border border-amber-600'
+                }`}>
+                    <span className="material-symbols-outlined text-xl">
+                        {toast.type === 'error' ? 'error' : toast.type === 'success' ? 'check_circle' : 'warning'}
+                    </span>
+                    <span className="text-xs font-bold">{toast.message}</span>
+                    <button 
+                        type="button"
+                        onClick={() => setToast(null)}
+                        className="ml-2 hover:opacity-75 cursor-pointer text-white flex items-center justify-center"
+                    >
+                        <span className="material-symbols-outlined text-base">close</span>
+                    </button>
+                </div>
+            )}
         </AuthenticatedLayout>
     );
 }

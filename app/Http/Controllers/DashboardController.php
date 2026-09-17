@@ -120,7 +120,7 @@ class DashboardController extends Controller
 
         $registeredYears = DB::table('master_tahun')->orderBy('tahun', 'asc')->pluck('tahun')->toArray();
         if (empty($registeredYears)) {
-            $registeredYears = [2025, 2026];
+            $registeredYears = [];
         }
 
         $statusCount = [

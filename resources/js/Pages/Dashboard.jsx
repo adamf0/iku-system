@@ -19,14 +19,26 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
     const items = data;
     const isAllYears = (selectedTahun === 'ALL');
     const availableYears = isAllYears
-        ? (items[0]?.years_data ? Object.keys(items[0].years_data).map(Number) : [2025, 2026])
+        ? (items[0]?.years_data ? Object.keys(items[0].years_data).map(Number) : [])
         : [Number(selectedTahun)];
 
-    const yearColors = {
-        2025: { bar: '#6366f1', targetLine: '#10b981', baseLine: '#f59e0b', label: '2025' },
-        2026: { bar: '#a855f7', targetLine: '#0d9488', baseLine: '#ea580c', label: '2026' },
-        2027: { bar: '#ec4899', targetLine: '#0284c7', baseLine: '#e11d48', label: '2027' }
-    };
+    const COLOR_PALETTES = [
+        { bar: '#6366f1', targetLine: '#10b981', baseLine: '#f59e0b' },
+        { bar: '#a855f7', targetLine: '#0d9488', baseLine: '#ea580c' },
+        { bar: '#ec4899', targetLine: '#0284c7', baseLine: '#e11d48' },
+        { bar: '#3b82f6', targetLine: '#16a34a', baseLine: '#d97706' },
+        { bar: '#8b5cf6', targetLine: '#059669', baseLine: '#dc2626' },
+        { bar: '#06b6d4', targetLine: '#84cc16', baseLine: '#f97316' },
+    ];
+
+    const yearColors = {};
+    availableYears.forEach((yr, idx) => {
+        const palette = COLOR_PALETTES[idx % COLOR_PALETTES.length];
+        yearColors[yr] = {
+            ...palette,
+            label: String(yr)
+        };
+    });
 
     const height = 370;
     const itemWidth = isAllYears ? 95 : 80;
@@ -584,7 +596,7 @@ export default function Dashboard() {
 
     const [stats, setStats] = useState(null);
     const [units, setUnits] = useState([]);
-    const [years, setYears] = useState([{ tahun: 2026 }, { tahun: 2025 }]);
+    const [years, setYears] = useState([]);
     const [selectedTahun, setSelectedTahun] = useState('2026');
     const [selectedUnit, setSelectedUnit] = useState(user?.fakultas_unit || '');
     const [loading, setLoading] = useState(true);

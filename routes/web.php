@@ -135,6 +135,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('api/capaian')->group(function () {
         Route::get('/', [CapaianController::class, 'index']);
         Route::get('/stream', [CapaianController::class, 'streamCapaian']);
+        Route::get('/drive-link', [CapaianController::class, 'getDriveLink']);
         Route::post('/', [CapaianController::class, 'store']);
         Route::post('/{id}/submit', [CapaianController::class, 'submit']);
         Route::post('/{id}/verify', [CapaianController::class, 'verify']);
@@ -145,7 +146,11 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('api/penugasan')->group(function () {
         Route::get('/', [CapaianController::class, 'listPenugasan']);
         Route::get('/stream', [CapaianController::class, 'streamPenugasan']);
+        Route::get('/gdrive-stream', [CapaianController::class, 'streamGdriveStatus']);
         Route::post('/', [CapaianController::class, 'storePenugasan']);
+        Route::post('/delete-group', [CapaianController::class, 'deleteGroupPenugasan']);
+        Route::post('/restore-group', [CapaianController::class, 'restoreGroupPenugasan']);
+        Route::post('/retry-gdrive-folder', [CapaianController::class, 'retryGdriveFolder']);
         Route::delete('/{id}', [CapaianController::class, 'deletePenugasan']);
         Route::post('/{id}/restore', [CapaianController::class, 'restorePenugasan']);
     });

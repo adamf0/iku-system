@@ -17,7 +17,7 @@ export default function SearchableSelect({
     const containerRef = useRef(null);
 
     // Standardize options into array of objects { value, label, isGroupHeader, disabled, original }
-    const normalizedOptions = options.map(opt => {
+    const rawNormalized = options.map(opt => {
         if (typeof opt === 'object' && opt !== null) {
             return {
                 value: getValue(opt),
@@ -37,6 +37,18 @@ export default function SearchableSelect({
             original: opt
         };
     });
+
+    let normalizedOptions = [...rawNormalized];
+    if (!isMulti && placeholder && !rawNormalized.some(opt => !opt.isGroupHeader && String(opt.value) === '')) {
+        normalizedOptions.unshift({
+            value: '',
+            label: placeholder,
+            isGroupHeader: false,
+            badge: null,
+            disabled: false,
+            original: null
+        });
+    }
 
     const selectedValues = isMulti 
         ? (Array.isArray(value) ? value.map(v => String(v)) : (value ? [String(value)] : []))
@@ -119,12 +131,15 @@ export default function SearchableSelect({
             }
         }
 
+        const isValueEmpty = !selectedOption || String(selectedOption.value) === '';
         return (
-            <span className={selectedOption ? 'text-[#181c23] font-semibold truncate' : 'text-[#717785] italic truncate'}>
+            <span className={isValueEmpty ? 'text-[#717785] italic truncate' : 'text-[#181c23] font-semibold truncate'}>
                 {selectedOption ? selectedOption.label : placeholder}
             </span>
         );
     };
+
+    const hasValue = !isMulti && value !== '' && value !== null && value !== undefined && String(value) !== '';
 
     return (
         <div className={`relative w-full ${className}`} ref={containerRef}>
@@ -139,9 +154,23 @@ export default function SearchableSelect({
                 }`}
             >
                 {renderTriggerLabel()}
-                <span className={`material-symbols-outlined text-[#535f71] text-[20px] ml-2 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#005bb1]' : ''}`}>
-                    expand_more
-                </span>
+                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    {hasValue && !disabled && (
+                        <span 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('');
+                            }}
+                            title="Batal Pilih (Unselect)"
+                            className="material-symbols-outlined text-gray-400 hover:text-red-500 text-[18px] p-0.5 rounded-full hover:bg-gray-100 transition-colors"
+                        >
+                            close
+                        </span>
+                    )}
+                    <span className={`material-symbols-outlined text-[#535f71] text-[20px] transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#005bb1]' : ''}`}>
+                        expand_more
+                    </span>
+                </div>
             </button>
 
             {isOpen && (

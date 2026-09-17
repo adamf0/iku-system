@@ -12,7 +12,7 @@ export default function Verifikasi() {
 
     // Filter states
     const [filterTriwulan, setFilterTriwulan] = useState('ALL');
-    const [years, setYears] = useState([{ tahun: 2026 }, { tahun: 2025 }]);
+    const [years, setYears] = useState([]);
     const [filterTahun, setFilterTahun] = useState('ALL');
     const [filterUnit, setFilterUnit] = useState('');
     const [filterIndikator, setFilterIndikator] = useState('');

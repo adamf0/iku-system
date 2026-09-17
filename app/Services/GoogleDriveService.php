@@ -14,48 +14,49 @@ class GoogleDriveService
 
     public static function defaultIkuList()
     {
-        return [
-            "IKU 1",
-            "IKU 1 - a",
-            "IKU 1 - b",
-            "IKU 1 - c",
-            "IKU 1 - d",
-            "IKU 1 - e",
-            "IKU 1 - f",
-            "IKU 1 - g",
-            "IKU 1 - h",
-            "Sub IKU 1.1",
-            "Sub IKU 1.1 - a",
-            "Sub IKU 1.1 - b",
-            "Sub IKU 1.2",
-            "IKU 2",
-            "IKU 3",
-            "IKU 4",
-            "Sub IKU 4.1",
-            "IKU 5",
-            "IKU 6",
-            "Sub IKU 6.1",
-            "Sub IKU 6.1.1 - a",
-            "Sub IKU 6.1.2 - b",
-            "Sub IKU 6.2",
-            "IKU 7",
-            "Sub IKU 7.1",
-            "Sub IKU 7.2",
-            "IKU 8",
-            "IKU 9",
-            "Sub IKU 9.1",
-            "Sub IKU 9.1.2 - a",
-            "Sub IKU 9.1.3 - b",
-            "Sub IKU 9.2",
-            "Sub IKU 9.2.1 - a",
-            "Sub IKU 9.2.2 - b",
-            "Sub IKU 9.2.3 - c",
-            "IKU 10",
-            "IKU 11 - a",
-            "IKU 11 - c",
-            "IKU 11 - d",
-            "IKU 12"
-        ];
+        return [];
+        // return [
+        //     "IKU 1",
+        //     "IKU 1 - a",
+        //     "IKU 1 - b",
+        //     "IKU 1 - c",
+        //     "IKU 1 - d",
+        //     "IKU 1 - e",
+        //     "IKU 1 - f",
+        //     "IKU 1 - g",
+        //     "IKU 1 - h",
+        //     "Sub IKU 1.1",
+        //     "Sub IKU 1.1 - a",
+        //     "Sub IKU 1.1 - b",
+        //     "Sub IKU 1.2",
+        //     "IKU 2",
+        //     "IKU 3",
+        //     "IKU 4",
+        //     "Sub IKU 4.1",
+        //     "IKU 5",
+        //     "IKU 6",
+        //     "Sub IKU 6.1",
+        //     "Sub IKU 6.1.1 - a",
+        //     "Sub IKU 6.1.2 - b",
+        //     "Sub IKU 6.2",
+        //     "IKU 7",
+        //     "Sub IKU 7.1",
+        //     "Sub IKU 7.2",
+        //     "IKU 8",
+        //     "IKU 9",
+        //     "Sub IKU 9.1",
+        //     "Sub IKU 9.1.2 - a",
+        //     "Sub IKU 9.1.3 - b",
+        //     "Sub IKU 9.2",
+        //     "Sub IKU 9.2.1 - a",
+        //     "Sub IKU 9.2.2 - b",
+        //     "Sub IKU 9.2.3 - c",
+        //     "IKU 10",
+        //     "IKU 11 - a",
+        //     "IKU 11 - c",
+        //     "IKU 11 - d",
+        //     "IKU 12"
+        // ];
     }
 
     public static function defaultTwList()
@@ -155,7 +156,7 @@ class GoogleDriveService
     }
 
     /**
-     * Create a single folder in Google Drive (checks for existing folder first to prevent duplicates)
+     * Create a single folder in Google Drive (checks for existing folder first to prevent duplicates, thread-safe with flock)
      */
     public function createFolder($name, $parentId = null)
     {
@@ -169,44 +170,93 @@ class GoogleDriveService
             return self::$folderCache[$cacheKey];
         }
 
-        // Always check if folder already exists in Google Drive before creating
-        $existingId = $this->findFolder($name, $parentId);
-        if ($existingId) {
-            self::$folderCache[$cacheKey] = $existingId;
-            return $existingId;
+        $lockPath = storage_path('app/gdrive_create.lock');
+        $fp = @fopen($lockPath, 'c+');
+        if ($fp) {
+            @flock($fp, LOCK_EX);
         }
 
-        $accessToken = $this->getAccessToken();
-        if (!$accessToken) return null;
+        try {
+            // Check again inside lock if folder already exists in Google Drive before creating
+            $existingId = $this->findFolder($name, $parentId);
+            if ($existingId) {
+                self::$folderCache[$cacheKey] = $existingId;
+                if ($fp) {
+                    @flock($fp, LOCK_UN);
+                    @fclose($fp);
+                }
+                return $existingId;
+            }
 
-        $url = "https://www.googleapis.com/drive/v3/files";
-        $body = json_encode([
-            'name' => $name,
-            'mimeType' => 'application/vnd.google-apps.folder',
-            'parents' => [$parentId]
-        ]);
+            $accessToken = $this->getAccessToken();
+            if (!$accessToken) {
+                if ($fp) {
+                    @flock($fp, LOCK_UN);
+                    @fclose($fp);
+                }
+                return null;
+            }
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Authorization: Bearer {$accessToken}",
-            "Content-Type: application/json"
-        ]);
-        $res = curl_exec($ch);
-        curl_close($ch);
+            $url = "https://www.googleapis.com/drive/v3/files";
+            $body = json_encode([
+                'name' => $name,
+                'mimeType' => 'application/vnd.google-apps.folder',
+                'parents' => [$parentId]
+            ]);
 
-        $data = json_decode($res, true);
-        $folderId = $data['id'] ?? null;
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer {$accessToken}",
+                "Content-Type: application/json"
+            ]);
+            $res = curl_exec($ch);
+            curl_close($ch);
 
-        if ($folderId) {
-            self::$folderCache[$cacheKey] = $folderId;
+            $data = json_decode($res, true);
+            $folderId = $data['id'] ?? null;
+
+            if ($folderId) {
+                self::$folderCache[$cacheKey] = $folderId;
+
+                // Make created folder accessible via direct link
+                try {
+                    $urlPerm = "https://www.googleapis.com/drive/v3/files/{$folderId}/permissions";
+                    $chP = curl_init($urlPerm);
+                    curl_setopt($chP, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($chP, CURLOPT_CONNECTTIMEOUT, 5);
+                    curl_setopt($chP, CURLOPT_TIMEOUT, 10);
+                    curl_setopt($chP, CURLOPT_POST, true);
+                    curl_setopt($chP, CURLOPT_POSTFIELDS, json_encode([
+                        'role' => 'reader',
+                        'type' => 'anyone'
+                    ]));
+                    curl_setopt($chP, CURLOPT_HTTPHEADER, [
+                        "Authorization: Bearer {$accessToken}",
+                        "Content-Type: application/json"
+                    ]);
+                    curl_exec($chP);
+                    curl_close($chP);
+                } catch (\Throwable $eP) {}
+            }
+
+            if ($fp) {
+                @flock($fp, LOCK_UN);
+                @fclose($fp);
+            }
+
+            return $folderId;
+        } catch (\Throwable $e) {
+            if ($fp) {
+                @flock($fp, LOCK_UN);
+                @fclose($fp);
+            }
+            throw $e;
         }
-
-        return $folderId;
     }
 
     /**
@@ -486,6 +536,110 @@ class GoogleDriveService
             }
         } catch (\Throwable $e) {
             Log::error("Google Drive Upload Exception: " . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Ensure unit folder structure exists for assigned indicators on Google Drive:
+     * /iku/[tahun]/[TW1-4]/[indikator]/[unit]
+     * Checks if folders exist before creating to avoid duplicates.
+     * Returns array of created/existing folder links keyed by "{$tw}_{$indicatorId}"
+     */
+    public function ensureUnitFolderStructureForAssignment($tahun, $unitId, array $indicatorIds)
+    {
+        $accessToken = $this->getAccessToken();
+        if (!$accessToken || empty($indicatorIds)) {
+            Log::warning("Google Drive token or indicators not available for unit folder creation.");
+            return [];
+        }
+
+        // Get unit full name from v_fakultas_unit
+        $unit = \Illuminate\Support\Facades\DB::table('v_fakultas_unit')->where('id', $unitId)->first();
+        if (!$unit) {
+            Log::warning("Unit not found for ID: {$unitId}");
+            return [];
+        }
+
+        $unitName = trim($unit->nama_fak_prod_unit);
+        if (empty($unitName)) {
+            return [];
+        }
+
+        // Get indicator details from master_indikator
+        $indicators = \Illuminate\Support\Facades\DB::table('master_indikator')
+            ->whereIn('id', $indicatorIds)
+            ->get()
+            ->keyBy('id');
+
+        // 1. Ensure Year Folder exists
+        $yearFolderId = $this->createFolder((string)$tahun);
+        if (!$yearFolderId) {
+            Log::error("Failed to create/find year folder on Google Drive: {$tahun}");
+            return [];
+        }
+
+        $twList = self::defaultTwList(); // ["TW1", "TW2", "TW3", "TW4"]
+        $folderLinks = [];
+
+        foreach ($twList as $twName) {
+            // 2. Ensure TW Folder exists under Year Folder
+            $twFolderId = $this->createFolder($twName, $yearFolderId);
+            if (!$twFolderId) continue;
+
+            foreach ($indicatorIds as $indId) {
+                if (!isset($indicators[$indId])) continue;
+                $indObj = $indicators[$indId];
+
+                // Determine Indikator folder name (short code only, e.g. Sub IKU 6.1)
+                $indFolderName = trim($indObj->iku);
+
+                // 3. Ensure Indikator Folder exists under TW Folder
+                $indFolderId = $this->createFolder($indFolderName, $twFolderId);
+                if (!$indFolderId) continue;
+
+                // 4. Ensure Unit Folder exists under Indikator Folder (checks if exists first)
+                $unitFolderId = $this->createFolder($unitName, $indFolderId);
+                if ($unitFolderId) {
+                    $folderUrl = "https://drive.google.com/drive/folders/{$unitFolderId}";
+                    $folderLinks["{$twName}_{$indId}"] = $folderUrl;
+                }
+            }
+        }
+
+        return $folderLinks;
+    }
+
+    /**
+     * Get or create a specific Google Drive unit folder URL for (tahun, triwulan, unitId, indicatorId)
+     * Folder path: /iku/[tahun]/[triwulan]/[indikator]/[unit]
+     */
+    public function getOrCreateUnitFolderUrl($tahun, $triwulan, $unitId, $indicatorId)
+    {
+        $unit = \Illuminate\Support\Facades\DB::table('v_fakultas_unit')->where('id', $unitId)->first();
+        if (!$unit) return null;
+
+        $unitName = trim($unit->nama_fak_prod_unit);
+        if (empty($unitName)) return null;
+
+        $indObj = \Illuminate\Support\Facades\DB::table('master_indikator')->where('id', $indicatorId)->first();
+        if (!$indObj) return null;
+
+        $indFolderName = trim($indObj->iku);
+
+        $yearFolderId = $this->createFolder((string)$tahun);
+        if (!$yearFolderId) return null;
+
+        $twFolderId = $this->createFolder(strtoupper(trim($triwulan)), $yearFolderId);
+        if (!$twFolderId) return null;
+
+        $indFolderId = $this->createFolder($indFolderName, $twFolderId);
+        if (!$indFolderId) return null;
+
+        $unitFolderId = $this->createFolder($unitName, $indFolderId);
+        if ($unitFolderId) {
+            return "https://drive.google.com/drive/folders/{$unitFolderId}";
         }
 
         return null;

@@ -4,217 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use App\Services\GoogleDriveService;
+use App\Jobs\ProcessGdriveFolderJob;
 
 class CapaianController extends Controller
 {
-    private function syncAutoIku1Data($scopeUnits, $tahun = 2026)
-    {
-        if (empty($scopeUnits)) return;
-
-        $triwulanCutOffs = [
-            'TW1' => '-03-31 23:59:59',
-            'TW2' => '-06-30 23:59:59',
-            'TW3' => '-09-30 23:59:59',
-            'TW4' => '-12-31 23:59:59',
-        ];
-
-        $driveService = new \App\Services\GoogleDriveService();
-        $driveService->ensureYearFolderStructure($tahun);
-        $yearFolderId = $driveService->findFolder((string)$tahun);
-
-        foreach ((array)$scopeUnits as $unitId) {
-            $iku1Assigned = DB::table('penugasan_target')
-                ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
-                ->where('penugasan_target.fakultas_unit', $unitId)
-                ->where('penugasan_target.tahun', $tahun)
-                ->where(function($q) {
-                    $q->where('master_indikator.iku', 'IKU 1')
-                      ->orWhere('master_indikator.iku', 'LIKE', 'IKU 1 -%')
-                      ->orWhere('master_indikator.iku', 'LIKE', 'Sub IKU 1%')
-                      ->orWhere('master_indikator.id', 1);
-                })
-                ->whereNull('penugasan_target.deleted_at')
-                ->pluck('master_indikator.id');
-
-            if ($iku1Assigned->isEmpty()) continue;
-
-            $sijamuUnit = DB::table('sijamu_fakultas_unit')->where('id', $unitId)->first();
-            $vUnit = DB::table('v_fakultas_unit')->where('id', $unitId)->first();
-
-            if (!$sijamuUnit || empty($sijamuUnit->kode_fakultas)) continue;
-
-            foreach ($triwulanCutOffs as $tw => $dateSuffix) {
-                $cutOffDate = $tahun . $dateSuffix;
-                $twFolderId = $yearFolderId ? $driveService->findFolder($tw, $yearFolderId) : null;
-
-                try {
-                    $mhsStatsQuery = DB::connection('simak')->table('m_mahasiswa')
-                        ->selectRaw("
-                            COALESCE(kode_prodi, '') as kode_prodi,
-                            COUNT(*) as total_mhs
-                        ")
-                        ->where('kode_fak', $sijamuUnit->kode_fakultas);
-
-                    if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
-                        $mhsStatsQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                    }
-                    $baseStatsGrouped = $mhsStatsQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
-
-                    $dropOutGrouped = collect();
-                    try {
-                        $dropOutQuery = DB::connection('simak')->table('m_mahasiswa')
-                            ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, COUNT(*) as drop_out")
-                            ->where('kode_fak', $sijamuUnit->kode_fakultas)
-                            ->whereIn('status_mhs', ['DO', 'DROP OUT', 'KELUAR', 'Non-Aktif']);
-
-                        if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
-                            $dropOutQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                        }
-                        $dropOutGrouped = $dropOutQuery->groupBy('kode_prodi')->get()->keyBy('kode_prodi');
-                    } catch (\Throwable $eDo) {}
-
-                    $graduatesQuery = DB::connection('simak')->table('m_mahasiswa')
-                        ->selectRaw("
-                            COALESCE(kode_prodi, '') as kode_prodi,
-                            DATEDIFF(tanggal_lulus, tanggal_masuk) as masa_studi_hari
-                        ")
-                        ->where('kode_fak', $sijamuUnit->kode_fakultas)
-                        ->whereNotNull('tanggal_lulus')
-                        ->whereNotNull('tanggal_masuk')
-                        ->where('tanggal_lulus', '<=', $cutOffDate);
-
-                    if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
-                        $graduatesQuery->where('kode_prodi', $sijamuUnit->kode_prodi);
-                    }
-                    $graduates = $graduatesQuery->get();
-                    $graduatesByProdi = $graduates->groupBy('kode_prodi');
-
-                    $totalMhs = $baseStatsGrouped->sum('total_mhs');
-                    $totalLulus = $graduates->count();
-                } catch (\Throwable $e) {
-                    $totalMhs = 0;
-                    $totalLulus = 0;
-                    $baseStatsGrouped = collect();
-                    $dropOutGrouped = collect();
-                    $graduatesByProdi = collect();
-                }
-
-                $capaianPct = $totalMhs > 0 ? round(($totalLulus / $totalMhs) * 100, 2) : 0;
-
-                // Build detailed prodi breakdown for Excel export
-                $excelRows = [];
-                $prodiListQuery = DB::table('sijamu_fakultas_unit as s')
-                    ->leftJoin('v_fakultas_unit as v', 's.id', '=', 'v.id')
-                    ->where('s.kode_fakultas', $sijamuUnit->kode_fakultas);
-
-                if (!empty($sijamuUnit->kode_prodi) && ($vUnit && strtolower($vUnit->type) === 'prodi')) {
-                    $prodiListQuery->where('s.kode_prodi', $sijamuUnit->kode_prodi);
-                }
-
-                $prodis = $prodiListQuery->select('v.nama_fak_prod_unit as nama_prodi', 's.kode_fakultas', 's.kode_prodi', 'v.type', 'v.jenjang')->get();
-
-                foreach ($prodis as $p) {
-                    $baseP = $baseStatsGrouped->get($p->kode_prodi);
-                    $totMhsP = $baseP ? (int)$baseP->total_mhs : 0;
-
-                    $doP = $dropOutGrouped->get($p->kode_prodi);
-                    $dropOutP = $doP ? (int)$doP->drop_out : 0;
-
-                    $prodiGrads = $graduatesByProdi->get($p->kode_prodi, collect());
-                    $maxHariTepat = $this->getMasaStudiTepatWaktuHari($p->jenjang, $p->nama_prodi);
-                    $lulusTepatP = 0;
-                    $lulusTidakTepatP = 0;
-
-                    foreach ($prodiGrads as $grad) {
-                        if ($grad->masa_studi_hari !== null && $grad->masa_studi_hari <= $maxHariTepat) {
-                            $lulusTepatP++;
-                        } else {
-                            $lulusTidakTepatP++;
-                        }
-                    }
-
-                    $jenjang = !empty($p->jenjang) ? $p->jenjang : 'S1';
-                    if (preg_match('/\b(D3|D4|S1|S2|S3|Profesi)\b/i', $p->nama_prodi ?? '', $mj)) {
-                        $jenjang = strtoupper($mj[1]);
-                    }
-
-                    $excelRows[] = [
-                        $p->nama_prodi,
-                        $jenjang,
-                        $totMhsP,
-                        $lulusTepatP,
-                        $dropOutP,
-                        $lulusTidakTepatP
-                    ];
-                }
-
-                $headers = ['prodi', 'jenjang', 'total mahasiswa', 'total lulus tepat waktu', 'total drop out', 'total lulus tidak tepat waktu'];
-
-                foreach ($iku1Assigned as $indId) {
-                    $indObj = DB::table('master_indikator')->where('id', $indId)->first();
-                    $indikatorName = $indObj ? $indObj->iku : 'IKU 1';
-                    $fileName = "{$indikatorName}.xlsx";
-
-                    $tempPath = storage_path("app/temp/simak_{$tahun}_{$tw}_{$indId}.xlsx");
-                    \App\Services\SimpleXlsxWriter::create($tempPath, $headers, $excelRows);
-
-                    $fileUrl = null;
-                    if ($twFolderId && file_exists($tempPath)) {
-                        $ikuFolderId = $driveService->findFolder($indikatorName, $twFolderId);
-                        if (!$ikuFolderId) {
-                            $ikuFolderId = $driveService->createFolder($indikatorName, $twFolderId);
-                        }
-                        $targetParentId = $ikuFolderId ?: $twFolderId;
-
-                        $fileUrl = $driveService->uploadFile($tempPath, $fileName, $targetParentId);
-                        if ($fileUrl) {
-                            @unlink($tempPath);
-                        }
-                    }
-
-                    $exists = DB::table('template_capaian')
-                        ->where('id_indikator', $indId)
-                        ->where('fakultas_unit', $unitId)
-                        ->where('tahun', $tahun)
-                        ->where('triwulan', $tw)
-                        ->first();
-
-                    $updatePayload = [
-                        'nilai_capaian' => $capaianPct,
-                        'pembilang' => $totalLulus,
-                        'penyebut' => $totalMhs,
-                        'catatan' => "Perhitungan otomatis SIMAK (Cut-off {$tw} {$tahun}): Total Lulus {$totalLulus} / Total Mahasiswa {$totalMhs}",
-                        'updated_at' => now(),
-                    ];
-
-                    if ($fileUrl) {
-                        $updatePayload['file_url'] = $fileUrl;
-                    }
-
-                    if (!$exists) {
-                        $updatePayload['id_indikator'] = $indId;
-                        $updatePayload['fakultas_unit'] = $unitId;
-                        $updatePayload['tahun'] = $tahun;
-                        $updatePayload['triwulan'] = $tw;
-                        $updatePayload['status_validasi'] = 'DIAJUKAN';
-                        $updatePayload['diinput_oleh'] = 'system_simak';
-                        $updatePayload['created_at'] = now();
-                        DB::table('template_capaian')->insert($updatePayload);
-                    } else {
-                        if (!in_array($exists->status_validasi, ['DIVERIFIKASI', 'DISAHKAN'])) {
-                            DB::table('template_capaian')
-                                ->where('id', $exists->id)
-                                ->update($updatePayload);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     public function index(Request $request)
     {
         $tahun = $request->query('tahun', date('Y'));
@@ -223,7 +17,7 @@ class CapaianController extends Controller
         $user = $request->user();
         $scope = $user->scopeUnits();
 
-        $this->syncAutoIku1Data($scope, $tahun === 'ALL' ? 2000 : (int)$tahun);
+        // $this->syncAutoIku1Data($scope, $tahun === 'ALL' ? 2000 : (int)$tahun);
 
         $data = DB::table('template_capaian')
             ->whereIn('fakultas_unit', $scope)
@@ -307,9 +101,9 @@ class CapaianController extends Controller
             'fakultas_unit' => 'required|integer',
             'tahun' => 'required|integer',
             'triwulan' => 'required|string',
-            'nilai_capaian' => 'required|numeric',
+            'nilai_capaian' => 'required|numeric|min:0',
             'catatan' => 'nullable|string',
-            'file_url' => 'nullable|string',
+            'file_url' => 'required|string',
         ]);
 
         $user = $request->user();
@@ -350,6 +144,16 @@ class CapaianController extends Controller
             ->where('triwulan', $validated['triwulan'])
             ->first();
 
+        $gdriveLog = DB::table('gdrive_folder_logs')
+            ->where('fakultas_unit', $validated['fakultas_unit'])
+            ->where('tahun', $validated['tahun'])
+            ->where('id_indikator', $validated['id_indikator'])
+            ->first();
+
+        if ($gdriveLog && !empty($gdriveLog->folder_url)) {
+            $validated['file_url'] = $gdriveLog->folder_url;
+        }
+
         if ($existing) {
             if (in_array($existing->status_validasi, ['DIAJUKAN', 'DIVERIFIKASI', 'DISAHKAN'])) {
                 return response()->json(['error' => 'Data sedang diverifikasi atau sudah disahkan dan tidak dapat diedit.'], 422);
@@ -378,6 +182,36 @@ class CapaianController extends Controller
         }
 
         return response()->json(['message' => 'Capaian berhasil disimpan.', 'id_capaian' => $id]);
+    }
+
+    public function getDriveLink(Request $request)
+    {
+        $user = $request->user();
+        $unitId = $request->query('unit');
+        $tahun = $request->query('tahun', 2026);
+        $idIndikator = $request->query('id_indikator');
+
+        if ($user && !in_array($user->role, ['ADMIN', 'LPM'])) {
+            $unitId = $user->fakultas_unit;
+        } else if (empty($unitId) && $user) {
+            $unitId = $user->fakultas_unit;
+        }
+
+        if (empty($unitId) || empty($idIndikator)) {
+            return response()->json(['drive_url' => null]);
+        }
+
+        $gdriveLog = DB::table('gdrive_folder_logs')
+            ->where('fakultas_unit', $unitId)
+            ->where('tahun', $tahun)
+            ->where('id_indikator', $idIndikator)
+            ->first();
+
+        if ($gdriveLog && !empty($gdriveLog->folder_url)) {
+            return response()->json(['drive_url' => $gdriveLog->folder_url]);
+        }
+
+        return response()->json(['drive_url' => null]);
     }
 
     public function submit(Request $request, $id)
@@ -489,6 +323,11 @@ class CapaianController extends Controller
         $query = DB::table('penugasan_target')
             ->join('v_fakultas_unit', 'penugasan_target.fakultas_unit', '=', 'v_fakultas_unit.id')
             ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
+            ->leftJoin('gdrive_folder_logs', function($join) {
+                $join->on('penugasan_target.fakultas_unit', '=', 'gdrive_folder_logs.fakultas_unit')
+                     ->on('penugasan_target.tahun', '=', 'gdrive_folder_logs.tahun')
+                     ->on('penugasan_target.id_indikator', '=', 'gdrive_folder_logs.id_indikator');
+            })
             ->select(
                 'penugasan_target.id',
                 'penugasan_target.fakultas_unit',
@@ -502,7 +341,11 @@ class CapaianController extends Controller
                 'v_fakultas_unit.fakultas',
                 'master_indikator.iku',
                 'master_indikator.full_kategori',
-                'master_indikator.jenis_iku'
+                'master_indikator.jenis_iku',
+                'gdrive_folder_logs.status as gdrive_status',
+                'gdrive_folder_logs.folder_url as gdrive_url',
+                'gdrive_folder_logs.error_message as gdrive_error',
+                'gdrive_folder_logs.history as gdrive_history'
             );
 
         if ($showDeleted) {
@@ -521,11 +364,21 @@ class CapaianController extends Controller
             $query->where('master_indikator.jenis_iku', $request->query('jenis_iku'));
         }
         if ($request->filled('iku')) {
-            $kw = '%' . $request->query('iku') . '%';
-            $query->where(function($q) use ($kw) {
-                $q->where('master_indikator.iku', 'like', $kw)
-                  ->orWhere('master_indikator.full_kategori', 'like', $kw);
-            });
+            $rawKw = trim($request->query('iku'));
+            if ($rawKw !== '') {
+                $lastChar = substr($rawKw, -1);
+                $escapedKw = preg_quote($rawKw, '/');
+                $regexpPattern = ctype_alnum($lastChar) 
+                    ? $escapedKw . '([^a-zA-Z0-9]|$)' 
+                    : $escapedKw . '($|[^a-zA-Z0-9])';
+
+                $query->where(function($q) use ($rawKw, $regexpPattern) {
+                    $q->where('master_indikator.iku', 'REGEXP', $regexpPattern)
+                      ->orWhere('master_indikator.full_kategori', 'REGEXP', $regexpPattern)
+                      ->orWhere('master_indikator.kategori', 'REGEXP', $regexpPattern)
+                      ->orWhere('v_fakultas_unit.nama_fak_prod_unit', 'like', '%' . $rawKw . '%');
+                });
+            }
         }
 
         return new StreamedResponse(function () use ($query) {
@@ -536,13 +389,52 @@ class CapaianController extends Controller
             echo "event: start\ndata: {}\n\n";
             flush();
 
-            foreach ($query->cursor() as $row) {
-                echo "event: row\ndata: " . json_encode($row) . "\n\n";
+            $rows = $query->get();
+            $chunks = array_chunk($rows->toArray(), 50);
+
+            foreach ($chunks as $chunk) {
+                echo "event: batch\n";
+                echo "data: " . json_encode($chunk) . "\n\n";
                 flush();
             }
 
             echo "event: end\ndata: {}\n\n";
             flush();
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no'
+        ]);
+    }
+
+    public function streamGdriveStatus(Request $request)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat mengakses.'], 403);
+        }
+
+        return new StreamedResponse(function () {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            for ($i = 0; $i < 30; $i++) {
+                if (connection_aborted()) {
+                    break;
+                }
+
+                $logs = DB::table('gdrive_folder_logs')
+                    ->select('fakultas_unit', 'tahun', 'id_indikator', 'status', 'folder_url', 'error_message', 'history')
+                    ->get();
+
+                echo "event: gdrive_status_update\n";
+                echo "data: " . json_encode($logs) . "\n\n";
+                flush();
+
+                sleep(2);
+            }
         }, 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache',
@@ -575,17 +467,6 @@ class CapaianController extends Controller
             ['created_at' => now(), 'updated_at' => now()]
         );
 
-        // Check and create Google Drive folder structure for the year if it doesn't exist
-        $ikuList = GoogleDriveService::defaultIkuList();
-        $twList = GoogleDriveService::defaultTwList();
-
-        try {
-            $driveService = new GoogleDriveService();
-            $driveService->ensureYearFolderStructure($tahun, $ikuList, $twList);
-        } catch (\Throwable $e) {
-            Log::error("Google Drive structure check/creation error: " . $e->getMessage());
-        }
-
         // Delete existing active/soft-deleted for this unit and year
         DB::table('penugasan_target')
             ->where('fakultas_unit', $unitId)
@@ -593,6 +474,7 @@ class CapaianController extends Controller
             ->delete();
 
         $inserts = [];
+        $nowStr = now()->format('Y-m-d H:i:s');
         foreach ($indicatorIds as $indId) {
             $inserts[] = [
                 'fakultas_unit' => $unitId,
@@ -601,10 +483,42 @@ class CapaianController extends Controller
                 'created_at' => now(),
                 'updated_at' => now()
             ];
+
+            // Initialize or update gdrive_folder_logs with WAITING status
+            $existingLog = DB::table('gdrive_folder_logs')
+                ->where('fakultas_unit', $unitId)
+                ->where('tahun', $tahun)
+                ->where('id_indikator', $indId)
+                ->first();
+
+            $history = [];
+            if ($existingLog && !empty($existingLog->history)) {
+                $history = json_decode($existingLog->history, true) ?: [];
+            }
+            $history[] = [
+                'status' => 'WAITING',
+                'timestamp' => $nowStr,
+                'note' => 'Penugasan disimpan. Memulai proses background pembuatan folder Google Drive'
+            ];
+
+            DB::table('gdrive_folder_logs')->updateOrInsert(
+                [
+                    'fakultas_unit' => $unitId,
+                    'tahun' => $tahun,
+                    'id_indikator' => $indId,
+                ],
+                [
+                    'status' => 'WAITING',
+                    'history' => json_encode($history),
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]
+            );
         }
         
         if (count($inserts) > 0) {
             DB::table('penugasan_target')->insert($inserts);
+            ProcessGdriveFolderJob::dispatch($unitId, $tahun);
         }
 
         return response()->json(['message' => 'Penugasan berhasil disimpan.']);
@@ -644,6 +558,117 @@ class CapaianController extends Controller
         ]);
 
         return response()->json(['message' => 'Penugasan berhasil dipulihkan.']);
+    }
+
+    public function deleteGroupPenugasan(Request $request)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat menghapus penugasan.'], 403);
+        }
+
+        $validated = $request->validate([
+            'fakultas_unit' => 'required|integer',
+            'tahun' => 'required|integer',
+            'mode' => 'nullable|string'
+        ]);
+
+        $mode = $validated['mode'] ?? 'soft';
+        $unitId = $validated['fakultas_unit'];
+        $tahun = $validated['tahun'];
+
+        if ($mode === 'hard') {
+            DB::table('penugasan_target')
+                ->where('fakultas_unit', $unitId)
+                ->where('tahun', $tahun)
+                ->delete();
+            return response()->json(['message' => 'Semua penugasan untuk unit dan tahun ini berhasil dihapus secara permanen.']);
+        } else {
+            DB::table('penugasan_target')
+                ->where('fakultas_unit', $unitId)
+                ->where('tahun', $tahun)
+                ->whereNull('deleted_at')
+                ->update([
+                    'deleted_at' => now(),
+                    'updated_at' => now()
+                ]);
+            return response()->json(['message' => 'Semua penugasan untuk unit dan tahun ini berhasil dihapus sementara (Soft Delete).']);
+        }
+    }
+
+    public function restoreGroupPenugasan(Request $request)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat memulihkan penugasan.'], 403);
+        }
+
+        $validated = $request->validate([
+            'fakultas_unit' => 'required|integer',
+            'tahun' => 'required|integer'
+        ]);
+
+        DB::table('penugasan_target')
+            ->where('fakultas_unit', $validated['fakultas_unit'])
+            ->where('tahun', $validated['tahun'])
+            ->whereNotNull('deleted_at')
+            ->update([
+                'deleted_at' => null,
+                'updated_at' => now()
+            ]);
+
+        return response()->json(['message' => 'Semua penugasan untuk unit dan tahun ini berhasil dipulihkan.']);
+    }
+
+    public function retryGdriveFolder(Request $request)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat memproses ulang pembuatan folder.'], 403);
+        }
+
+        $validated = $request->validate([
+            'fakultas_unit' => 'required|integer',
+            'tahun' => 'required|integer',
+            'id_indikator' => 'required|integer',
+        ]);
+
+        $unitId = $validated['fakultas_unit'];
+        $tahun = $validated['tahun'];
+        $indId = $validated['id_indikator'];
+
+        $existingLog = DB::table('gdrive_folder_logs')
+            ->where('fakultas_unit', $unitId)
+            ->where('tahun', $tahun)
+            ->where('id_indikator', $indId)
+            ->first();
+
+        $history = [];
+        if ($existingLog && !empty($existingLog->history)) {
+            $history = json_decode($existingLog->history, true) ?: [];
+        }
+        $history[] = [
+            'status' => 'WAITING',
+            'timestamp' => now()->format('Y-m-d H:i:s'),
+            'note' => 'User meminta retry manual pembuatan folder Google Drive'
+        ];
+
+        DB::table('gdrive_folder_logs')->updateOrInsert(
+            [
+                'fakultas_unit' => $unitId,
+                'tahun' => $tahun,
+                'id_indikator' => $indId,
+            ],
+            [
+                'status' => 'WAITING',
+                'history' => json_encode($history),
+                'updated_at' => now()
+            ]
+        );
+
+        ProcessGdriveFolderJob::dispatch($unitId, $tahun, $indId);
+
+        return response()->json(['message' => 'Proses pembuatan folder Google Drive telah dimasukkan ke background job.']);
     }
 
     protected function getMasaStudiTepatWaktuHari($jenjang, $namaProdi)
