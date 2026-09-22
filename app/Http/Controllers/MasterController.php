@@ -254,7 +254,7 @@ class MasterController extends Controller
         $filename = time() . '_' . preg_replace('/[^A-Za-z0-9_\.-]/', '_', $file->getClientOriginalName());
         $uploadDir = public_path('uploads/berkas_indikator');
         if (!file_exists($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+            @mkdir($uploadDir, 0775, true);
         }
 
         $current = DB::table('master_indikator')->where('id', $id)->first();
@@ -265,7 +265,14 @@ class MasterController extends Controller
             }
         }
 
-        $file->move($uploadDir, $filename);
+        try {
+            $file->move($uploadDir, $filename);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Gagal menyimpan berkas di server. Pastikan folder public/uploads memiliki hak akses tulis (write permission). ' . $e->getMessage()
+            ], 500);
+        }
+
         $fileUrl = '/uploads/berkas_indikator/' . $filename;
 
         DB::table('master_indikator')->where('id', $id)->update([

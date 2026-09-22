@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -231,7 +231,7 @@ export default function EditCapaian() {
     const handleEditFromTable = (item) => {
         setFormErrors({});
         setSelectedIkuId(item.id_indikator);
-        setNilaiCapaian(item.nilai_capaian);
+        setNilaiCapaian(item.nilai_capaian === '-' ? '' : (item.nilai_capaian || ''));
         setCatatan(item.catatan || '');
         setFileUrl(item.file_url || '');
         
@@ -297,8 +297,76 @@ export default function EditCapaian() {
         });
     };
 
+    const selectedIku = indicators.find(i => Number(i.id) === Number(selectedIkuId));
+
+    const getStatusBadgeColor = (status) => {
+        switch (status) {
+            case 'DISAHKAN': return 'bg-green-100 text-green-700';
+            case 'DIVERIFIKASI': return 'bg-blue-100 text-blue-700';
+            case 'DIAJUKAN': return 'bg-orange-100 text-orange-700';
+            case 'DRAFT': return 'bg-[#d6e3ff] text-[#00468a]';
+            case 'DITOLAK': return 'bg-red-100 text-red-700';
+            case 'BELUM DIISI': return 'bg-gray-100 text-gray-500 border border-gray-200';
+            default: return 'bg-gray-100 text-gray-500';
+        }
+    };
+
+    const activeIndicator = indicators.find(i => Number(i.id) === Number(selectedIkuId));
+    const activeSatuan = activeIndicator ? activeIndicator.satuan : '%';
+
+    // Map assigned indicators to capaian list to strictly adhere to assigned indicators & pagination count
+    const mappedCapaianList = useMemo(() => {
+        if (!indicators || indicators.length === 0) return [];
+        return indicators.map(ind => {
+            const found = capaianList.find(c => Number(c.id_indikator) === Number(ind.id));
+            if (found) {
+                return {
+                    ...found,
+                    iku: found.iku || ind.iku,
+                    kategori: found.kategori || ind.kategori,
+                    full_kategori: found.full_kategori || ind.full_kategori || `${ind.iku} - ${ind.kategori}`,
+                    satuan: found.satuan || ind.satuan || '%'
+                };
+            }
+            return {
+                id: `pt_${ind.id}`,
+                id_indikator: ind.id,
+                fakultas_unit: selectedUnitId,
+                tahun: tahun,
+                triwulan: triwulan,
+                nilai_capaian: '-',
+                catatan: '',
+                file_url: null,
+                status_validasi: 'BELUM DIISI',
+                iku: ind.iku,
+                kategori: ind.kategori,
+                full_kategori: ind.full_kategori || `${ind.iku} - ${ind.kategori}`,
+                satuan: ind.satuan || '%'
+            };
+        });
+    }, [indicators, capaianList, selectedUnitId, tahun, triwulan]);
+
+    // Apply search filter
+    const filteredCapaianList = useMemo(() => {
+        if (!filterIku.trim()) return mappedCapaianList;
+        const q = filterIku.toLowerCase();
+        return mappedCapaianList.filter(item => 
+            (item.iku && item.iku.toLowerCase().includes(q)) ||
+            (item.kategori && item.kategori.toLowerCase().includes(q)) ||
+            (item.full_kategori && item.full_kategori.toLowerCase().includes(q))
+        );
+    }, [mappedCapaianList, filterIku]);
+
+    // Pagination calculations (Limit 10 per page)
+    const totalItems = filteredCapaianList.length;
+    const totalPages = Math.ceil(totalItems / 10) || 1;
+    const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+    const startIndex = (safeCurrentPage - 1) * 10;
+    const endIndex = Math.min(startIndex + 10, totalItems);
+    const currentCapaianList = filteredCapaianList.slice(startIndex, endIndex);
+
     const handleExportXlsx = () => {
-        if (capaianList.length === 0) {
+        if (filteredCapaianList.length === 0) {
             showToast('Tidak ada data capaian untuk diexport.', 'warning');
             return;
         }
@@ -306,16 +374,16 @@ export default function EditCapaian() {
         let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
         csvContent += "Kode IKU;Nama Indikator;Tahun;Triwulan;Capaian;Satuan;Catatan;File Bukti;Status Validasi\n";
 
-        capaianList.forEach(item => {
+        filteredCapaianList.forEach(item => {
             const kode = `"${(item.iku || item.raw_kode || '').replace(/"/g, '""')}"`;
             const nama = `"${(item.kategori || item.full_kategori || '').replace(/"/g, '""')}"`;
             const yr = `"${item.tahun || tahun}"`;
             const tw = `"${item.triwulan || triwulan}"`;
-            const cap = `"${item.nilai_capaian || 0}"`;
+            const cap = `"${item.nilai_capaian !== '-' ? (item.nilai_capaian || '') : ''}"`;
             const satuan = `"${(item.satuan || '%').replace(/"/g, '""')}"`;
             const note = `"${(item.catatan || '').replace(/"/g, '""')}"`;
             const file = `"${(item.file_url || '').replace(/"/g, '""')}"`;
-            const status = `"${(item.status_validasi || 'DRAFT').replace(/"/g, '""')}"`;
+            const status = `"${(item.status_validasi || 'BELUM DIISI').replace(/"/g, '""')}"`;
 
             csvContent += `${kode};${nama};${yr};${tw};${cap};${satuan};${note};${file};${status}\n`;
         });
@@ -328,34 +396,6 @@ export default function EditCapaian() {
         link.click();
         document.body.removeChild(link);
     };
-
-
-
-    const selectedIku = indicators.find(i => Number(i.id) === Number(selectedIkuId));
-
-    const getStatusBadgeColor = (status) => {
-        switch (status) {
-            case 'DISAHKAN': return 'bg-green-100 text-green-700';
-            case 'DIVERIFIKASI': return 'bg-blue-100 text-blue-700';
-            case 'DIAJUKAN': return 'bg-orange-100 text-orange-700';
-            case 'DRAFT': return 'bg-[#d6e3ff] text-[#00468a]';
-            case 'DITOLAK': return 'bg-red-100 text-red-700';
-            default: return 'bg-gray-100 text-gray-500';
-        }
-    };
-
-    const activeIndicator = indicators.find(i => Number(i.id) === Number(selectedIkuId));
-    const activeSatuan = activeIndicator ? activeIndicator.satuan : '%';
-
-    // Pagination calculations (Limit 10 per page)
-    const totalItems = capaianList.length;
-    const totalPages = Math.ceil(totalItems / 10) || 1;
-    const safeCurrentPage = Math.min(currentPage, totalPages);
-    const startIndex = (safeCurrentPage - 1) * 10;
-    const endIndex = Math.min(startIndex + 10, totalItems);
-    const currentCapaianList = capaianList.slice(startIndex, endIndex);
-
-    console.log(currentCapaianList)
     return (
         <AuthenticatedLayout pageTitle={`Isi Capaian Kinerja`}>
             <Head title={`Isi Capaian Kinerja - IKU Portal`} />
@@ -646,7 +686,7 @@ export default function EditCapaian() {
                                 {totalItems === 0 ? (
                                     <tr>
                                         <td colSpan="6" className="p-4 text-center text-[#717785] italic">
-                                            {streaming ? 'Memuat data capaian...' : 'Belum ada laporan diinput pada triwulan ini.'}
+                                            {loading || streaming ? 'Memuat data capaian...' : 'Belum ada indikator yang ditugaskan atau diinput pada triwulan ini.'}
                                         </td>
                                     </tr>
                                 ) : (
@@ -654,7 +694,9 @@ export default function EditCapaian() {
                                         <tr key={c.id} className="hover:bg-[#f9f9ff]">
                                             <td className="p-3 font-bold text-[#005bb1]">{c.iku || '-'}</td>
                                             <td className="p-3 font-semibold text-[#181c23]">{c.kategori || c.full_kategori || 'Indikator tidak diketahui'}</td>
-                                            <td className="p-3 text-center font-bold text-[#181c23]">{c.nilai_capaian} {c.satuan || '%'}</td>
+                                            <td className="p-3 text-center font-bold text-[#181c23]">
+                                                {c.status_validasi === 'BELUM DIISI' || c.nilai_capaian === '-' ? '-' : `${c.nilai_capaian} ${c.satuan || '%'}`}
+                                            </td>
                                             <td className="p-3 text-center">
                                                 {c.file_url ? (
                                                     <a 
@@ -683,7 +725,7 @@ export default function EditCapaian() {
                                                             disabled={['DIAJUKAN', 'DIVERIFIKASI', 'DISAHKAN'].includes(c.status_validasi)}
                                                             className="bg-[#ebedf8] text-[#005bb1] px-3 py-1 rounded text-[10px] font-bold hover:bg-[#d6e3ff] transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase"
                                                         >
-                                                            Edit
+                                                            {c.status_validasi === 'BELUM DIISI' ? 'Input' : 'Edit'}
                                                         </button>
                                                         {c.status_validasi === 'DRAFT' && (
                                                             <button 
