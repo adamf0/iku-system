@@ -113,14 +113,28 @@ Route::middleware(['auth'])->group(function () {
         return Inertia::render('PenugasanTarget');
     })->name('penugasan-target');
 
+    Route::get('/management-unit', function () {
+        if (auth()->user()->role !== 'ADMIN') {
+            abort(403, 'Akses Ditolak: Halaman ini hanya untuk Administrator.');
+        }
+        return Inertia::render('ManagementUnit');
+    })->name('management-unit');
+
+    Route::get('/management-account', function () {
+        if (auth()->user()->role !== 'ADMIN') {
+            abort(403, 'Akses Ditolak: Halaman ini hanya untuk Administrator.');
+        }
+        return Inertia::render('ManagementAccount');
+    })->name('management-account');
+
     Route::get('/verifikasi', function () {
         return Inertia::render('Verifikasi');
     })->name('verifikasi');
 
     // Profile
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [\App\Http\Controllers\ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // API - Dashboard
     Route::prefix('api/dashboard')->group(function () {
@@ -155,6 +169,25 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{id}/restore', [CapaianController::class, 'restorePenugasan']);
     });
 
+    // API - Management Unit
+    Route::prefix('api/unit-management')->group(function () {
+        Route::get('/', [\App\Http\Controllers\UnitController::class, 'index']);
+        Route::get('/options', [\App\Http\Controllers\UnitController::class, 'options']);
+        Route::post('/', [\App\Http\Controllers\UnitController::class, 'store']);
+        Route::post('/{id}', [\App\Http\Controllers\UnitController::class, 'update']);
+        Route::post('/{id}/toggle-status', [\App\Http\Controllers\UnitController::class, 'toggleStatus']);
+        Route::delete('/{id}', [\App\Http\Controllers\UnitController::class, 'destroy']);
+    });
+
+    // API - Account Management
+    Route::prefix('api/account-management')->group(function () {
+        Route::get('/', [\App\Http\Controllers\AccountController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\AccountController::class, 'store']);
+        Route::post('/{id}', [\App\Http\Controllers\AccountController::class, 'update']);
+        Route::post('/{id}/toggle-status', [\App\Http\Controllers\AccountController::class, 'toggleStatus']);
+        Route::delete('/{id}', [\App\Http\Controllers\AccountController::class, 'destroy']);
+    });
+
     // Target Management routes (Bypasses WAF REST blocks)
     Route::post('/target/justifikasi/{id}', [MasterController::class, 'saveJustifikasi']);
     Route::post('/target/save/{id}', [MasterController::class, 'updateIku']);
@@ -167,6 +200,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/iku', [MasterController::class, 'createIku']);
         Route::post('/iku/{id}', [MasterController::class, 'updateIku']);
         Route::post('/iku/{id}/justifikasi', [MasterController::class, 'saveJustifikasi']);
+        Route::post('/iku/{id}/berkas', [MasterController::class, 'uploadBerkas']);
+        Route::post('/iku/{id}/delete-berkas', [MasterController::class, 'deleteBerkas']);
+        Route::delete('/iku/{id}/berkas', [MasterController::class, 'deleteBerkas']);
         Route::delete('/iku/{id}', [MasterController::class, 'deleteIku']);
         Route::get('/units', [MasterController::class, 'units']);
         Route::get('/users', [MasterController::class, 'users']);

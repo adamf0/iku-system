@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import SearchableSelect from '@/Components/SearchableSelect';
@@ -336,24 +336,29 @@ function CapaianSemuaUnitBarChart({ data }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
 
-    if (!data || data.length === 0) {
+    // Filter only active units
+    const activeData = useMemo(() => {
+        return (data || []).filter(u => u.is_active !== false && u.is_active !== 0);
+    }, [data]);
+
+    if (!activeData || activeData.length === 0) {
         return (
             <div className="p-8 text-center text-xs text-[#717785] italic">
-                Belum ada data capaian unit kerja.
+                Belum ada data capaian unit kerja aktif.
             </div>
         );
     }
 
     // Unique unit types for tabs
-    const unitTypes = ['ALL', ...Array.from(new Set(data.map(u => u.type).filter(Boolean)))];
+    const unitTypes = ['ALL', ...Array.from(new Set(activeData.map(u => u.type).filter(Boolean)))];
 
     // Counts by performance status
-    const highCount = data.filter(u => (Number(u.capaian) || 0) >= 80).length;
-    const medCount = data.filter(u => (Number(u.capaian) || 0) >= 50 && (Number(u.capaian) || 0) < 80).length;
-    const lowCount = data.filter(u => (Number(u.capaian) || 0) < 50).length;
+    const highCount = activeData.filter(u => (Number(u.capaian) || 0) >= 80).length;
+    const medCount = activeData.filter(u => (Number(u.capaian) || 0) >= 50 && (Number(u.capaian) || 0) < 80).length;
+    const lowCount = activeData.filter(u => (Number(u.capaian) || 0) < 50).length;
 
     // Filter & Sort logic
-    let filteredData = data.filter(unit => {
+    let filteredData = activeData.filter(unit => {
         const matchSearch = (unit.nama_unit || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchType = selectedType === 'ALL' || unit.type === selectedType;
         return matchSearch && matchType;
@@ -417,7 +422,7 @@ function CapaianSemuaUnitBarChart({ data }) {
                 {/* Unit Type Filter Tabs */}
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
                     {unitTypes.map(type => {
-                        const count = type === 'ALL' ? data.length : data.filter(u => u.type === type).length;
+                        const count = type === 'ALL' ? activeData.length : activeData.filter(u => u.type === type).length;
                         const label = type === 'ALL' ? 'Semua Unit' : type;
                         return (
                             <button
@@ -1045,13 +1050,13 @@ export default function Dashboard() {
 
                                                         <td className="px-6 py-4 text-center">
                                                             <div className="bg-[#f1f3fe]/40 border border-[#c0c6d6]/30 rounded-xl px-3 py-2 text-[#535f71] font-bold text-xs inline-block min-w-[64px]">
-                                                                {iku.base_line || '-'}
+                                                                {(!iku.base_line || iku.base_line === '-' || iku.base_line === '0' || iku.base_line === 0) ? '-' : iku.base_line}
                                                             </div>
                                                         </td>
 
                                                         <td className="px-6 py-4 text-center">
                                                             <div className="bg-[#f1f3fe]/40 border border-[#c0c6d6]/30 rounded-xl px-3 py-2 text-[#181c23] font-extrabold text-xs inline-block min-w-[64px]">
-                                                                {iku.target ?? '-'}
+                                                                {(!iku.target || iku.target === '-' || iku.target === '0' || iku.target === 0) ? '-' : iku.target}
                                                             </div>
                                                         </td>
 

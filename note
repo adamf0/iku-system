@@ -1,6 +1,10 @@
-update:
+update iku 18 september 2026:
 +penugasan indikator target multiple
-ketika submit background job akan membuat folder indikator di masing-masing tw (sync 1 arah, 1x eksekusi, link google drive update link bukti)
++ketika submit background job akan membuat folder indikator di masing-masing tw (sync 1 arah, 1x eksekusi, link google drive update link bukti)
++form isi link bukti pada tw sudah otomatis dari gdrive
+
+glitch:
+*ketika prodi/fakultas/unit buka tw, lalu admin perbaharui indikator maka link bukti akan di reset ke "" yg disebebkan karena get link grive folder untuk di tempel ke indikator tw masing-masing target
 
 masalah kedepan:
-master indikator saat ini masih tidak ada tahun sama sekali & tidak tahu kedepannya apakah berubah seperti apa
+*master indikator saat ini masih tidak ada tahun sama sekali & tidak tahu kedepannya apakah berubah seperti apa

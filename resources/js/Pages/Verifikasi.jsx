@@ -33,6 +33,30 @@ export default function Verifikasi() {
         .catch(err => console.error(err));
     }, []);
 
+    // Dynamically update indicator options when filterUnit or filterTahun changes
+    useEffect(() => {
+        if (filterUnit) {
+            const params = new URLSearchParams();
+            params.append('unit', filterUnit);
+            if (filterTahun !== 'ALL') params.append('tahun', filterTahun);
+
+            fetch(`/api/master/iku/assigned?${params.toString()}`)
+                .then(res => res.json())
+                .then(data => {
+                    setIndicators(data);
+                    if (filterIndikator && !data.some(i => String(i.id) === String(filterIndikator))) {
+                        setFilterIndikator('');
+                    }
+                })
+                .catch(err => console.error(err));
+        } else {
+            fetch('/api/master/iku')
+                .then(res => res.json())
+                .then(data => setIndicators(data))
+                .catch(err => console.error(err));
+        }
+    }, [filterUnit, filterTahun]);
+
     const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
@@ -125,6 +149,10 @@ export default function Verifikasi() {
                 return <span className="text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full uppercase tracking-wider border border-amber-200">Diajukan</span>;
             case 'DITOLAK':
                 return <span className="text-[10px] font-extrabold bg-red-100 text-red-700 px-2.5 py-1 rounded-full uppercase tracking-wider border border-red-200">Ditolak</span>;
+            case 'DRAFT':
+                return <span className="text-[10px] font-extrabold bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full uppercase tracking-wider border border-gray-200">Draft</span>;
+            case 'BELUM DIISI':
+                return <span className="text-[10px] font-extrabold bg-orange-50 text-orange-600 px-2.5 py-1 rounded-full uppercase tracking-wider border border-orange-200">Belum Diisi</span>;
             default:
                 return <span className="text-[10px] font-extrabold bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full uppercase tracking-wider border border-gray-200">{status}</span>;
         }
@@ -256,7 +284,9 @@ export default function Verifikasi() {
                                 { id: 'DIAJUKAN', label: 'Diajukan' },
                                 { id: 'DIVERIFIKASI', label: 'Diverifikasi' },
                                 { id: 'DISAHKAN', label: 'Disahkan' },
-                                { id: 'DITOLAK', label: 'Ditolak' }
+                                { id: 'DITOLAK', label: 'Ditolak' },
+                                { id: 'DRAFT', label: 'Draft' },
+                                { id: 'BELUM DIISI', label: 'Belum Diisi' }
                             ]}
                             value={filterStatus}
                             onChange={(val) => setFilterStatus(val)}
@@ -320,7 +350,7 @@ export default function Verifikasi() {
                                                         {renderJenisBadge(item.jenis_iku)}
                                                     </div>
                                                     <p className="text-[#535f71] line-clamp-2">{item.nama_iku || item.full_kategori}</p>
-                                                    <p className="text-[10px] text-[#717785]">Diinput oleh: {item.diinput_oleh}</p>
+                                                    <p className="text-[10px] text-[#717785]">Diinput oleh: {item.diinput_oleh || '-'}</p>
                                                 </td>
                                                 <td className="p-4 text-center font-extrabold text-[#535f71] bg-[#f9f9ff]">
                                                     {item.triwulan}
@@ -347,9 +377,9 @@ export default function Verifikasi() {
                                                             Realisasi
                                                         </span>
                                                         <div className="text-base font-extrabold text-[#005bb1] mt-0.5">
-                                                            {item.nilai_capaian} <span className="text-xs font-normal text-[#535f71]">{item.satuan || '%'}</span>
+                                                            {item.status_validasi === 'BELUM DIISI' ? '-' : item.nilai_capaian} <span className="text-xs font-normal text-[#535f71]">{item.satuan || '%'}</span>
                                                         </div>
-                                                        {progressPct && (
+                                                        {item.status_validasi !== 'BELUM DIISI' && progressPct && (
                                                             <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
                                                                 {progressPct}
                                                             </div>
@@ -373,13 +403,13 @@ export default function Verifikasi() {
                                                         {item.status_validasi === 'DIAJUKAN' && (
                                                             <div className="flex items-center gap-1">
                                                                 <button 
-                                                                    onClick={() => handleVerify(item.id_capaian, 'APPROVE')}
+                                                                    onClick={() => handleVerify(item.real_capaian_id || item.id_capaian, 'APPROVE')}
                                                                     className="px-3 py-1.5 bg-[#005bb1] text-white rounded-lg font-bold hover:bg-[#0073dd] transition-all text-[11px]"
                                                                 >
                                                                     Setujui
                                                                 </button>
                                                                 <button 
-                                                                    onClick={() => handleVerify(item.id_capaian, 'REJECT')}
+                                                                    onClick={() => handleVerify(item.real_capaian_id || item.id_capaian, 'REJECT')}
                                                                     className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg font-bold hover:bg-red-200 transition-all text-[11px]"
                                                                 >
                                                                     Tolak
@@ -389,7 +419,7 @@ export default function Verifikasi() {
 
                                                         {item.status_validasi === 'DIVERIFIKASI' && (
                                                             <button 
-                                                                onClick={() => handleSahkan(item.id_capaian)}
+                                                                onClick={() => handleSahkan(item.real_capaian_id || item.id_capaian)}
                                                                 className="px-4 py-1.5 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-all text-[11px] shadow-sm uppercase tracking-wider"
                                                             >
                                                                 Sah kan
@@ -400,6 +430,18 @@ export default function Verifikasi() {
                                                             <span className="text-[10px] font-bold text-green-700 inline-flex items-center gap-0.5">
                                                                 <span className="material-symbols-outlined text-[14px]">check_circle</span>
                                                                 Telah Disahkan
+                                                            </span>
+                                                        )}
+
+                                                        {item.status_validasi === 'BELUM DIISI' && (
+                                                            <span className="text-[10px] text-gray-400 italic">
+                                                                Belum diisi
+                                                            </span>
+                                                        )}
+
+                                                        {item.status_validasi === 'DRAFT' && (
+                                                            <span className="text-[10px] text-gray-400 italic">
+                                                                Menunggu diajukan
                                                             </span>
                                                         )}
 

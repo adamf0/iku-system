@@ -83,6 +83,62 @@ class DashboardController extends Controller
         return $t > 0 ? $t : 1;
     }
 
+    private function resolveUnitTargetValue($iku, $unitObj, $targetYearRecord = null)
+    {
+        if ($unitObj) {
+            $type = strtoupper($unitObj->type ?? '');
+            $jenjang = strtoupper($unitObj->jenjang ?? '');
+
+            if ($type === 'PRODI') {
+                $col = match ($jenjang) {
+                    'S1' => 'target_s1',
+                    'S2' => 'target_s2',
+                    'S3' => 'target_s3',
+                    'D3' => 'target_d3',
+                    'D4' => 'target_d4',
+                    'PROFESI' => 'target_profesi',
+                    default => null
+                };
+
+                if ($col) {
+                    if ($targetYearRecord && isset($targetYearRecord->$col) && $targetYearRecord->$col !== null && $targetYearRecord->$col !== '') {
+                        return $targetYearRecord->$col;
+                    }
+                    if (isset($iku->$col) && $iku->$col !== null && $iku->$col !== '') {
+                        return $iku->$col;
+                    }
+                }
+
+                if ($targetYearRecord && isset($targetYearRecord->target_prodi) && $targetYearRecord->target_prodi !== null && $targetYearRecord->target_prodi !== '') {
+                    return $targetYearRecord->target_prodi;
+                }
+                if (isset($iku->target_prodi) && $iku->target_prodi !== null && $iku->target_prodi !== '') {
+                    return $iku->target_prodi;
+                }
+            } elseif ($type === 'FAKULTAS') {
+                if ($targetYearRecord && isset($targetYearRecord->target_fakultas) && $targetYearRecord->target_fakultas !== null && $targetYearRecord->target_fakultas !== '') {
+                    return $targetYearRecord->target_fakultas;
+                }
+                if (isset($iku->target_fakultas) && $iku->target_fakultas !== null && $iku->target_fakultas !== '') {
+                    return $iku->target_fakultas;
+                }
+            } elseif ($type === 'UNIT') {
+                if ($targetYearRecord && isset($targetYearRecord->target_unit) && $targetYearRecord->target_unit !== null && $targetYearRecord->target_unit !== '') {
+                    return $targetYearRecord->target_unit;
+                }
+                if (isset($iku->target_unit) && $iku->target_unit !== null && $iku->target_unit !== '') {
+                    return $iku->target_unit;
+                }
+            }
+        }
+
+        if ($targetYearRecord && isset($targetYearRecord->target) && $targetYearRecord->target !== null && $targetYearRecord->target !== '') {
+            return $targetYearRecord->target;
+        }
+
+        return $iku->target ?? '-';
+    }
+
     public function summaryData(Request $request)
     {
         $tahunParam = $request->query('tahun', date('Y'));
@@ -93,21 +149,58 @@ class DashboardController extends Controller
         $user = $request->user();
         $scope = $user ? $user->scopeUnits() : [1];
 
+        // Determine if a specific unit is selected or scoped for the user
+        $selectedUnitId = $request->filled('unit') 
+            ? (int)$request->query('unit') 
+            : ($user && !in_array($user->role, ['ADMIN', 'LPM', 'FAKULTAS']) ? (int)$user->fakultas_unit : null);
+
+        // Fetch assigned indicator IDs from penugasan_target if a specific unit is selected
+        $assignedIkuIds = null;
+        if ($selectedUnitId) {
+            $assignedIkuQuery = DB::table('penugasan_target')
+                ->leftJoin('gdrive_folder_logs', function($join) {
+                    $join->on('penugasan_target.fakultas_unit', '=', 'gdrive_folder_logs.fakultas_unit')
+                         ->on('penugasan_target.tahun', '=', 'gdrive_folder_logs.tahun')
+                         ->on('penugasan_target.id_indikator', '=', 'gdrive_folder_logs.id_indikator');
+                })
+                ->where('penugasan_target.fakultas_unit', $selectedUnitId)
+                ->whereNull('penugasan_target.deleted_at');
+            if ($tahun !== 'ALL') {
+                $assignedIkuQuery->where('penugasan_target.tahun', $tahun);
+            }
+            $assignedIkuIds = $assignedIkuQuery->orderByRaw('COALESCE(gdrive_folder_logs.id, penugasan_target.id) ASC')
+                ->pluck('penugasan_target.id_indikator')->unique()->values()->toArray();
+        }
+
         // Fetch template_capaian in scope for user status counts & per_iku table
         $allCapaianRows = DB::table('template_capaian')
             ->whereIn('fakultas_unit', $scope)
             ->get();
 
         $data = $allCapaianRows;
-        if ($request->filled('unit')) {
+        if ($selectedUnitId) {
+            $data = $data->where('fakultas_unit', $selectedUnitId);
+            if (!empty($assignedIkuIds)) {
+                $data = $data->whereIn('id_indikator', $assignedIkuIds);
+            } else {
+                $data = collect();
+            }
+        } elseif ($request->filled('unit')) {
             $data = $data->where('fakultas_unit', $request->query('unit'));
         }
         if ($tahun !== 'ALL') {
             $data = $data->where('tahun', $tahun);
         }
 
-        // Fetch ALL template_capaian across all units for executive multi-prodi aggregate chart
-        $sebaranQuery = DB::table('template_capaian');
+        // Fetch ALL template_capaian across active units for executive multi-prodi aggregate chart
+        $activeUnitIds = DB::table('v_fakultas_unit')
+            ->where(function($w) {
+                $w->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->pluck('id')
+            ->toArray();
+
+        $sebaranQuery = DB::table('template_capaian')->whereIn('fakultas_unit', $activeUnitIds);
         if ($request->filled('chart_unit')) {
             $sebaranQuery->where('fakultas_unit', $request->query('chart_unit'));
         }
@@ -115,7 +208,12 @@ class DashboardController extends Controller
 
         // Fetch ALL master indicators, units, and years ONCE
         $allIkuList = DB::table('master_indikator')->orderBy('id', 'asc')->get();
-        $unitsMap = DB::table('v_fakultas_unit')->get()->keyBy('id');
+        $unitsMap = DB::table('v_fakultas_unit')
+            ->where(function($w) {
+                $w->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->get()
+            ->keyBy('id');
         $targetYearMap = DB::table('target_indikator_tahun')->get()->groupBy('id_indikator');
 
         $registeredYears = DB::table('master_tahun')->orderBy('tahun', 'asc')->pluck('tahun')->toArray();
@@ -140,43 +238,16 @@ class DashboardController extends Controller
         $perIku = [];
         $sebaranPerIku = [];
 
+        // 1. Multi-Prodi / University-wide Sebaran Per IKU for aggregate distribution chart
         foreach ($allIkuList as $iku) {
             $rows = $data->filter(function ($item) use ($iku) {
                 return $item->id_indikator === $iku->id;
             });
-
-            // Get triwulan specific values across user scope
-            $twDetails = [];
-            foreach ($this->TRIWULAN as $tw) {
-                $rowsTw = $rows->where('triwulan', $tw);
-                if ($rowsTw->count() > 0) {
-                    $avgNilai = round($rowsTw->avg('nilai_capaian'), 2);
-                    $firstSah = $rowsTw->where('status_validasi', 'DISAHKAN')->first();
-                    $statusVal = $firstSah ? 'DISAHKAN' : ($rowsTw->first() ? $rowsTw->first()->status_validasi : null);
-                    $twDetails[$tw] = [
-                        'nilai' => $avgNilai,
-                        'status_validasi' => $statusVal
-                    ];
-                } else {
-                    $twDetails[$tw] = [
-                        'nilai' => null,
-                        'status_validasi' => null
-                    ];
-                }
-            }
-
             $rowsSah = $rows->where('status_validasi', 'DISAHKAN');
             $capaianRata = $rowsSah->count() > 0 ? round($rowsSah->avg('nilai_capaian'), 2) : ($rows->count() > 0 ? round($rows->avg('nilai_capaian'), 2) : null);
 
             $target = (float)$iku->target;
             $baseLine = (float)$iku->base_line;
-            
-            $status = 'BELUM ADA DATA SAH';
-            if ($capaianRata !== null) {
-                $status = $capaianRata >= $target ? 'TERCAPAI' : 'BELUM TERCAPAI';
-            }
-
-            // Clean code label for X-axis
             $kodeLabel = $iku->iku;
             $hasData = ($rows->count() > 0 && $capaianRata !== null);
 
@@ -282,31 +353,6 @@ class DashboardController extends Controller
                 ];
             }
 
-            $perIkuItem = [
-                'id' => $iku->id,
-                'kode_iku' => $kodeLabel,
-                'raw_kode' => $iku->iku,
-                'nama_indikator' => $iku->kategori ?: $iku->full_kategori,
-                'full_kategori' => $iku->full_kategori,
-                'jenis_iku' => $iku->jenis_iku ?? 'WAJIB',
-                'sifat' => $iku->jenis_iku ?? 'WAJIB',
-                'satuan' => $iku->satuan,
-                'base_line' => $baseLine,
-                'target' => $target,
-                'capaian_rata' => $capaianRata,
-                'capaian_tw1' => $twDetails['TW1']['nilai'] ?? null,
-                'status_tw1' => $twDetails['TW1']['status_validasi'] ?? null,
-                'capaian_tw2' => $twDetails['TW2']['nilai'] ?? null,
-                'status_tw2' => $twDetails['TW2']['status_validasi'] ?? null,
-                'capaian_tw3' => $twDetails['TW3']['nilai'] ?? null,
-                'status_tw3' => $twDetails['TW3']['status_validasi'] ?? null,
-                'capaian_tw4' => $twDetails['TW4']['nilai'] ?? null,
-                'status_tw4' => $twDetails['TW4']['status_validasi'] ?? null,
-                'status' => $status
-            ];
-
-            $perIku[] = $perIkuItem;
-
             $sebaranPerIku[] = [
                 'id' => $iku->id,
                 'kode_iku' => $kodeLabel,
@@ -324,6 +370,76 @@ class DashboardController extends Controller
                 'TW3' => $twPcts['TW3'],
                 'TW4' => $twPcts['TW4'],
                 'ALL' => $allPct
+            ];
+        }
+
+        // 2. Performance Distribution Table strictly matching penugasan_target for selected unit
+        $targetUnitObj = $selectedUnitId ? $unitsMap->get($selectedUnitId) : null;
+        $ikuListForPerIku = $selectedUnitId ? collect($assignedIkuIds ?? [])->map(fn($id) => $allIkuList->firstWhere('id', $id))->filter() : $allIkuList;
+
+        foreach ($ikuListForPerIku as $iku) {
+            $rows = $data->filter(function ($item) use ($iku) {
+                return $item->id_indikator === $iku->id;
+            });
+
+            // Get triwulan specific values across user scope
+            $twDetails = [];
+            foreach ($this->TRIWULAN as $tw) {
+                $rowsTw = $rows->where('triwulan', $tw);
+                if ($rowsTw->count() > 0) {
+                    $avgNilai = round($rowsTw->avg('nilai_capaian'), 2);
+                    $firstSah = $rowsTw->where('status_validasi', 'DISAHKAN')->first();
+                    $statusVal = $firstSah ? 'DISAHKAN' : ($rowsTw->first() ? $rowsTw->first()->status_validasi : null);
+                    $twDetails[$tw] = [
+                        'nilai' => $avgNilai,
+                        'status_validasi' => $statusVal
+                    ];
+                } else {
+                    $twDetails[$tw] = [
+                        'nilai' => null,
+                        'status_validasi' => null
+                    ];
+                }
+            }
+
+            $rowsSah = $rows->where('status_validasi', 'DISAHKAN');
+            $capaianRata = $rowsSah->count() > 0 ? round($rowsSah->avg('nilai_capaian'), 2) : ($rows->count() > 0 ? round($rows->avg('nilai_capaian'), 2) : null);
+
+            $tObj = isset($targetYearMap[$iku->id]) ? $targetYearMap[$iku->id]->firstWhere('tahun', $tahun !== 'ALL' ? $tahun : date('Y')) : null;
+
+            $rawTarget = $this->resolveUnitTargetValue($iku, $targetUnitObj, $tObj);
+            $rawBaseLine = ($tObj && isset($tObj->base_line) && $tObj->base_line !== null && $tObj->base_line !== '') ? $tObj->base_line : ($iku->base_line ?? '-');
+
+            $status = 'BELUM ADA DATA SAH';
+            if ($capaianRata !== null) {
+                if (is_numeric($rawTarget) && (float)$rawTarget > 0) {
+                    $status = $capaianRata >= (float)$rawTarget ? 'TERCAPAI' : 'BELUM TERCAPAI';
+                } else {
+                    $status = 'DIPERIKSA';
+                }
+            }
+
+            $perIku[] = [
+                'id' => $iku->id,
+                'kode_iku' => $iku->iku,
+                'raw_kode' => $iku->iku,
+                'nama_indikator' => $iku->kategori ?: $iku->full_kategori,
+                'full_kategori' => $iku->full_kategori,
+                'jenis_iku' => $iku->jenis_iku ?? 'WAJIB',
+                'sifat' => $iku->jenis_iku ?? 'WAJIB',
+                'satuan' => $iku->satuan,
+                'base_line' => $rawBaseLine,
+                'target' => $rawTarget,
+                'capaian_rata' => $capaianRata,
+                'capaian_tw1' => $twDetails['TW1']['nilai'] ?? null,
+                'status_tw1' => $twDetails['TW1']['status_validasi'] ?? null,
+                'capaian_tw2' => $twDetails['TW2']['nilai'] ?? null,
+                'status_tw2' => $twDetails['TW2']['status_validasi'] ?? null,
+                'capaian_tw3' => $twDetails['TW3']['nilai'] ?? null,
+                'status_tw3' => $twDetails['TW3']['status_validasi'] ?? null,
+                'capaian_tw4' => $twDetails['TW4']['nilai'] ?? null,
+                'status_tw4' => $twDetails['TW4']['status_validasi'] ?? null,
+                'status' => $status
             ];
         }
 
@@ -416,9 +532,12 @@ class DashboardController extends Controller
             $simakStats = collect();
         }
 
-        // Capaian Semua Unit (Evaluated per year & triwulan filter)
+        // Capaian Semua Unit (Evaluated per year & triwulan filter, only active units)
         $unitTwParam = strtoupper($request->query('unit_tw', 'ALL'));
-        $unitsList = DB::table('v_fakultas_unit');
+        $unitsList = DB::table('v_fakultas_unit')
+            ->where(function($w) {
+                $w->whereNull('is_active')->orWhere('is_active', 1);
+            });
         if (!in_array($user->role ?? '', ['ADMIN', 'LPM'])) {
             $unitsList->whereIn('id', $scope);
         }
@@ -459,16 +578,21 @@ class DashboardController extends Controller
                 'total_laporan' => $rowsUnit->count(),
                 'total_lulusan' => $stat ? (int)$stat->total_lulusan : 0,
                 'avg_lama_kuliah' => $stat ? (float)$stat->avg_lama_kuliah : null,
+                'is_active' => (bool)($u->is_active ?? true),
             ];
         }
 
         $isAssigned = true;
-        if ($user && !in_array($user->role, ['ADMIN', 'LPM'])) {
+        if ($selectedUnitId) {
+            $isAssigned = !empty($assignedIkuIds);
+        } elseif ($user && !in_array($user->role, ['ADMIN', 'LPM'])) {
             $isAssigned = DB::table('penugasan_target')
                 ->where('fakultas_unit', $user->fakultas_unit)
-                ->where('tahun', $tahun)
-                ->whereNull('deleted_at')
-                ->exists();
+                ->whereNull('deleted_at');
+            if ($tahun !== 'ALL') {
+                $isAssigned->where('tahun', $tahun);
+            }
+            $isAssigned = $isAssigned->exists();
         }
 
         return [
@@ -478,7 +602,7 @@ class DashboardController extends Controller
             'sebaran_per_iku' => $sebaranPerIku,
             'capaian_per_unit' => $capaianPerUnit,
             'total_unit_terpantau' => count($scope),
-            'total_iku_dipantau' => $allIkuList->count(),
+            'total_iku_dipantau' => $selectedUnitId ? ($assignedIkuIds !== null ? count($assignedIkuIds) : 0) : $allIkuList->count(),
             'total_laporan' => $data->count(),
             'status_count' => $statusCount,
             'persentase_iku_tercapai' => $totalAdaData ? round(($totalTercapai / $totalAdaData) * 100, 1) : 0,
@@ -591,55 +715,88 @@ class DashboardController extends Controller
             return response()->json(['error' => 'Hanya LPM/Admin yang dapat mengakses antrean verifikasi.'], 403);
         }
 
-        $query = DB::table('template_capaian')
-            ->join('v_fakultas_unit', 'template_capaian.fakultas_unit', '=', 'v_fakultas_unit.id')
-            ->join('master_indikator', 'template_capaian.id_indikator', '=', 'master_indikator.id')
-            ->leftJoin('target_indikator_tahun', function($join) {
-                $join->on('template_capaian.id_indikator', '=', 'target_indikator_tahun.id_indikator')
-                     ->on('template_capaian.tahun', '=', 'target_indikator_tahun.tahun');
+        $triwulanFilter = $request->query('triwulan');
+        $isSingleTw = !empty($triwulanFilter) && $triwulanFilter !== 'ALL';
+
+        if ($isSingleTw) {
+            $twSubquery = "(SELECT '" . addslashes($triwulanFilter) . "' AS triwulan) AS tw";
+        } else {
+            $twSubquery = "(SELECT 'TW1' AS triwulan UNION ALL SELECT 'TW2' UNION ALL SELECT 'TW3' UNION ALL SELECT 'TW4') AS tw";
+        }
+
+        $query = DB::table('penugasan_target as pt')
+            ->crossJoin(DB::raw($twSubquery))
+            ->join('v_fakultas_unit as vfu', 'pt.fakultas_unit', '=', 'vfu.id')
+            ->join('master_indikator as mi', 'pt.id_indikator', '=', 'mi.id')
+            ->leftJoin('gdrive_folder_logs as gfl', function($join) {
+                $join->on('pt.fakultas_unit', '=', 'gfl.fakultas_unit')
+                     ->on('pt.tahun', '=', 'gfl.tahun')
+                     ->on('pt.id_indikator', '=', 'gfl.id_indikator');
+            })
+            ->leftJoin('target_indikator_tahun as tit', function($join) {
+                $join->on('pt.id_indikator', '=', 'tit.id_indikator')
+                     ->on('pt.tahun', '=', 'tit.tahun');
+            })
+            ->leftJoin('template_capaian as tc', function($join) {
+                $join->on('pt.fakultas_unit', '=', 'tc.fakultas_unit')
+                     ->on('pt.id_indikator', '=', 'tc.id_indikator')
+                     ->on('pt.tahun', '=', 'tc.tahun')
+                     ->on('tw.triwulan', '=', 'tc.triwulan');
+            })
+            ->whereNull('pt.deleted_at')
+            ->where(function($w) {
+                $w->whereNull('vfu.is_active')->orWhere('vfu.is_active', 1);
             })
             ->select(
-                'template_capaian.id as id_capaian',
-                'template_capaian.fakultas_unit',
-                'template_capaian.id_indikator',
-                'template_capaian.tahun',
-                'template_capaian.triwulan',
-                'template_capaian.nilai_capaian',
-                'template_capaian.file_url',
-                'template_capaian.status_validasi',
-                'template_capaian.diinput_oleh',
-                'template_capaian.alasan_penolakan',
-                'template_capaian.created_at',
-                'v_fakultas_unit.nama_fak_prod_unit as nama_unit',
-                'v_fakultas_unit.type as type_unit',
-                'master_indikator.iku as kode_iku',
-                'master_indikator.kategori as nama_iku',
-                'master_indikator.full_kategori',
-                'master_indikator.satuan',
-                'master_indikator.jenis_iku',
-                DB::raw('COALESCE(target_indikator_tahun.base_line, master_indikator.base_line) as base_line'),
-                DB::raw('COALESCE(target_indikator_tahun.target, master_indikator.target) as target')
-            )
-            ->orderBy("template_capaian.triwulan","asc")
-            ->orderBy("template_capaian.tahun","asc");
+                DB::raw("COALESCE(CAST(tc.id AS CHAR), CONCAT('pt_', pt.id, '_', tw.triwulan)) as id_capaian"),
+                'tc.id as real_capaian_id',
+                'pt.id as id_penugasan',
+                'pt.fakultas_unit',
+                'pt.id_indikator',
+                'pt.tahun',
+                'tw.triwulan',
+                DB::raw('COALESCE(tc.nilai_capaian, 0) as nilai_capaian'),
+                'tc.file_url',
+                DB::raw("COALESCE(tc.status_validasi, 'BELUM DIISI') as status_validasi"),
+                'tc.diinput_oleh',
+                'tc.alasan_penolakan',
+                'tc.created_at',
+                'vfu.nama_fak_prod_unit as nama_unit',
+                'vfu.type as type_unit',
+                'vfu.jenjang',
+                'vfu.fakultas',
+                'mi.iku as kode_iku',
+                'mi.kategori as nama_iku',
+                'mi.full_kategori',
+                'mi.satuan',
+                'mi.jenis_iku',
+                DB::raw('COALESCE(tit.base_line, mi.base_line) as base_line'),
+                DB::raw('COALESCE(tit.target, mi.target) as target')
+            );
 
         if ($request->filled('tahun') && $request->query('tahun') !== 'ALL') {
-            $query->where('template_capaian.tahun', $request->query('tahun'));
-        }
-        if ($request->filled('triwulan') && $request->query('triwulan') !== 'ALL') {
-            $query->where('template_capaian.triwulan', $request->query('triwulan'));
+            $query->where('pt.tahun', $request->query('tahun'));
         }
         if ($request->filled('unit')) {
-            $query->where('template_capaian.fakultas_unit', $request->query('unit'));
+            $query->where('pt.fakultas_unit', $request->query('unit'));
         }
         if ($request->filled('indikator')) {
-            $query->where('template_capaian.id_indikator', $request->query('indikator'));
+            $query->where('pt.id_indikator', $request->query('indikator'));
         }
         if ($request->filled('status') && $request->query('status') !== 'ALL') {
-            $query->where('template_capaian.status_validasi', $request->query('status'));
+            $statusVal = $request->query('status');
+            if ($statusVal === 'BELUM DIISI') {
+                $query->whereNull('tc.id');
+            } else {
+                $query->where('tc.status_validasi', $statusVal);
+            }
         }
 
-        $data = $query->orderBy('template_capaian.created_at', 'desc')->get();
+        $data = $query->orderBy('pt.tahun', 'desc')
+            ->orderBy('tw.triwulan', 'asc')
+            ->orderBy('vfu.nama_fak_prod_unit', 'asc')
+            ->orderByRaw('COALESCE(gfl.id, pt.id) asc')
+            ->get();
 
         return response()->json($data);
     }

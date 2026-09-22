@@ -74,6 +74,19 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                         <span className="material-symbols-outlined text-lg">assignment_ind</span>
                         <span className="text-[13px]">Penugasan Target</span>
                     </Link>
+
+                    <Link 
+                        href={route('management-unit')} 
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                            route().current('management-unit') 
+                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-lg">corporate_fare</span>
+                        <span className="text-[13px]">Manajemen Unit</span>
+                    </Link>
                 </>
             )}
 
@@ -127,6 +140,19 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                     <div className="px-4 py-1">
                         <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">PROFILE & ACCOUNTS</span>
                     </div>
+
+                    <Link 
+                        href={route('management-account')} 
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                            route().current('management-account') 
+                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
+                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-lg">manage_accounts</span>
+                        <span className="text-[13px]">Account</span>
+                    </Link>
 
                     <Link 
                         href={route('profile.edit')} 

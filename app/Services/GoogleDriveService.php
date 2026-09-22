@@ -118,16 +118,25 @@ class GoogleDriveService
     /**
      * Check if a folder exists by name under a parent folder (with memory cache)
      */
+    /**
+     * Check if a folder exists by name under a parent folder (with memory cache & persistent Laravel Cache)
+     */
     public function findFolder($name, $parentId = null)
     {
         $name = trim($name);
         $parentId = $parentId ?: $this->parentFolderId;
         if (empty($parentId)) return null;
 
-        $cacheKey = "{$parentId}_{$name}";
+        $cacheKey = "gdrive_fld_{$parentId}_" . md5($name);
 
         if (isset(self::$folderCache[$cacheKey])) {
             return self::$folderCache[$cacheKey];
+        }
+
+        $cachedId = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cachedId) {
+            self::$folderCache[$cacheKey] = $cachedId;
+            return $cachedId;
         }
 
         $accessToken = $this->getAccessToken();
@@ -150,13 +159,14 @@ class GoogleDriveService
 
         if ($folderId) {
             self::$folderCache[$cacheKey] = $folderId;
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $folderId, now()->addDays(30));
         }
 
         return $folderId;
     }
 
     /**
-     * Create a single folder in Google Drive (checks for existing folder first to prevent duplicates, thread-safe with flock)
+     * Create a single folder in Google Drive (thread-safe with atomic Cache lock + persistent Cache)
      */
     public function createFolder($name, $parentId = null)
     {
@@ -164,98 +174,93 @@ class GoogleDriveService
         $parentId = $parentId ?: $this->parentFolderId;
         if (empty($parentId)) return null;
 
-        $cacheKey = "{$parentId}_{$name}";
+        $cacheKey = "gdrive_fld_{$parentId}_" . md5($name);
+        $lockKey = "gdrive_lock_{$parentId}_" . md5($name);
 
         if (isset(self::$folderCache[$cacheKey])) {
             return self::$folderCache[$cacheKey];
         }
 
-        $lockPath = storage_path('app/gdrive_create.lock');
-        $fp = @fopen($lockPath, 'c+');
-        if ($fp) {
-            @flock($fp, LOCK_EX);
+        $cachedId = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cachedId) {
+            self::$folderCache[$cacheKey] = $cachedId;
+            return $cachedId;
         }
 
+        $lock = \Illuminate\Support\Facades\Cache::lock($lockKey, 30);
+
         try {
-            // Check again inside lock if folder already exists in Google Drive before creating
-            $existingId = $this->findFolder($name, $parentId);
-            if ($existingId) {
-                self::$folderCache[$cacheKey] = $existingId;
-                if ($fp) {
-                    @flock($fp, LOCK_UN);
-                    @fclose($fp);
+            return $lock->block(25, function () use ($name, $parentId, $cacheKey) {
+                // Re-check persistent cache inside lock
+                $cachedId = \Illuminate\Support\Facades\Cache::get($cacheKey);
+                if ($cachedId) {
+                    self::$folderCache[$cacheKey] = $cachedId;
+                    return $cachedId;
                 }
-                return $existingId;
-            }
 
-            $accessToken = $this->getAccessToken();
-            if (!$accessToken) {
-                if ($fp) {
-                    @flock($fp, LOCK_UN);
-                    @fclose($fp);
+                // Re-check Google Drive API inside lock
+                $existingId = $this->findFolder($name, $parentId);
+                if ($existingId) {
+                    self::$folderCache[$cacheKey] = $existingId;
+                    \Illuminate\Support\Facades\Cache::put($cacheKey, $existingId, now()->addDays(30));
+                    return $existingId;
                 }
-                return null;
-            }
 
-            $url = "https://www.googleapis.com/drive/v3/files";
-            $body = json_encode([
-                'name' => $name,
-                'mimeType' => 'application/vnd.google-apps.folder',
-                'parents' => [$parentId]
-            ]);
+                $accessToken = $this->getAccessToken();
+                if (!$accessToken) return null;
 
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                "Authorization: Bearer {$accessToken}",
-                "Content-Type: application/json"
-            ]);
-            $res = curl_exec($ch);
-            curl_close($ch);
+                $url = "https://www.googleapis.com/drive/v3/files";
+                $body = json_encode([
+                    'name' => $name,
+                    'mimeType' => 'application/vnd.google-apps.folder',
+                    'parents' => [$parentId]
+                ]);
 
-            $data = json_decode($res, true);
-            $folderId = $data['id'] ?? null;
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    "Authorization: Bearer {$accessToken}",
+                    "Content-Type: application/json"
+                ]);
+                $res = curl_exec($ch);
+                curl_close($ch);
 
-            if ($folderId) {
-                self::$folderCache[$cacheKey] = $folderId;
+                $data = json_decode($res, true);
+                $folderId = $data['id'] ?? null;
 
-                // Make created folder accessible via direct link
-                try {
-                    $urlPerm = "https://www.googleapis.com/drive/v3/files/{$folderId}/permissions";
-                    $chP = curl_init($urlPerm);
-                    curl_setopt($chP, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($chP, CURLOPT_CONNECTTIMEOUT, 5);
-                    curl_setopt($chP, CURLOPT_TIMEOUT, 10);
-                    curl_setopt($chP, CURLOPT_POST, true);
-                    curl_setopt($chP, CURLOPT_POSTFIELDS, json_encode([
-                        'role' => 'reader',
-                        'type' => 'anyone'
-                    ]));
-                    curl_setopt($chP, CURLOPT_HTTPHEADER, [
-                        "Authorization: Bearer {$accessToken}",
-                        "Content-Type: application/json"
-                    ]);
-                    curl_exec($chP);
-                    curl_close($chP);
-                } catch (\Throwable $eP) {}
-            }
+                if ($folderId) {
+                    self::$folderCache[$cacheKey] = $folderId;
+                    \Illuminate\Support\Facades\Cache::put($cacheKey, $folderId, now()->addDays(30));
 
-            if ($fp) {
-                @flock($fp, LOCK_UN);
-                @fclose($fp);
-            }
+                    // Make created folder accessible via direct link
+                    try {
+                        $urlPerm = "https://www.googleapis.com/drive/v3/files/{$folderId}/permissions";
+                        $chP = curl_init($urlPerm);
+                        curl_setopt($chP, CURLOPT_RETURNTRANSFER, true);
+                        curl_setopt($chP, CURLOPT_CONNECTTIMEOUT, 5);
+                        curl_setopt($chP, CURLOPT_TIMEOUT, 10);
+                        curl_setopt($chP, CURLOPT_POST, true);
+                        curl_setopt($chP, CURLOPT_POSTFIELDS, json_encode([
+                            'role' => 'reader',
+                            'type' => 'anyone'
+                        ]));
+                        curl_setopt($chP, CURLOPT_HTTPHEADER, [
+                            "Authorization: Bearer {$accessToken}",
+                            "Content-Type: application/json"
+                        ]);
+                        curl_exec($chP);
+                        curl_close($chP);
+                    } catch (\Throwable $eP) {}
+                }
 
-            return $folderId;
+                return $folderId;
+            });
         } catch (\Throwable $e) {
-            if ($fp) {
-                @flock($fp, LOCK_UN);
-                @fclose($fp);
-            }
-            throw $e;
+            return $this->findFolder($name, $parentId);
         }
     }
 
@@ -376,7 +381,9 @@ class GoogleDriveService
             $data = json_decode($res, true);
             foreach ($data['files'] ?? [] as $file) {
                 $names[] = $file['name'];
-                self::$folderCache["{$parentId}_{$file['name']}"] = $file['id'];
+                $cacheKey = "gdrive_fld_{$parentId}_" . md5($file['name']);
+                self::$folderCache[$cacheKey] = $file['id'];
+                \Illuminate\Support\Facades\Cache::put($cacheKey, $file['id'], now()->addDays(30));
             }
             $pageToken = $data['nextPageToken'] ?? null;
         } while ($pageToken);

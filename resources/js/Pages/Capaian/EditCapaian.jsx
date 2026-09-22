@@ -42,7 +42,7 @@ export default function EditCapaian() {
     };
 
     const activeTw = getActiveTriwulan();
-    const isTriwulanActive = (triwulan === activeTw);
+    const isTriwulanActive = true; // Seluruh periode triwulan (TW1 - TW4) dibuka untuk pengisian
 
     const [nilaiCapaian, setNilaiCapaian] = useState('');
     const [targetCapaian, setTargetCapaian] = useState('');
@@ -546,6 +546,23 @@ export default function EditCapaian() {
                                 <div><strong className="text-[#181c23]">Formula:</strong> {selectedIku.formula_text || '-'}</div>
                                 <div><strong className="text-[#181c23]">Satuan:</strong> {selectedIku.satuan}</div>
                                 <div><strong className="text-[#181c23]">Sumber data:</strong> {selectedIku.sumber_data || '-'}</div>
+
+                                {selectedIku.file_berkas && (
+                                    <div className="pt-1 flex flex-wrap items-center gap-2">
+                                        <strong className="text-[#181c23]">Berkas / Pedoman:</strong>
+                                        <a 
+                                            href={selectedIku.file_berkas} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 text-[#005bb1] font-bold hover:underline bg-[#005bb1]/10 border border-[#005bb1]/20 px-2.5 py-1 rounded-md text-[11px] transition-colors hover:bg-[#005bb1]/20"
+                                            title="Buka / Unduh Berkas Indikator"
+                                        >
+                                            <span className="material-symbols-outlined text-[15px]">description</span>
+                                            <span>{selectedIku.file_berkas.split('/').pop().replace(/^\d+_/, '') || 'Unduh Berkas'}</span>
+                                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                                        </a>
+                                    </div>
+                                )}
 
                                 {(selectedIku.file_justifikasi || selectedIku.catatan_justifikasi) && (
                                     <div className="pt-2 border-t border-[#c0c6d6]/20 mt-2 flex flex-col items-start gap-2.5">

@@ -60,8 +60,13 @@ class MasterController extends Controller
             $unitId = $user->fakultas_unit;
         }
         
-        $query = DB::table('master_indikator')
-            ->join('penugasan_target', 'master_indikator.id', '=', 'penugasan_target.id_indikator')
+        $query = DB::table('penugasan_target')
+            ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
+            ->leftJoin('gdrive_folder_logs', function($join) {
+                $join->on('penugasan_target.fakultas_unit', '=', 'gdrive_folder_logs.fakultas_unit')
+                     ->on('penugasan_target.tahun', '=', 'gdrive_folder_logs.tahun')
+                     ->on('penugasan_target.id_indikator', '=', 'gdrive_folder_logs.id_indikator');
+            })
             ->where('penugasan_target.fakultas_unit', $unitId)
             ->whereNull('penugasan_target.deleted_at');
 
@@ -69,7 +74,11 @@ class MasterController extends Controller
             $query->where('penugasan_target.tahun', $tahun);
         }
 
-        $indicators = $query->select('master_indikator.*')->distinct()->get();
+        $indicators = $query->select('master_indikator.*')
+            ->orderByRaw('COALESCE(gdrive_folder_logs.id, penugasan_target.id) ASC')
+            ->get()
+            ->unique('id')
+            ->values();
 
         $targetYear = $tahun ?: 2026;
 
@@ -211,9 +220,88 @@ class MasterController extends Controller
             return response()->json(['error' => 'Hanya Admin yang dapat menghapus master indikator.'], 403);
         }
 
+        $current = DB::table('master_indikator')->where('id', $id)->first();
+        if ($current && !empty($current->file_berkas)) {
+            $oldPath = public_path(ltrim($current->file_berkas, '/'));
+            if (file_exists($oldPath) && is_file($oldPath)) {
+                @unlink($oldPath);
+            }
+        }
+
         DB::table('master_indikator')->where('id', $id)->delete();
         DB::table('target_indikator_tahun')->where('id_indikator', $id)->delete();
         return response()->json(['message' => 'Indikator berhasil dihapus.']);
+    }
+
+    // Upload berkas/pedoman/template for master indicator (Menu 1: Management Indikator)
+    public function uploadBerkas(Request $request, $id)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat mengunggah berkas indikator.'], 403);
+        }
+
+        $request->validate([
+            'file_berkas' => 'required|file|mimes:pdf,xls,xlsx|max:5120',
+        ], [
+            'file_berkas.required' => 'File berkas wajib dipilih.',
+            'file_berkas.file' => 'Berkas yang diunggah tidak valid.',
+            'file_berkas.mimes' => 'Format file harus berupa PDF atau Excel (.pdf, .xls, .xlsx).',
+            'file_berkas.max' => 'Ukuran berkas maksimal adalah 5MB.',
+        ]);
+
+        $file = $request->file('file_berkas');
+        $filename = time() . '_' . preg_replace('/[^A-Za-z0-9_\.-]/', '_', $file->getClientOriginalName());
+        $uploadDir = public_path('uploads/berkas_indikator');
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $current = DB::table('master_indikator')->where('id', $id)->first();
+        if ($current && !empty($current->file_berkas)) {
+            $oldPath = public_path(ltrim($current->file_berkas, '/'));
+            if (file_exists($oldPath) && is_file($oldPath)) {
+                @unlink($oldPath);
+            }
+        }
+
+        $file->move($uploadDir, $filename);
+        $fileUrl = '/uploads/berkas_indikator/' . $filename;
+
+        DB::table('master_indikator')->where('id', $id)->update([
+            'file_berkas' => $fileUrl,
+            'updated_at' => now()
+        ]);
+
+        return response()->json([
+            'message' => 'Berkas indikator berhasil diunggah.',
+            'file_berkas' => $fileUrl,
+            'file_name' => $file->getClientOriginalName()
+        ]);
+    }
+
+    // Delete berkas from master indicator
+    public function deleteBerkas(Request $request, $id)
+    {
+        $user = $request->user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Hanya Admin yang dapat menghapus berkas indikator.'], 403);
+        }
+
+        $current = DB::table('master_indikator')->where('id', $id)->first();
+        if ($current && !empty($current->file_berkas)) {
+            $oldPath = public_path(ltrim($current->file_berkas, '/'));
+            if (file_exists($oldPath) && is_file($oldPath)) {
+                @unlink($oldPath);
+            }
+        }
+
+        DB::table('master_indikator')->where('id', $id)->update([
+            'file_berkas' => null,
+            'updated_at' => now()
+        ]);
+
+        return response()->json(['message' => 'Berkas indikator berhasil dihapus.']);
     }
 
     // Save justifikasi for indicator target per year (Menu 2: Management Target)
@@ -259,16 +347,21 @@ class MasterController extends Controller
         ]);
     }
 
-    // Fetch units from v_fakultas_unit view (Scoped per user role & unit)
+    // Fetch units from v_fakultas_unit view (Scoped per user role & unit, only active units)
     public function units(Request $request)
     {
         $user = $request->user();
+        $query = DB::table('v_fakultas_unit')
+            ->where(function($w) {
+                $w->whereNull('is_active')->orWhere('is_active', 1);
+            });
+
         if ($user) {
             $scope = $user->scopeUnits();
-            $data = DB::table('v_fakultas_unit')->whereIn('id', $scope)->get();
-            return response()->json($data);
+            $query->whereIn('id', $scope);
         }
-        $data = DB::table('v_fakultas_unit')->get();
+
+        $data = $query->get();
         return response()->json($data);
     }
 

@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'role',
         'fakultas_unit',
+        'is_active',
     ];
 
     /**
@@ -45,6 +46,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -54,7 +56,12 @@ class User extends Authenticatable
     public function scopeUnits(): array
     {
         if (in_array($this->role, ['LPM', 'ADMIN'])) {
-            return DB::table('v_fakultas_unit')->pluck('id')->toArray();
+            return DB::table('v_fakultas_unit')
+                ->where(function($w) {
+                    $w->whereNull('is_active')->orWhere('is_active', 1);
+                })
+                ->pluck('id')
+                ->toArray();
         }
 
         if (!$this->fakultas_unit) {
@@ -65,8 +72,13 @@ class User extends Authenticatable
             $faculty = DB::table('v_fakultas_unit')->where('id', $this->fakultas_unit)->first();
             if ($faculty) {
                 return DB::table('v_fakultas_unit')
-                    ->where('id', $this->fakultas_unit)
-                    ->orWhere('fakultas', $faculty->nama_fak_prod_unit)
+                    ->where(function($w) {
+                        $w->whereNull('is_active')->orWhere('is_active', 1);
+                    })
+                    ->where(function($q) use ($faculty) {
+                        $q->where('id', $this->fakultas_unit)
+                          ->orWhere('fakultas', $faculty->nama_fak_prod_unit);
+                    })
                     ->pluck('id')
                     ->toArray();
             }

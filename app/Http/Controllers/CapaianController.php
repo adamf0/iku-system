@@ -289,6 +289,11 @@ class CapaianController extends Controller
         $query = DB::table('penugasan_target')
             ->join('v_fakultas_unit', 'penugasan_target.fakultas_unit', '=', 'v_fakultas_unit.id')
             ->join('master_indikator', 'penugasan_target.id_indikator', '=', 'master_indikator.id')
+            ->leftJoin('gdrive_folder_logs', function($join) {
+                $join->on('penugasan_target.fakultas_unit', '=', 'gdrive_folder_logs.fakultas_unit')
+                     ->on('penugasan_target.tahun', '=', 'gdrive_folder_logs.tahun')
+                     ->on('penugasan_target.id_indikator', '=', 'gdrive_folder_logs.id_indikator');
+            })
             ->select(
                 'penugasan_target.id',
                 'penugasan_target.fakultas_unit',
@@ -306,7 +311,14 @@ class CapaianController extends Controller
             $query->whereNull('penugasan_target.deleted_at');
         }
 
-        $data = $query->get();
+        if ($request->filled('unit')) {
+            $query->where('penugasan_target.fakultas_unit', $request->query('unit'));
+        }
+        if ($request->filled('tahun')) {
+            $query->where('penugasan_target.tahun', $request->query('tahun'));
+        }
+
+        $data = $query->orderByRaw('COALESCE(gdrive_folder_logs.id, penugasan_target.id) ASC')->get();
         return response()->json($data);
     }
 
@@ -380,6 +392,8 @@ class CapaianController extends Controller
                 });
             }
         }
+
+        $query->orderByRaw('COALESCE(gdrive_folder_logs.id, penugasan_target.id) ASC');
 
         return new StreamedResponse(function () use ($query) {
             if (ob_get_level() > 0) {
@@ -490,6 +504,10 @@ class CapaianController extends Controller
                 ->where('tahun', $tahun)
                 ->where('id_indikator', $indId)
                 ->first();
+
+            if ($existingLog && $existingLog->status === 'CREATED' && !empty($existingLog->folder_url)) {
+                continue;
+            }
 
             $history = [];
             if ($existingLog && !empty($existingLog->history)) {

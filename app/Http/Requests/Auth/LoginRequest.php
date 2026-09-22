@@ -50,7 +50,20 @@ class LoginRequest extends FormRequest
             'password' => $this->input('password')
         ];
 
-        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
+        // Check user active status first if credentials match
+        $userModel = \App\Models\User::where($field, $login)->first();
+        if ($userModel && !\Illuminate\Support\Facades\Hash::check($this->input('password'), $userModel->password)) {
+            $userModel = null;
+        }
+
+        if ($userModel && !$userModel->is_active) {
+            RateLimiter::hit($this->throttleKey());
+            throw ValidationException::withMessages([
+                'login' => 'Akun Anda berstatus non-aktif. Silakan hubungi Administrator.',
+            ]);
+        }
+
+        if (! Auth::attempt(array_merge($credentials, ['is_active' => true]), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

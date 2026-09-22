@@ -90,22 +90,22 @@ export default function Reporting() {
                             { id: 'TW3', name: 'TW3 Reporting', dateRange: 'Juli – September' },
                             { id: 'TW4', name: 'TW4 Reporting', dateRange: 'Oktober – Desember' }
                         ].map((twItem, idx) => {
-                            const isActive = (twItem.id === activeTw);
+                            const isCurrent = (twItem.id === activeTw);
                             return (
                                 <div 
                                     key={twItem.id} 
                                     className={`bg-white rounded-2xl border shadow-sm p-6 flex flex-col justify-between h-60 transition-all ${
-                                        isActive ? 'border-[#005bb1] ring-2 ring-[#005bb1]/20' : 'border-[#c0c6d6]/20 opacity-85'
+                                        isCurrent ? 'border-[#005bb1] ring-2 ring-[#005bb1]/20' : 'border-[#c0c6d6]/20 hover:border-[#005bb1]/40'
                                     }`}
                                 >
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
                                             <span className="text-[10px] font-bold text-[#717785] uppercase tracking-wider">TRIWULAN {idx + 1}</span>
-                                            {isActive ? (
+                                            {isCurrent ? (
                                                 <span className="bg-indigo-100 text-indigo-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">IN PROGRESS</span>
                                             ) : (
-                                                <span className="bg-gray-100 text-gray-500 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                                    <span className="material-symbols-outlined text-[10px]">lock</span> TERKUNCI
+                                                <span className="bg-emerald-100 text-emerald-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[11px]">lock_open</span> DIBUKA
                                                 </span>
                                             )}
                                         </div>
@@ -113,22 +113,16 @@ export default function Reporting() {
                                         <p className="text-xs text-[#535f71]">Periode: <span className="font-semibold text-[#181c23]">{twItem.dateRange}</span></p>
                                     </div>
 
-                                    {isActive ? (
-                                        <Link 
-                                            href={route('capaian.edit') + `?triwulan=${twItem.id}`}
-                                            className="w-full bg-[#005bb1] text-white text-xs font-extrabold py-3 rounded-xl block text-center hover:bg-[#0073dd] transition-all uppercase tracking-wider shadow-sm"
-                                        >
-                                            Isi Capaian {twItem.id}
-                                        </Link>
-                                    ) : (
-                                        <button 
-                                            disabled
-                                            className="w-full bg-gray-100 text-gray-400 text-xs font-bold py-3 rounded-xl block text-center uppercase tracking-wider cursor-not-allowed opacity-60"
-                                            title="Periode pengisian ini belum aktif atau telah ditutup."
-                                        >
-                                            Isi Capaian {twItem.id}
-                                        </button>
-                                    )}
+                                    <Link 
+                                        href={route('capaian.edit') + `?triwulan=${twItem.id}`}
+                                        className={`w-full text-white text-xs font-extrabold py-3 rounded-xl block text-center transition-all uppercase tracking-wider shadow-sm ${
+                                            isCurrent 
+                                                ? 'bg-[#005bb1] hover:bg-[#0073dd]' 
+                                                : 'bg-[#005bb1]/90 hover:bg-[#005bb1]'
+                                        }`}
+                                    >
+                                        Isi Capaian {twItem.id}
+                                    </Link>
                                 </div>
                             );
                         })}

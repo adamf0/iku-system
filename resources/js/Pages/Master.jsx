@@ -23,8 +23,88 @@ export default function Master() {
         satuan: '',
         jenis_iku: 'WAJIB',
         formula_text: '',
-        sumber_data: ''
+        sumber_data: '',
+        file_berkas: null
     });
+
+    // Modal Upload Berkas State
+    const [uploadModalIku, setUploadModalIku] = useState(null);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState('');
+
+    const handleOpenUploadModal = (iku) => {
+        setUploadModalIku(iku);
+        setSelectedFile(null);
+        setUploadError('');
+    };
+
+    const handleCloseUploadModal = () => {
+        setUploadModalIku(null);
+        setSelectedFile(null);
+        setUploadError('');
+        setIsUploading(false);
+    };
+
+    const handleUploadBerkas = (e) => {
+        e.preventDefault();
+        if (!selectedFile || !uploadModalIku) return;
+
+        const allowedExtensions = ['pdf', 'xls', 'xlsx'];
+        const fileExt = selectedFile.name.split('.').pop().toLowerCase();
+        if (!allowedExtensions.includes(fileExt)) {
+            setUploadError('Hanya file berkas PDF dan Excel (.pdf, .xls, .xlsx) yang diperbolehkan.');
+            return;
+        }
+
+        if (selectedFile.size > 5 * 1024 * 1024) {
+            setUploadError('Ukuran berkas tidak boleh melebihi 5MB.');
+            return;
+        }
+
+        setIsUploading(true);
+        setUploadError('');
+
+        const data = new FormData();
+        data.append('file_berkas', selectedFile);
+
+        axios.post(`/api/master/iku/${uploadModalIku.id}/berkas`, data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        .then(res => {
+            setIsUploading(false);
+            alert('Berkas indikator berhasil diunggah!');
+            const newUrl = res.data.file_berkas;
+            setIkus(prev => prev.map(item => item.id === uploadModalIku.id ? { ...item, file_berkas: newUrl } : item));
+            setUploadModalIku(prev => prev ? { ...prev, file_berkas: newUrl } : null);
+            setSelectedFile(null);
+            loadData();
+        })
+        .catch(err => {
+            setIsUploading(false);
+            const msg = err.response?.data?.message || err.response?.data?.error || 'Gagal mengunggah berkas.';
+            setUploadError(msg);
+        });
+    };
+
+    const handleDeleteBerkas = () => {
+        if (!uploadModalIku || !uploadModalIku.file_berkas) return;
+        if (!confirm('Apakah anda yakin ingin menghapus berkas indikator ini?')) return;
+
+        setIsUploading(true);
+        axios.delete(`/api/master/iku/${uploadModalIku.id}/berkas`)
+        .then(() => {
+            setIsUploading(false);
+            alert('Berkas berhasil dihapus.');
+            setIkus(prev => prev.map(item => item.id === uploadModalIku.id ? { ...item, file_berkas: null } : item));
+            setUploadModalIku(prev => prev ? { ...prev, file_berkas: null } : null);
+            loadData();
+        })
+        .catch(err => {
+            setIsUploading(false);
+            alert(err.response?.data?.error || 'Gagal menghapus berkas.');
+        });
+    };
 
     useEffect(() => {
         loadData();
@@ -58,7 +138,8 @@ export default function Master() {
             satuan: '%',
             jenis_iku: 'WAJIB',
             formula_text: '',
-            sumber_data: ''
+            sumber_data: '',
+            file_berkas: null
         });
     };
 
@@ -73,7 +154,8 @@ export default function Master() {
             satuan: iku.satuan || '',
             jenis_iku: iku.jenis_iku || 'WAJIB',
             formula_text: iku.formula_text || '',
-            sumber_data: iku.sumber_data || ''
+            sumber_data: iku.sumber_data || '',
+            file_berkas: iku.file_berkas || null
         });
     };
 
@@ -200,11 +282,42 @@ export default function Master() {
                                                                     <h4 className="text-sm font-bold text-[#181c23]">{iku.kategori}</h4>
                                                                     {renderJenisBadge(iku.jenis_iku)}
                                                                 </div>
-                                                                <p className="text-[10px] text-[#717785] font-semibold uppercase mt-0.5">Satuan: {iku.satuan} • Baseline: {iku.base_line || '-'} • Target: {iku.target || '-'}</p>
+                                                                <p className="text-[10px] text-[#717785] font-semibold uppercase mt-0.5 flex flex-wrap items-center gap-2">
+                                                                    <span>Satuan: {iku.satuan} • Baseline: {iku.base_line || '-'} • Target: {iku.target || '-'}</span>
+                                                                    {iku.file_berkas && (
+                                                                        <a 
+                                                                            href={iku.file_berkas} 
+                                                                            target="_blank" 
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center gap-1 text-[#005bb1] hover:underline bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold normal-case"
+                                                                            title="Buka Berkas"
+                                                                        >
+                                                                            <span className="material-symbols-outlined text-[13px]">attachment</span>
+                                                                            <span>Berkas: {iku.file_berkas.split('/').pop().replace(/^\d+_/, '')}</span>
+                                                                            <span className="material-symbols-outlined text-[11px]">open_in_new</span>
+                                                                        </a>
+                                                                    )}
+                                                                </p>
                                                             </div>
                                                         </div>
                                                         {user.role === 'ADMIN' && (
-                                                            <div className="flex items-center gap-2">
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => handleOpenUploadModal(iku)}
+                                                                    className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-all ${
+                                                                        iku.file_berkas 
+                                                                            ? 'text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100' 
+                                                                            : 'text-[#005bb1] bg-[#005bb1]/10 border-[#005bb1]/30 hover:bg-[#005bb1]/20'
+                                                                    }`}
+                                                                    title={iku.file_berkas ? 'Lihat / Kelola Berkas' : 'Upload Berkas Indikator'}
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[15px]">
+                                                                        {iku.file_berkas ? 'task' : 'upload_file'}
+                                                                    </span>
+                                                                    <span>{iku.file_berkas ? 'Berkas Ada' : 'Upload Berkas'}</span>
+                                                                </button>
+                                                                <span className="text-[#c0c6d6]">|</span>
                                                                 <button 
                                                                     onClick={() => handleEditClick(iku)}
                                                                     className="text-xs font-bold text-[#005bb1] hover:underline"
@@ -235,10 +348,39 @@ export default function Master() {
                                                                                 <span className="text-[#535f71] font-semibold">{sub.kategori}</span>
                                                                                 {renderJenisBadge(sub.jenis_iku)}
                                                                                 <span className="text-[10px] text-[#717785] ml-2">(Satuan: {sub.satuan} • B: {sub.base_line || '-'} • T: {sub.target || '-'})</span>
+                                                                                {sub.file_berkas && (
+                                                                                    <a 
+                                                                                        href={sub.file_berkas} 
+                                                                                        target="_blank" 
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="inline-flex items-center gap-1 text-[#005bb1] hover:underline bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2"
+                                                                                        title="Buka Berkas"
+                                                                                    >
+                                                                                        <span className="material-symbols-outlined text-[11px]">attachment</span>
+                                                                                        <span>Berkas</span>
+                                                                                    </a>
+                                                                                )}
                                                                             </div>
                                                                             {user.role === 'ADMIN' && (
-                                                                                <div className="flex items-center gap-2 font-bold">
+                                                                                <div className="flex items-center gap-2 font-bold flex-shrink-0">
+                                                                                    <button 
+                                                                                        type="button"
+                                                                                        onClick={() => handleOpenUploadModal(sub)}
+                                                                                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border transition-all ${
+                                                                                            sub.file_berkas 
+                                                                                                ? 'text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100' 
+                                                                                                : 'text-[#005bb1] bg-[#005bb1]/10 border-[#005bb1]/30 hover:bg-[#005bb1]/20'
+                                                                                        }`}
+                                                                                        title={sub.file_berkas ? 'Lihat / Kelola Berkas' : 'Upload Berkas'}
+                                                                                    >
+                                                                                        <span className="material-symbols-outlined text-[13px]">
+                                                                                            {sub.file_berkas ? 'task' : 'upload_file'}
+                                                                                        </span>
+                                                                                        <span>{sub.file_berkas ? 'Berkas Ada' : 'Upload Berkas'}</span>
+                                                                                    </button>
+                                                                                    <span className="text-[#c0c6d6]">|</span>
                                                                                     <button onClick={() => handleEditClick(sub)} className="text-[#005bb1] hover:underline text-[10px]">Edit</button>
+                                                                                    <span className="text-[#c0c6d6]">|</span>
                                                                                     <button onClick={() => handleDeleteClick(sub.id)} className="text-red-600 hover:underline text-[10px]">Hapus</button>
                                                                                 </div>
                                                                             )}
@@ -254,10 +396,39 @@ export default function Master() {
                                                                                             <span className="text-[#535f71]">{ss.kategori}</span>
                                                                                             {renderJenisBadge(ss.jenis_iku)}
                                                                                             <span className="text-[9px] text-[#717785] ml-2">(B: {ss.base_line || '-'} • T: {ss.target || '-'})</span>
+                                                                                            {ss.file_berkas && (
+                                                                                                <a 
+                                                                                                    href={ss.file_berkas} 
+                                                                                                    target="_blank" 
+                                                                                                    rel="noopener noreferrer"
+                                                                                                    className="inline-flex items-center gap-0.5 text-[#005bb1] hover:underline bg-blue-50 border border-blue-200 px-1 py-0.5 rounded text-[8px] font-bold ml-1.5"
+                                                                                                    title="Buka Berkas"
+                                                                                                >
+                                                                                                    <span className="material-symbols-outlined text-[10px]">attachment</span>
+                                                                                                    <span>Berkas</span>
+                                                                                                </a>
+                                                                                            )}
                                                                                         </div>
                                                                                         {user.role === 'ADMIN' && (
-                                                                                            <div className="flex items-center gap-2 font-bold text-[9px]">
+                                                                                            <div className="flex items-center gap-1.5 font-bold text-[9px] flex-shrink-0">
+                                                                                                <button 
+                                                                                                    type="button"
+                                                                                                    onClick={() => handleOpenUploadModal(ss)}
+                                                                                                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border transition-all ${
+                                                                                                        ss.file_berkas 
+                                                                                                            ? 'text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100' 
+                                                                                                            : 'text-[#005bb1] bg-[#005bb1]/10 border-[#005bb1]/30 hover:bg-[#005bb1]/20'
+                                                                                                    }`}
+                                                                                                    title={ss.file_berkas ? 'Lihat / Kelola Berkas' : 'Upload Berkas'}
+                                                                                                >
+                                                                                                    <span className="material-symbols-outlined text-[12px]">
+                                                                                                        {ss.file_berkas ? 'task' : 'upload_file'}
+                                                                                                    </span>
+                                                                                                    <span>{ss.file_berkas ? 'Berkas' : 'Upload'}</span>
+                                                                                                </button>
+                                                                                                <span className="text-[#c0c6d6]">|</span>
                                                                                                 <button onClick={() => handleEditClick(ss)} className="text-[#005bb1] hover:underline">Edit</button>
+                                                                                                <span className="text-[#c0c6d6]">|</span>
                                                                                                 <button onClick={() => handleDeleteClick(ss.id)} className="text-red-600 hover:underline">Hapus</button>
                                                                                             </div>
                                                                                         )}
@@ -392,6 +563,46 @@ export default function Master() {
                                 />
                             </div>
 
+                            {!isCreate && editingIkuId && (
+                                <div className="space-y-1.5 pt-2 border-t border-[#c0c6d6]/20">
+                                    <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">Berkas / Dokumen Pendukung</label>
+                                    {formData.file_berkas ? (
+                                        <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs">
+                                            <div className="flex items-center gap-2 truncate">
+                                                <span className="material-symbols-outlined text-emerald-600 text-lg flex-shrink-0">description</span>
+                                                <a href={formData.file_berkas} target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-800 hover:underline truncate">
+                                                    {formData.file_berkas.split('/').pop().replace(/^\d+_/, '')}
+                                                </a>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const ikuObj = ikus.find(i => i.id === editingIkuId);
+                                                    if (ikuObj) handleOpenUploadModal(ikuObj);
+                                                }}
+                                                className="text-[11px] font-bold text-[#005bb1] hover:underline flex-shrink-0 ml-2"
+                                            >
+                                                Kelola Berkas
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-[#717785]">
+                                            <span>Belum ada berkas pendukung terunggah.</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const ikuObj = ikus.find(i => i.id === editingIkuId);
+                                                    if (ikuObj) handleOpenUploadModal(ikuObj);
+                                                }}
+                                                className="text-[11px] font-bold text-[#005bb1] hover:underline"
+                                            >
+                                                Upload Sekarang
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="pt-6 border-t border-[#c0c6d6]/10 flex justify-end gap-3">
                                 <button 
                                     type="button"
@@ -405,6 +616,184 @@ export default function Master() {
                                     className="px-6 py-2.5 rounded-lg bg-[#005bb1] text-white font-bold text-xs hover:bg-[#0073dd] shadow-sm uppercase tracking-wider"
                                 >
                                     SIMPAN
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Upload Berkas Modal Dialog */}
+            {uploadModalIku && (
+                <div className="fixed inset-0 bg-[#181c23]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#c0c6d6]/20 relative">
+                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-[#c0c6d6]/20">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[#005bb1] text-2xl">upload_file</span>
+                                <h3 className="text-base font-bold text-[#181c23]">
+                                    Upload Berkas Indikator
+                                </h3>
+                            </div>
+                            <button 
+                                onClick={handleCloseUploadModal}
+                                className="text-[#717785] hover:text-[#181c23] p-1 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="mb-4 bg-[#f9f9ff] p-3.5 rounded-xl border border-[#c0c6d6]/20 text-xs">
+                            <div className="font-bold text-[#005bb1] flex items-center gap-1.5 mb-1">
+                                <span className="bg-[#005bb1]/10 px-2 py-0.5 rounded text-[11px] font-bold">{uploadModalIku.iku}</span>
+                                <span className="truncate">{uploadModalIku.kategori}</span>
+                            </div>
+                            <p className="text-[#535f71] text-[11px] mt-1">
+                                Berkas yang diunggah akan dapat diakses dan diunduh oleh unit saat mengisi capaian di halaman Capaian (tepat di bawah Sumber Data).
+                            </p>
+                        </div>
+
+                        {/* Current File if exists */}
+                        {uploadModalIku.file_berkas && (
+                            <div className="mb-4 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                                <div className="text-[11px] font-bold text-emerald-900 mb-1.5 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-emerald-600 text-base">verified</span>
+                                    Berkas Terpasang Saat Ini:
+                                </div>
+                                <div className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-emerald-100">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <span className="material-symbols-outlined text-[#005bb1] text-lg flex-shrink-0">description</span>
+                                        <a 
+                                            href={uploadModalIku.file_berkas} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-bold text-[#005bb1] hover:underline truncate"
+                                            title="Buka file"
+                                        >
+                                            {uploadModalIku.file_berkas.split('/').pop().replace(/^\d+_/, '')}
+                                        </a>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <a 
+                                            href={uploadModalIku.file_berkas} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] font-bold text-[#005bb1] hover:underline px-2.5 py-1 bg-[#005bb1]/10 rounded-md flex items-center gap-1"
+                                        >
+                                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                                            Buka
+                                        </a>
+                                        <button
+                                            type="button"
+                                            disabled={isUploading}
+                                            onClick={handleDeleteBerkas}
+                                            className="text-[11px] font-bold text-red-600 hover:underline px-2.5 py-1 bg-red-50 rounded-md flex items-center gap-1"
+                                        >
+                                            <span className="material-symbols-outlined text-[13px]">delete</span>
+                                            Hapus
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Upload Form */}
+                        <form onSubmit={handleUploadBerkas} className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-[#535f71] uppercase tracking-wider block">
+                                    {uploadModalIku.file_berkas ? 'Ganti dengan Berkas Baru' : 'Pilih File Berkas / Template / Pedoman'}
+                                </label>
+                                <div className="border-2 border-dashed border-[#c0c6d6] hover:border-[#005bb1] rounded-xl p-5 text-center transition-colors bg-[#f9f9ff]">
+                                    <input
+                                        type="file"
+                                        id="modal_file_berkas_input"
+                                        onChange={(e) => {
+                                            const file = e.target.files[0] || null;
+                                            if (file) {
+                                                const allowedExtensions = ['pdf', 'xls', 'xlsx'];
+                                                const ext = file.name.split('.').pop().toLowerCase();
+                                                if (!allowedExtensions.includes(ext)) {
+                                                    setUploadError('Hanya file PDF dan Excel (.pdf, .xls, .xlsx) yang diperbolehkan.');
+                                                    setSelectedFile(null);
+                                                    e.target.value = '';
+                                                    return;
+                                                }
+                                                if (file.size > 5 * 1024 * 1024) {
+                                                    setUploadError('Ukuran file melebihi batas maksimal 5MB.');
+                                                    setSelectedFile(null);
+                                                    e.target.value = '';
+                                                    return;
+                                                }
+                                            }
+                                            setUploadError('');
+                                            setSelectedFile(file);
+                                        }}
+                                        className="hidden"
+                                        accept=".pdf,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    />
+                                    <label 
+                                        htmlFor="modal_file_berkas_input" 
+                                        className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
+                                    >
+                                        <span className="material-symbols-outlined text-3xl text-[#005bb1]">
+                                            {selectedFile ? 'task_alt' : 'cloud_upload'}
+                                        </span>
+                                        {selectedFile ? (
+                                            <div className="text-xs font-bold text-[#181c23]">
+                                                <p className="text-emerald-700">{selectedFile.name}</p>
+                                                <p className="text-[10px] text-[#717785] font-normal">
+                                                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <span className="text-xs font-bold text-[#005bb1] hover:underline">
+                                                    Pilih file dari komputer
+                                                </span>
+                                                <span className="text-[10px] text-[#717785]">
+                                                    Format: PDF atau Excel (.pdf, .xls, .xlsx) (Maks. 5MB)
+                                                </span>
+                                            </>
+                                        )}
+                                    </label>
+                                </div>
+                            </div>
+
+                            {uploadError && (
+                                <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-600 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[16px]">error</span>
+                                    <span>{uploadError}</span>
+                                </div>
+                            )}
+
+                            <div className="pt-3 border-t border-[#c0c6d6]/10 flex justify-end gap-2.5">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseUploadModal}
+                                    disabled={isUploading}
+                                    className="px-4 py-2 rounded-lg border border-[#c0c6d6] text-[#535f71] font-bold text-xs hover:bg-[#f1f3fe]"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={!selectedFile || isUploading}
+                                    className={`px-5 py-2 rounded-lg text-white font-bold text-xs flex items-center gap-1.5 shadow-sm uppercase tracking-wider ${
+                                        !selectedFile || isUploading
+                                            ? 'bg-gray-400 cursor-not-allowed'
+                                            : 'bg-[#005bb1] hover:bg-[#0073dd]'
+                                    }`}
+                                >
+                                    {isUploading ? (
+                                        <>
+                                            <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                            <span>Mengunggah...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined text-[16px]">upload</span>
+                                            <span>{uploadModalIku.file_berkas ? 'Simpan & Ganti' : 'Unggah Berkas'}</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </form>
