@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 
 export default function SearchableSelect({ 
     options = [], 
@@ -103,63 +102,11 @@ export default function SearchableSelect({
         onChange([]);
     };
 
-    const [dropdownStyle, setDropdownStyle] = useState(null);
-    const dropdownRef = useRef(null);
-
-    const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
-
-    const updatePosition = () => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const spaceAbove = rect.top;
-
-        let openUp = false;
-        if (direction === 'up') {
-            openUp = true;
-        } else if (direction === 'down') {
-            openUp = false;
-        } else if (spaceBelow < 260 && spaceAbove > spaceBelow) {
-            openUp = true;
-        }
-
-        const style = {
-            position: 'fixed',
-            left: `${rect.left}px`,
-            width: `${rect.width}px`,
-            zIndex: 99999,
-        };
-
-        if (openUp) {
-            style.bottom = `${window.innerHeight - rect.top + 6}px`;
-        } else {
-            style.top = `${rect.bottom + 6}px`;
-        }
-
-        setDropdownStyle(style);
-    };
-
-    useIsomorphicLayoutEffect(() => {
-        if (isOpen) {
-            updatePosition();
-            window.addEventListener('resize', updatePosition);
-            window.addEventListener('scroll', updatePosition, true);
-            return () => {
-                window.removeEventListener('resize', updatePosition);
-                window.removeEventListener('scroll', updatePosition, true);
-            };
-        } else {
-            setDropdownStyle(null);
-        }
-    }, [isOpen, direction]);
+    const [openUpwards, setOpenUpwards] = useState(false);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            if (
-                containerRef.current && !containerRef.current.contains(e.target) &&
-                dropdownRef.current && !dropdownRef.current.contains(e.target)
-            ) {
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
                 setIsOpen(false);
             }
         };
@@ -175,6 +122,55 @@ export default function SearchableSelect({
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [isOpen]);
+
+    const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+    useIsomorphicLayoutEffect(() => {
+        if (!isOpen || !containerRef.current) {
+            setOpenUpwards(false);
+            return;
+        }
+
+        if (direction === 'up') {
+            setOpenUpwards(true);
+            return;
+        }
+        if (direction === 'down') {
+            setOpenUpwards(false);
+            return;
+        }
+
+        const rect = containerRef.current.getBoundingClientRect();
+        
+        // Find nearest modal card, dialog, or form container
+        const modalEl = containerRef.current.closest('form, [role="dialog"], .rounded-2xl, .fixed > div');
+        
+        const spaceBelowWindow = window.innerHeight - rect.bottom;
+        const spaceAboveWindow = rect.top;
+
+        if (modalEl) {
+            const modalRect = modalEl.getBoundingClientRect();
+            const modalSpaceBelow = modalRect.bottom - rect.bottom;
+            const modalSpaceAbove = rect.top - modalRect.top;
+            
+            // If inside a bounded modal/form and space below is tight (< 220px) with more space above
+            if (modalSpaceBelow < 220 && modalSpaceAbove > modalSpaceBelow) {
+                setOpenUpwards(true);
+                return;
+            }
+            if (modalSpaceBelow >= 220) {
+                setOpenUpwards(false);
+                return;
+            }
+        }
+
+        // Fallback for full page window
+        if (spaceBelowWindow < 260 && spaceAboveWindow > spaceBelowWindow) {
+            setOpenUpwards(true);
+        } else {
+            setOpenUpwards(false);
+        }
+    }, [isOpen, direction]);
 
     const renderTriggerLabel = () => {
         if (isMulti) {
