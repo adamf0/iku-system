@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function SearchableSelect({ 
     options = [], 
@@ -10,7 +11,8 @@ export default function SearchableSelect({
     disabled = false,
     className = "",
     searchPlaceholder = "Cari...",
-    isMulti = false
+    isMulti = false,
+    direction = "auto"
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -101,15 +103,78 @@ export default function SearchableSelect({
         onChange([]);
     };
 
+    const [dropdownStyle, setDropdownStyle] = useState(null);
+    const dropdownRef = useRef(null);
+
+    const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+    const updatePosition = () => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        let openUp = false;
+        if (direction === 'up') {
+            openUp = true;
+        } else if (direction === 'down') {
+            openUp = false;
+        } else if (spaceBelow < 260 && spaceAbove > spaceBelow) {
+            openUp = true;
+        }
+
+        const style = {
+            position: 'fixed',
+            left: `${rect.left}px`,
+            width: `${rect.width}px`,
+            zIndex: 99999,
+        };
+
+        if (openUp) {
+            style.bottom = `${window.innerHeight - rect.top + 6}px`;
+        } else {
+            style.top = `${rect.bottom + 6}px`;
+        }
+
+        setDropdownStyle(style);
+    };
+
+    useIsomorphicLayoutEffect(() => {
+        if (isOpen) {
+            updatePosition();
+            window.addEventListener('resize', updatePosition);
+            window.addEventListener('scroll', updatePosition, true);
+            return () => {
+                window.removeEventListener('resize', updatePosition);
+                window.removeEventListener('scroll', updatePosition, true);
+            };
+        } else {
+            setDropdownStyle(null);
+        }
+    }, [isOpen, direction]);
+
     useEffect(() => {
         const handleClickOutside = (e) => {
-            if (containerRef.current && !containerRef.current.contains(e.target)) {
+            if (
+                containerRef.current && !containerRef.current.contains(e.target) &&
+                dropdownRef.current && !dropdownRef.current.contains(e.target)
+            ) {
+                setIsOpen(false);
+            }
+        };
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen) {
                 setIsOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen]);
 
     const renderTriggerLabel = () => {
         if (isMulti) {
@@ -142,7 +207,7 @@ export default function SearchableSelect({
     const hasValue = !isMulti && value !== '' && value !== null && value !== undefined && String(value) !== '';
 
     return (
-        <div className={`relative w-full ${className}`} ref={containerRef}>
+        <div className={`relative w-full ${isOpen ? 'z-50' : ''} ${className}`} ref={containerRef}>
             <button
                 type="button"
                 disabled={disabled}
@@ -174,7 +239,7 @@ export default function SearchableSelect({
             </button>
 
             {isOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#c0c6d6]/60 rounded-xl shadow-xl z-50 overflow-hidden py-2 max-h-80 flex flex-col">
+                <div className={`absolute left-0 right-0 ${openUpwards ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} bg-white border border-[#c0c6d6]/60 rounded-xl shadow-xl z-50 overflow-hidden py-2 max-h-60 flex flex-col`}>
                     <div className="px-3 pb-2 border-b border-[#c0c6d6]/20 space-y-2">
                         <div className="relative flex items-center">
                             <span className="material-symbols-outlined absolute left-2.5 text-[#717785] text-[16px]">search</span>

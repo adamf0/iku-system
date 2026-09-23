@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class UnitController extends Controller
 {
@@ -54,15 +55,29 @@ class UnitController extends Controller
             return response()->json(['error' => 'Akses ditolak.'], 403);
         }
 
-        $fakultas = DB::table('m_fakultas')
-            ->select('kode_fakultas', 'nama_fakultas')
-            ->orderBy('nama_fakultas', 'asc')
-            ->get();
+        try {
+            $fakultas = DB::connection('simak')->table('m_fakultas')
+                ->select('kode_fakultas', 'nama_fakultas')
+                ->orderBy('nama_fakultas', 'asc')
+                ->get();
 
-        $prodi = DB::table('m_program_studi')
-            ->select('kode_prodi', 'kode_fak', 'nama_prodi', 'kode_jenjang')
-            ->orderBy('nama_prodi', 'asc')
-            ->get();
+            $prodi = DB::connection('simak')->table('m_program_studi')
+                ->select('kode_prodi', 'kode_fak', 'nama_prodi', 'kode_jenjang')
+                ->orderBy('nama_prodi', 'asc')
+                ->get();
+        } catch (\Throwable $e) {
+            Log::warning('Gagal query database SIMAK, fallback ke database default: ' . $e->getMessage());
+
+            $fakultas = DB::table('m_fakultas')
+                ->select('kode_fakultas', 'nama_fakultas')
+                ->orderBy('nama_fakultas', 'asc')
+                ->get();
+
+            $prodi = DB::table('m_program_studi')
+                ->select('kode_prodi', 'kode_fak', 'nama_prodi', 'kode_jenjang')
+                ->orderBy('nama_prodi', 'asc')
+                ->get();
+        }
 
         return response()->json([
             'fakultas' => $fakultas,

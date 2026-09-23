@@ -408,9 +408,12 @@ export default function ManagementUnit() {
 
             {/* Modal Add / Edit Unit */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-                    <div className="bg-white rounded-2xl shadow-2xl border border-[#c0c6d6]/20 w-full max-w-lg overflow-hidden animate-scale-up">
-                        <div className="p-5 border-b border-[#c0c6d6]/20 flex justify-between items-center bg-[#f8fafc]">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs overflow-y-auto">
+                    <div 
+                        className="bg-white rounded-2xl shadow-2xl border border-[#c0c6d6]/20 w-full max-w-lg overflow-visible animate-scale-up my-auto"
+                        style={{ overflow: 'visible' }}
+                    >
+                        <div className="p-5 border-b border-[#c0c6d6]/20 flex justify-between items-center bg-[#f8fafc] rounded-t-2xl">
                             <h3 className="text-base font-bold text-[#181c23]">
                                 {editingUnitId ? 'Edit Data Unit' : 'Tambah Unit Baru'}
                             </h3>
@@ -422,7 +425,7 @@ export default function ManagementUnit() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSave} className="p-6 space-y-4 text-xs">
+                        <form onSubmit={handleSave} className="p-6 space-y-4 text-xs" style={{ overflow: 'visible' }}>
                             {/* Selecting Unit Category */}
                             <div>
                                 <label className="block font-bold text-gray-700 mb-1.5">Tipe / Kategori Unit</label>
