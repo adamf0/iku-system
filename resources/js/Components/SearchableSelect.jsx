@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function SearchableSelect({ 
     options = [], 
@@ -102,75 +103,119 @@ export default function SearchableSelect({
         onChange([]);
     };
 
-    const [openUpwards, setOpenUpwards] = useState(false);
+    const [coords, setCoords] = useState(null);
+    const dropdownRef = useRef(null);
+    const searchInputRef = useRef(null);
+
+    const updatePosition = () => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return;
+
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        let isUp = false;
+        if (direction === 'up') {
+            isUp = true;
+        } else if (direction === 'down') {
+            isUp = false;
+        } else {
+            // Open upwards if space below is less than 240px and space above is greater
+            isUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+        }
+
+        const availableHeight = isUp ? spaceAbove - 16 : spaceBelow - 16;
+        const maxHeight = Math.min(360, Math.max(140, availableHeight));
+
+        let left = rect.left;
+        let width = rect.width;
+        if (left + width > window.innerWidth - 12) {
+            left = Math.max(12, window.innerWidth - width - 12);
+        }
+        if (left < 12) {
+            left = 12;
+            width = Math.min(width, window.innerWidth - 24);
+        }
+
+        setCoords({
+            left: Math.round(left),
+            width: Math.round(width),
+            top: isUp ? null : Math.round(rect.bottom + 6),
+            bottom: isUp ? Math.round(window.innerHeight - rect.top + 6) : null,
+            maxHeight: Math.round(maxHeight),
+            isUp
+        });
+    };
+
+    const toggleOpen = () => {
+        if (disabled) return;
+        if (!isOpen) {
+            updatePosition();
+            setIsOpen(true);
+        } else {
+            setIsOpen(false);
+        }
+    };
+
+    const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+    useIsomorphicLayoutEffect(() => {
+        if (isOpen) {
+            updatePosition();
+        }
+    }, [isOpen, direction]);
 
     useEffect(() => {
+        if (!isOpen) return;
+
+        const handleScroll = (e) => {
+            if (dropdownRef.current && dropdownRef.current.contains(e.target)) {
+                return;
+            }
+            updatePosition();
+        };
+
+        const handleResize = () => {
+            updatePosition();
+        };
+
         const handleClickOutside = (e) => {
-            if (containerRef.current && !containerRef.current.contains(e.target)) {
+            if (
+                containerRef.current && !containerRef.current.contains(e.target) &&
+                dropdownRef.current && !dropdownRef.current.contains(e.target)
+            ) {
                 setIsOpen(false);
             }
         };
+
         const handleKeyDown = (e) => {
-            if (e.key === 'Escape' && isOpen) {
+            if (e.key === 'Escape') {
                 setIsOpen(false);
             }
         };
+
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('resize', handleResize);
         document.addEventListener('mousedown', handleClickOutside);
         document.addEventListener('keydown', handleKeyDown);
+
         return () => {
+            window.removeEventListener('scroll', handleScroll, true);
+            window.removeEventListener('resize', handleResize);
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [isOpen]);
 
-    const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
-
-    useIsomorphicLayoutEffect(() => {
-        if (!isOpen || !containerRef.current) {
-            setOpenUpwards(false);
-            return;
+    useEffect(() => {
+        if (isOpen) {
+            const timer = setTimeout(() => {
+                searchInputRef.current?.focus();
+            }, 30);
+            return () => clearTimeout(timer);
         }
-
-        if (direction === 'up') {
-            setOpenUpwards(true);
-            return;
-        }
-        if (direction === 'down') {
-            setOpenUpwards(false);
-            return;
-        }
-
-        const rect = containerRef.current.getBoundingClientRect();
-        
-        // Find nearest modal card, dialog, or form container
-        const modalEl = containerRef.current.closest('form, [role="dialog"], .rounded-2xl, .fixed > div');
-        
-        const spaceBelowWindow = window.innerHeight - rect.bottom;
-        const spaceAboveWindow = rect.top;
-
-        if (modalEl) {
-            const modalRect = modalEl.getBoundingClientRect();
-            const modalSpaceBelow = modalRect.bottom - rect.bottom;
-            const modalSpaceAbove = rect.top - modalRect.top;
-            
-            // If inside a bounded modal/form and space below is tight (< 220px) with more space above
-            if (modalSpaceBelow < 220 && modalSpaceAbove > modalSpaceBelow) {
-                setOpenUpwards(true);
-                return;
-            }
-            if (modalSpaceBelow >= 220) {
-                setOpenUpwards(false);
-                return;
-            }
-        }
-
-        // Fallback for full page window
-        if (spaceBelowWindow < 260 && spaceAboveWindow > spaceBelowWindow) {
-            setOpenUpwards(true);
-        } else {
-            setOpenUpwards(false);
-        }
-    }, [isOpen, direction]);
+    }, [isOpen]);
 
     const renderTriggerLabel = () => {
         if (isMulti) {
@@ -203,11 +248,11 @@ export default function SearchableSelect({
     const hasValue = !isMulti && value !== '' && value !== null && value !== undefined && String(value) !== '';
 
     return (
-        <div className={`relative w-full ${isOpen ? 'z-50' : ''} ${className}`} ref={containerRef}>
+        <div className={`relative w-full ${className}`} ref={containerRef}>
             <button
                 type="button"
                 disabled={disabled}
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={toggleOpen}
                 className={`w-full bg-white border ${
                     isOpen ? 'border-[#005bb1] ring-1 ring-[#005bb1]' : 'border-[#c0c6d6]'
                 } rounded-xl px-4 py-2.5 text-xs text-left font-semibold text-[#181c23] flex items-center justify-between shadow-sm outline-none hover:border-[#005bb1] transition-all cursor-pointer ${
@@ -228,18 +273,33 @@ export default function SearchableSelect({
                             close
                         </span>
                     )}
-                    <span className={`material-symbols-outlined text-[#535f71] text-[20px] transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#005bb1]' : ''}`}>
+                    <span className={`material-symbols-outlined text-[#535f71] text-[20px] transition-transform duration-200 ${isOpen ? (coords?.isUp ? '-rotate-180 text-[#005bb1]' : 'rotate-180 text-[#005bb1]') : ''}`}>
                         expand_more
                     </span>
                 </div>
             </button>
 
-            {isOpen && (
-                <div className={`absolute left-0 right-0 ${openUpwards ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} bg-white border border-[#c0c6d6]/60 rounded-xl shadow-xl z-50 overflow-hidden py-2 max-h-60 flex flex-col`}>
+            {isOpen && coords && typeof document !== 'undefined' && createPortal(
+                <div 
+                    ref={dropdownRef}
+                    style={{
+                        position: 'fixed',
+                        left: `${coords.left}px`,
+                        width: `${coords.width}px`,
+                        top: coords.isUp ? 'auto' : `${coords.top}px`,
+                        bottom: coords.isUp ? `${coords.bottom}px` : 'auto',
+                        maxHeight: `${coords.maxHeight}px`,
+                        zIndex: 99999
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="bg-white border border-[#c0c6d6]/80 rounded-xl shadow-2xl overflow-hidden py-2 flex flex-col"
+                >
                     <div className="px-3 pb-2 border-b border-[#c0c6d6]/20 space-y-2">
                         <div className="relative flex items-center">
                             <span className="material-symbols-outlined absolute left-2.5 text-[#717785] text-[16px]">search</span>
                             <input
+                                ref={searchInputRef}
                                 type="text"
                                 autoFocus
                                 value={searchTerm}
@@ -367,7 +427,8 @@ export default function SearchableSelect({
                             })
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
