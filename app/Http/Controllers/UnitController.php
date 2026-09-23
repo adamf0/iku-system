@@ -23,16 +23,16 @@ class UnitController extends Controller
         if ($request->filled('search')) {
             $search = '%' . trim($request->query('search')) . '%';
             $query->where(function ($q) use ($search) {
-                $q->where('nama_fak_prod_unit', 'like', $search)
-                  ->orWhere('fakultas', 'like', $search)
-                  ->orWhere('type', 'like', $search)
-                  ->orWhere('kode_fakultas', 'like', $search)
-                  ->orWhere('kode_prodi', 'like', $search);
+                $q->whereRaw('CONVERT(nama_fak_prod_unit USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', [$search])
+                  ->orWhereRaw('CONVERT(fakultas USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', [$search])
+                  ->orWhereRaw('CONVERT(type USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', [$search])
+                  ->orWhereRaw('CONVERT(kode_fakultas USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', [$search])
+                  ->orWhereRaw('CONVERT(kode_prodi USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', [$search]);
             });
         }
 
         if ($request->filled('type') && $request->query('type') !== 'ALL') {
-            $query->where('type', $request->query('type'));
+            $query->whereRaw('CONVERT(type USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?', [$request->query('type')]);
         }
 
         if ($request->filled('status') && $request->query('status') !== 'ALL') {
@@ -62,7 +62,21 @@ class UnitController extends Controller
                 ->get();
 
             $prodi = DB::connection('simak')->table('m_program_studi')
-                ->select('kode_prodi', 'kode_fak', 'nama_prodi', 'kode_jenjang')
+                ->select(
+                    'kode_prodi',
+                    'kode_fak',
+                    'nama_prodi',
+                    'kode_jenjang',
+                    DB::raw("CASE 
+                        WHEN kode_jenjang = 'C' THEN 's1' 
+                        WHEN kode_jenjang = 'B' THEN 's2' 
+                        WHEN kode_jenjang = 'A' THEN 's3' 
+                        WHEN kode_jenjang = 'E' THEN 'd3' 
+                        WHEN kode_jenjang = 'D' THEN 'd4' 
+                        WHEN kode_jenjang = 'J' THEN 'profesi' 
+                        ELSE '' 
+                    END AS jenjang")
+                )
                 ->orderBy('nama_prodi', 'asc')
                 ->get();
         } catch (\Throwable $e) {
@@ -74,7 +88,21 @@ class UnitController extends Controller
                 ->get();
 
             $prodi = DB::table('m_program_studi')
-                ->select('kode_prodi', 'kode_fak', 'nama_prodi', 'kode_jenjang')
+                ->select(
+                    'kode_prodi',
+                    'kode_fak',
+                    'nama_prodi',
+                    'kode_jenjang',
+                    DB::raw("CASE 
+                        WHEN kode_jenjang = 'C' THEN 's1' 
+                        WHEN kode_jenjang = 'B' THEN 's2' 
+                        WHEN kode_jenjang = 'A' THEN 's3' 
+                        WHEN kode_jenjang = 'E' THEN 'd3' 
+                        WHEN kode_jenjang = 'D' THEN 'd4' 
+                        WHEN kode_jenjang = 'J' THEN 'profesi' 
+                        ELSE '' 
+                    END AS jenjang")
+                )
                 ->orderBy('nama_prodi', 'asc')
                 ->get();
         }

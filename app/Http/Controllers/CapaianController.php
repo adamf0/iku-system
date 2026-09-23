@@ -388,7 +388,7 @@ class CapaianController extends Controller
                     $q->where('master_indikator.iku', 'REGEXP', $regexpPattern)
                       ->orWhere('master_indikator.full_kategori', 'REGEXP', $regexpPattern)
                       ->orWhere('master_indikator.kategori', 'REGEXP', $regexpPattern)
-                      ->orWhere('v_fakultas_unit.nama_fak_prod_unit', 'like', '%' . $rawKw . '%');
+                      ->orWhereRaw('CONVERT(v_fakultas_unit.nama_fak_prod_unit USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', ['%' . $rawKw . '%']);
                 });
             }
         }

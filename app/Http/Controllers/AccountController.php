@@ -42,7 +42,7 @@ class AccountController extends Controller
                 $q->where('users.name', 'like', $search)
                   ->orWhere('users.username', 'like', $search)
                   ->orWhere('users.email', 'like', $search)
-                  ->orWhere('v_fakultas_unit.nama_fak_prod_unit', 'like', $search);
+                  ->orWhereRaw('CONVERT(v_fakultas_unit.nama_fak_prod_unit USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?', [$search]);
             });
         }
 

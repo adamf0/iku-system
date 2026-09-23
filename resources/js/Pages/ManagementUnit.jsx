@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import SearchableSelect from '@/Components/SearchableSelect';
+import { formatJenjang } from '@/Utils/unitHelper';
 
 export default function ManagementUnit() {
     const user = usePage().props.auth.user;
@@ -488,10 +489,20 @@ export default function ManagementUnit() {
                                     <div>
                                         <label className="block font-bold text-gray-700 mb-1">Pilih Program Studi</label>
                                         <SearchableSelect
-                                            options={filteredProdiOptions.map(p => ({
-                                                value: p.kode_prodi,
-                                                label: `${p.nama_prodi} (${p.kode_prodi})`
-                                            }))}
+                                            options={filteredProdiOptions.map(p => {
+                                                const j = p.jenjang || formatJenjang(p.kode_jenjang);
+                                                const jDisplay = j ? j.toUpperCase() : '';
+                                                return {
+                                                    value: p.kode_prodi,
+                                                    label: jDisplay ? `${p.nama_prodi} - ${jDisplay} (${p.kode_prodi})` : `${p.nama_prodi} (${p.kode_prodi})`,
+                                                    badge: jDisplay || null,
+                                                    badgeColor: jDisplay === 'S1' ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                                              : jDisplay === 'S2' ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                              : jDisplay === 'S3' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                              : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                                    original: p
+                                                };
+                                            })}
                                             value={formData.kode_prodi}
                                             onChange={(val) => {
                                                 const pObj = options.prodi.find(p => String(p.kode_prodi) === String(val));

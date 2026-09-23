@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import SearchableSelect from '@/Components/SearchableSelect';
+import { formatJenjang } from '@/Utils/unitHelper';
 
 export default function ManagementAccount() {
     const user = usePage().props.auth.user;
@@ -521,10 +522,16 @@ export default function ManagementAccount() {
                                 <div>
                                     <label className="block font-bold text-gray-700 mb-1">Unit Pelapor Terkait</label>
                                     <SearchableSelect
-                                        options={units.map(u => ({
-                                            value: u.id,
-                                            label: `${u.nama_fak_prod_unit} ${u.fakultas ? `(${u.fakultas})` : ''} [${u.type?.toUpperCase()}]`
-                                        }))}
+                                        options={units.map(u => {
+                                            const jStr = formatJenjang(u.jenjang || u.kode_jenjang);
+                                            const jPart = jStr ? ` - ${jStr}` : '';
+                                            const fakPart = u.fakultas ? ` (${u.fakultas})` : '';
+                                            return {
+                                                value: u.id,
+                                                label: `${u.nama_fak_prod_unit}${jPart}${fakPart} [${u.type?.toUpperCase()}]`,
+                                                badge: jStr ? `${u.type?.toUpperCase()} ${jStr}` : u.type?.toUpperCase()
+                                            };
+                                        })}
                                         value={formData.fakultas_unit}
                                         onChange={(val) => setFormData(prev => ({ ...prev, fakultas_unit: val }))}
                                         placeholder="-- Pilih Unit Pelapor --"

@@ -1,4 +1,35 @@
 /**
+ * Format jenjang code or name matching CASE WHEN in v_fakultas_unit:
+ * C => s1, B => s2, A => s3, E => d3, D => d4, J => profesi, ELSE ''
+ */
+export function formatJenjang(val) {
+    if (!val) return '';
+    const clean = String(val).trim().toLowerCase();
+    switch (clean) {
+        case 'c':
+        case 's1':
+            return 's1';
+        case 'b':
+        case 's2':
+            return 's2';
+        case 'a':
+        case 's3':
+            return 's3';
+        case 'e':
+        case 'd3':
+            return 'd3';
+        case 'd':
+        case 'd4':
+            return 'd4';
+        case 'j':
+        case 'profesi':
+            return 'profesi';
+        default:
+            return '';
+    }
+}
+
+/**
  * Utility to format raw v_fakultas_unit rows into grouped & categorized options for SearchableSelect
  */
 export function buildGroupedUnitOptions(units = [], defaultOptionLabel = 'Semua Unit') {
@@ -12,7 +43,7 @@ export function buildGroupedUnitOptions(units = [], defaultOptionLabel = 'Semua 
 
     units.forEach(u => {
         const type = (u.type || '').toLowerCase();
-        const jenjangStr = u.jenjang ? u.jenjang.toUpperCase() : (u.kode_jenjang ? u.kode_jenjang.toUpperCase() : '');
+        const jenjangStr = formatJenjang(u.jenjang || u.kode_jenjang);
         const fakStr = u.fakultas ? ` (Fak. ${u.fakultas})` : '';
 
         if (type === 'fakultas') {

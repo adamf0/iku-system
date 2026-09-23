@@ -28,6 +28,9 @@ return new class extends Migration
 
         // 3. Re-create v_fakultas_unit database view
         DB::statement("DROP VIEW IF EXISTS v_fakultas_unit");
+        try {
+            DB::statement("SET collation_connection = 'utf8mb4_unicode_ci'");
+        } catch (\Throwable $e) {}
 
         DB::statement("
             CREATE VIEW v_fakultas_unit AS 
