@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import React, { useState } from "react";
+import { Link, usePage } from "@inertiajs/react";
 
 export default function AuthenticatedLayout({ pageTitle, children }) {
     const user = usePage().props.auth.user;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    
+
     const getInitials = (name) => {
-        if (!name) return 'U';
-        const parts = name.split(' ');
+        if (!name) return "U";
+        const parts = name.split(" ");
         if (parts.length >= 2) {
             return (parts[0][0] + parts[1][0]).toUpperCase();
         }
@@ -16,169 +16,213 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
 
     const renderNavItems = () => (
         <nav className="flex-1 px-4 mt-4 space-y-1.5 overflow-y-auto">
-            <Link 
-                href={route('dashboard')} 
+            <Link
+                href={route("dashboard")}
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                    route().current('dashboard') 
-                        ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                        : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                    route().current("dashboard")
+                        ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                        : "text-[#535f71] hover:bg-[#e5e8f2]"
                 }`}
             >
-                <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: route().current('dashboard') ? "'FILL' 1" : "'FILL' 0" }}>dashboard</span>
+                <span
+                    className="material-symbols-outlined text-lg"
+                    style={{
+                        fontVariationSettings: route().current("dashboard")
+                            ? "'FILL' 1"
+                            : "'FILL' 0",
+                    }}
+                >
+                    dashboard
+                </span>
                 <span className="text-[13px]">Dashboard PT</span>
             </Link>
 
-            {user.role === 'ADMIN' && (
+            {user.role === "ADMIN" && (
                 <>
                     <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
                     <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">MASTER SETTINGS</span>
+                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">
+                            MASTER SETTINGS
+                        </span>
                     </div>
 
-                    <Link 
-                        href={route('master')} 
+                    <Link
+                        href={route("master")}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('master') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("master")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">format_list_bulleted</span>
-                        <span className="text-[13px]">Management Indikator</span>
+                        <span className="material-symbols-outlined text-lg">
+                            format_list_bulleted
+                        </span>
+                        <span className="text-[13px]">
+                            Management Indikator
+                        </span>
                     </Link>
 
-                    <Link 
-                        href={route('management-target')} 
+                    <Link
+                        href={route("management-target")}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('management-target') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("management-target")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">track_changes</span>
+                        <span className="material-symbols-outlined text-lg">
+                            track_changes
+                        </span>
                         <span className="text-[13px]">Management Target</span>
                     </Link>
 
-                    <Link 
-                        href={route('penugasan-target')} 
+                    <Link
+                        href={route("penugasan-target")}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('penugasan-target') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("penugasan-target")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">assignment_ind</span>
+                        <span className="material-symbols-outlined text-lg">
+                            assignment_ind
+                        </span>
                         <span className="text-[13px]">Penugasan Target</span>
                     </Link>
 
-                    <Link 
-                        href={route('management-unit')} 
+                    <Link
+                        href={route("management-unit")}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('management-unit') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("management-unit")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">corporate_fare</span>
+                        <span className="material-symbols-outlined text-lg">
+                            corporate_fare
+                        </span>
                         <span className="text-[13px]">Manajemen Unit</span>
                     </Link>
                 </>
             )}
 
-            {user.role !== 'ADMIN' && (
+            {user.role !== "ADMIN" && (
                 <>
                     <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
                     <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">REPORTING</span>
+                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">
+                            REPORTING
+                        </span>
                     </div>
 
-                    <Link 
-                        href={route('reporting')} 
+                    <Link
+                        href={route("reporting")}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('reporting') || route().current('capaian.edit')
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("reporting") ||
+                            route().current("capaian.edit")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">analytics</span>
+                        <span className="material-symbols-outlined text-lg">
+                            analytics
+                        </span>
                         <span className="text-[13px]">Capaian Kinerja</span>
                     </Link>
                 </>
             )}
 
-            {['ADMIN', 'LPM'].includes(user.role) && (
+            {["ADMIN", "LPM"].includes(user.role) && (
                 <>
                     <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
                     <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">VERIFIKASI & PENGESAHAN</span>
+                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">
+                            VERIFIKASI & PENGESAHAN
+                        </span>
                     </div>
 
-                    <Link 
-                        href={route().has('verifikasi') ? route('verifikasi') : '/verifikasi'} 
+                    <Link
+                        href={
+                            route().has("verifikasi")
+                                ? route("verifikasi")
+                                : "/verifikasi"
+                        }
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('verifikasi') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("verifikasi")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">verified</span>
-                        <span className="text-[13px]">Antrean Verifikasi LPM</span>
+                        <span className="material-symbols-outlined text-lg">
+                            verified
+                        </span>
+                        <span className="text-[13px]">
+                            Antrean Verifikasi LPM
+                        </span>
                     </Link>
                 </>
             )}
 
-            {user.role === 'ADMIN' && (
+            {user.role === "ADMIN" && (
                 <>
                     <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
                     <div className="px-4 py-1">
-                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">PROFILE & ACCOUNTS</span>
+                        <span className="text-[9px] font-bold text-[#717785] opacity-75 uppercase tracking-widest">
+                            PROFILE & ACCOUNTS
+                        </span>
                     </div>
 
-                    <Link 
-                        href={route('management-account')} 
+                    <Link
+                        href={route("management-account")}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('management-account') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
+                            route().current("management-account")
+                                ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                                : "text-[#535f71] hover:bg-[#e5e8f2]"
                         }`}
                     >
-                        <span className="material-symbols-outlined text-lg">manage_accounts</span>
+                        <span className="material-symbols-outlined text-lg">
+                            manage_accounts
+                        </span>
                         <span className="text-[13px]">Account</span>
                     </Link>
-
-                    <Link 
-                        href={route('profile.edit')} 
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                            route().current('profile.edit') 
-                                ? 'bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm' 
-                                : 'text-[#535f71] hover:bg-[#e5e8f2]'
-                        }`}
-                    >
-                        <span className="material-symbols-outlined text-lg">person</span>
-                        <span className="text-[13px]">Profil</span>
-                    </Link>
                 </>
             )}
+
+            <Link
+                href={route("profile.edit")}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+                    route().current("profile.edit")
+                        ? "bg-[#d7e3f9] text-[#101c2c] font-semibold shadow-sm"
+                        : "text-[#535f71] hover:bg-[#e5e8f2]"
+                }`}
+            >
+                <span className="material-symbols-outlined text-lg">
+                    person
+                </span>
+                <span className="text-[13px]">Profil</span>
+            </Link>
 
             <div className="h-[1px] bg-[#c0c6d6]/30 my-2"></div>
 
-            <Link 
-                method="post" 
-                href={route('logout')} 
-                as="button" 
+            <Link
+                method="post"
+                href={route("logout")}
+                as="button"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 text-left font-medium"
             >
-                <span className="material-symbols-outlined text-lg">logout</span>
+                <span className="material-symbols-outlined text-lg">
+                    logout
+                </span>
                 <span className="text-[13px]">Logout</span>
             </Link>
         </nav>
@@ -187,8 +231,12 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
     const renderFooterDetails = () => (
         <div className="p-4 border-t border-[#c0c6d6]/20 space-y-3">
             <div className="bg-[#005bb1]/5 p-4 rounded-xl border border-[#005bb1]/10">
-                <p className="text-[10px] font-bold text-[#005bb1] uppercase tracking-wider font-upper">INSTITUTION</p>
-                <p className="text-xs font-bold text-[#181c23] mt-1">Universitas Pakuan</p>
+                <p className="text-[10px] font-bold text-[#005bb1] uppercase tracking-wider font-upper">
+                    INSTITUTION
+                </p>
+                <p className="text-xs font-bold text-[#181c23] mt-1">
+                    Universitas Pakuan
+                </p>
             </div>
 
             <div className="bg-[#ebedf8] p-3 rounded-xl flex items-center gap-3 border border-[#c0c6d6]/20 shadow-sm">
@@ -196,8 +244,12 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
                     {getInitials(user?.name)}
                 </div>
                 <div className="flex-grow min-w-0">
-                    <p className="text-xs font-bold truncate text-[#181c23]">{user?.name}</p>
-                    <p className="text-[9px] text-[#717785] uppercase font-bold tracking-widest truncate">{user?.role} - {user?.nama_unit || user?.fakultas_unit}</p>
+                    <p className="text-xs font-bold truncate text-[#181c23]">
+                        {user?.name}
+                    </p>
+                    <p className="text-[9px] text-[#717785] uppercase font-bold tracking-widest truncate">
+                        {user?.role} - {user?.nama_unit || user?.fakultas_unit}
+                    </p>
                 </div>
             </div>
         </div>
@@ -208,8 +260,15 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
             {/* Desktop Sidebar Navigation */}
             <aside className="fixed left-0 top-0 h-full w-64 bg-[#ebedf8] border-r border-[#c0c6d6]/30 hidden md:flex flex-col z-50">
                 <div className="p-6 flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[#005bb1] text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
-                    <span className="text-xl text-[#005bb1] font-bold tracking-tight">IKU Portal</span>
+                    <span
+                        className="material-symbols-outlined text-[#005bb1] text-3xl"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                        school
+                    </span>
+                    <span className="text-xl text-[#005bb1] font-bold tracking-tight">
+                        IKU Portal
+                    </span>
                 </div>
                 {renderNavItems()}
                 {renderFooterDetails()}
@@ -217,27 +276,40 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
 
             {/* Mobile Backdrop Overlay */}
             {mobileMenuOpen && (
-                <div 
+                <div
                     onClick={() => setMobileMenuOpen(false)}
                     className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 md:hidden transition-opacity"
                 />
             )}
 
             {/* Mobile Drawer Sidebar Navigation */}
-            <aside className={`fixed left-0 top-0 h-full w-72 bg-[#ebedf8] border-r border-[#c0c6d6]/30 flex flex-col z-50 transition-transform duration-300 md:hidden ${
-                mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
-            }`}>
+            <aside
+                className={`fixed left-0 top-0 h-full w-72 bg-[#ebedf8] border-r border-[#c0c6d6]/30 flex flex-col z-50 transition-transform duration-300 md:hidden ${
+                    mobileMenuOpen
+                        ? "translate-x-0 shadow-2xl"
+                        : "-translate-x-full"
+                }`}
+            >
                 <div className="p-6 flex items-center justify-between border-b border-[#c0c6d6]/20">
                     <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-[#005bb1] text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
-                        <span className="text-xl text-[#005bb1] font-bold tracking-tight">IKU Portal</span>
+                        <span
+                            className="material-symbols-outlined text-[#005bb1] text-3xl"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                            school
+                        </span>
+                        <span className="text-xl text-[#005bb1] font-bold tracking-tight">
+                            IKU Portal
+                        </span>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setMobileMenuOpen(false)}
                         className="p-1 rounded-lg text-[#535f71] hover:bg-[#e5e8f2] transition-colors"
                         aria-label="Close menu"
                     >
-                        <span className="material-symbols-outlined text-2xl">close</span>
+                        <span className="material-symbols-outlined text-2xl">
+                            close
+                        </span>
                     </button>
                 </div>
                 {renderNavItems()}
@@ -247,16 +319,18 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
             {/* Top App Bar with Mobile Menu Toggle Button */}
             <header className="fixed top-0 left-0 md:left-64 right-0 h-16 bg-white/80 backdrop-blur-xl flex items-center justify-between px-4 sm:px-8 z-40 shadow-sm border-b border-[#c0c6d6]/10">
                 <div className="flex items-center gap-3 min-w-0">
-                    <button 
+                    <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                         className="md:hidden p-2 rounded-xl text-[#005bb1] hover:bg-[#ebedf8] transition-colors flex items-center justify-center border border-[#c0c6d6]/30 shadow-2xs flex-shrink-0"
                         aria-label="Toggle Mobile Menu"
                     >
                         <span className="material-symbols-outlined text-2xl">
-                            {mobileMenuOpen ? 'close' : 'menu'}
+                            {mobileMenuOpen ? "close" : "menu"}
                         </span>
                     </button>
-                    <h1 className="text-base sm:text-lg text-[#005bb1] font-bold truncate">{pageTitle || 'IKU Performance Portal'}</h1>
+                    <h1 className="text-base sm:text-lg text-[#005bb1] font-bold truncate">
+                        {pageTitle || "IKU Performance Portal"}
+                    </h1>
                 </div>
 
                 <div className="flex items-center gap-4 flex-shrink-0">
@@ -267,7 +341,9 @@ export default function AuthenticatedLayout({ pageTitle, children }) {
             </header>
 
             {/* Main Content wrapper */}
-            <main className={`pt-20 sm:pt-24 pb-12 md:ml-64 px-4 sm:px-8 max-w-7xl mx-auto ${route().current('dashboard') ? 'flex flex-col gap-6' : ''}`}>
+            <main
+                className={`pt-20 sm:pt-24 pb-12 md:ml-64 px-4 sm:px-8 max-w-7xl mx-auto ${route().current("dashboard") ? "flex flex-col gap-6" : ""}`}
+            >
                 {children}
             </main>
         </div>
