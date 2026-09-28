@@ -246,7 +246,7 @@ export default function Verifikasi() {
                     <div className="space-y-1">
                         <label className="text-[9px] font-bold text-[#535f71] uppercase tracking-wider block">Filter Tahun</label>
                         <SearchableSelect 
-                            options={[{ id: 'ALL', label: 'Semua Tahun' }, ...years.map(y => ({ id: y.tahun, label: `Tahun ${y.tahun}` }))]}
+                            options={[...years.map(y => ({ id: y.tahun, label: `Tahun ${y.tahun}` }))]}
                             value={filterTahun}
                             onChange={(val) => setFilterTahun(val)}
                             placeholder="Semua Tahun"
@@ -268,7 +268,7 @@ export default function Verifikasi() {
                     <div className="space-y-1">
                         <label className="text-[9px] font-bold text-[#535f71] uppercase tracking-wider block">Filter Indikator</label>
                         <SearchableSelect 
-                            options={[{ id: '', label: 'Semua Indikator' }, ...indicators.map(i => ({ id: i.id, label: `${i.iku} - ${i.kategori}` }))]}
+                            options={[...indicators.map(i => ({ id: i.id, label: `${i.iku} - ${i.kategori}` }))]}
                             value={filterIndikator}
                             onChange={(val) => setFilterIndikator(val)}
                             placeholder="Semua Indikator"
