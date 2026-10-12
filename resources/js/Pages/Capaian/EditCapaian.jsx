@@ -5,6 +5,13 @@ import axios from 'axios';
 import SearchableSelect from '@/Components/SearchableSelect';
 import { buildGroupedUnitOptions } from '@/Utils/unitHelper';
 
+export const TW_PERIOD_LABELS = {
+    TW1: 'Januari – Maret',
+    TW2: 'April – Juni',
+    TW3: 'Juli – September',
+    TW4: 'Oktober – Desember'
+};
+
 export default function EditCapaian() {
     const user = usePage().props.auth.user;
 
@@ -503,7 +510,7 @@ export default function EditCapaian() {
                             <div className="space-y-1">
                                 <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Triwulan</label>
                                 <SearchableSelect 
-                                    options={['TW1', 'TW2', 'TW3', 'TW4'].map(t => ({ id: t, label: t }))}
+                                    options={['TW1', 'TW2', 'TW3', 'TW4'].map(t => ({ id: t, label: `${t} (${TW_PERIOD_LABELS[t]})` }))}
                                     value={triwulan}
                                     onChange={(val) => {
                                         setTriwulan(val);
@@ -674,7 +681,7 @@ export default function EditCapaian() {
                     <div className="flex justify-between items-center">
                         <div>
                             <h3 className="text-sm font-bold text-[#181c23]">Daftar Capaian yang Telah Diinput</h3>
-                            <p className="text-[11px] text-[#717785] mt-0.5">Daftar entri laporan untuk Triwulan {triwulan} - {tahun}.</p>
+                            <p className="text-[11px] text-[#717785] mt-0.5">Daftar entri laporan untuk Triwulan {triwulan} ({TW_PERIOD_LABELS[triwulan] || ''}) - {tahun}.</p>
                         </div>
                         <div className="flex items-center gap-3">
                             <input 

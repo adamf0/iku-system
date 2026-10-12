@@ -4,6 +4,13 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import SearchableSelect from '@/Components/SearchableSelect';
 import { buildGroupedUnitOptions } from '@/Utils/unitHelper';
 
+export const TW_PERIOD_LABELS = {
+    TW1: 'Januari – Maret',
+    TW2: 'April – Juni',
+    TW3: 'Juli – September',
+    TW4: 'Oktober – Desember'
+};
+
 // Combo Chart: Grouped Bars for Realisasi + Threshold Lines for Target & Baseline per year
 function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
     const [hoverIndex, setHoverIndex] = useState(null);
@@ -845,9 +852,14 @@ export default function Dashboard() {
                                             </div>
 
                                             <div className="mt-3 flex items-center justify-between gap-1.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                    <span className="font-extrabold text-sm text-[#181c23]">TW {idx + 1}</span>
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                                                    <div className="min-w-0">
+                                                        <span className="font-extrabold text-sm text-[#181c23] block leading-tight">TW {idx + 1}</span>
+                                                        <span className="text-[10px] font-semibold text-[#717785] block leading-tight mt-0.5 whitespace-nowrap">
+                                                            {TW_PERIOD_LABELS[twKey]}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 {user?.role === 'ADMIN' && (
                                                     <a 
@@ -855,7 +867,7 @@ export default function Dashboard() {
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         title={`Export ${twKey} Google Drive Folder (ZIP)`}
-                                                        className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs"
+                                                        className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs flex-shrink-0"
                                                     >
                                                         <span className="material-symbols-outlined text-[13px]">folder_zip</span>
                                                         <span>Export</span>
@@ -902,10 +914,10 @@ export default function Dashboard() {
                                         className="bg-transparent border-none text-xs font-extrabold text-[#181c23] outline-none cursor-pointer pr-2"
                                     >
                                         <option value="ALL">Semua TW</option>
-                                        <option value="TW1">TW1</option>
-                                        <option value="TW2">TW2</option>
-                                        <option value="TW3">TW3</option>
-                                        <option value="TW4">TW4</option>
+                                        <option value="TW1">TW1 (Jan – Mar)</option>
+                                        <option value="TW2">TW2 (Apr – Jun)</option>
+                                        <option value="TW3">TW3 (Jul – Sep)</option>
+                                        <option value="TW4">TW4 (Okt – Des)</option>
                                     </select>
                                 </div>
                             </div>
@@ -935,10 +947,10 @@ export default function Dashboard() {
                                         className="bg-transparent border-none text-xs font-extrabold text-[#181c23] outline-none cursor-pointer pr-2"
                                     >
                                         <option value="ALL">Semua TW</option>
-                                        <option value="TW1">TW1</option>
-                                        <option value="TW2">TW2</option>
-                                        <option value="TW3">TW3</option>
-                                        <option value="TW4">TW4</option>
+                                        <option value="TW1">TW1 (Jan – Mar)</option>
+                                        <option value="TW2">TW2 (Apr – Jun)</option>
+                                        <option value="TW3">TW3 (Jul – Sep)</option>
+                                        <option value="TW4">TW4 (Okt – Des)</option>
                                     </select>
                                 </div>
                             </div>

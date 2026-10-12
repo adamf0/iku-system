@@ -222,10 +222,10 @@ export default function Verifikasi() {
                 <div className="flex items-center gap-2 bg-[#f1f3fe]/60 p-1.5 rounded-2xl w-fit border border-[#c0c6d6]/20">
                     {[
                         { id: 'ALL', label: 'Semua Triwulan' },
-                        { id: 'TW1', label: 'TW1' },
-                        { id: 'TW2', label: 'TW2' },
-                        { id: 'TW3', label: 'TW3' },
-                        { id: 'TW4', label: 'TW4' }
+                        { id: 'TW1', label: 'TW1 (Jan – Mar)' },
+                        { id: 'TW2', label: 'TW2 (Apr – Jun)' },
+                        { id: 'TW3', label: 'TW3 (Jul – Sep)' },
+                        { id: 'TW4', label: 'TW4 (Okt – Des)' }
                     ].map(tab => (
                         <button
                             key={tab.id}

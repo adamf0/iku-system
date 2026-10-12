@@ -3,6 +3,13 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import SearchableSelect from '@/Components/SearchableSelect';
 
+const TW_PERIOD_LABELS = {
+    TW1: 'Januari – Maret',
+    TW2: 'April – Juni',
+    TW3: 'Juli – September',
+    TW4: 'Oktober – Desember'
+};
+
 export default function Rekap() {
     const [triwulan, setTriwulan] = useState('TW1');
     const [tahun, setTahun] = useState(2026);
@@ -42,9 +49,9 @@ export default function Rekap() {
                     <h2 className="text-xl font-bold text-[#181c23]">Heatmap Matriks Unit Kerja</h2>
                     <p className="text-sm text-[#535f71]">Visualisasi perbandingan pencapaian target IKU per unit.</p>
                 </div>
-                <div className="w-36">
+                <div className="w-56">
                     <SearchableSelect 
-                        options={['TW1', 'TW2', 'TW3', 'TW4'].map(t => ({ id: t, label: t }))}
+                        options={['TW1', 'TW2', 'TW3', 'TW4'].map(t => ({ id: t, label: `${t} (${TW_PERIOD_LABELS[t]})` }))}
                         value={triwulan}
                         onChange={(val) => setTriwulan(val)}
                         placeholder="Pilih Triwulan"
