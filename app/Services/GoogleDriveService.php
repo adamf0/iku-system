@@ -73,51 +73,65 @@ class GoogleDriveService
     }
 
     /**
-     * Get valid access token (refreshing if expired)
+     * Refresh access token (force refresh or when expired)
      */
-    public function getAccessToken()
+    public function refreshAccessToken($force = false)
     {
         if (!file_exists($this->tokenFile)) {
             return null;
         }
 
         $tokenData = json_decode(file_get_contents($this->tokenFile), true);
-        $accessToken = $tokenData['access_token'] ?? null;
+        if (empty($tokenData['refresh_token'])) {
+            return $tokenData['access_token'] ?? null;
+        }
 
-        // Auto-refresh token if expired or near expiration
-        if (isset($tokenData['created_at'], $tokenData['expires_in']) && (time() - $tokenData['created_at'] > $tokenData['expires_in'] - 60)) {
-            if (!empty($tokenData['refresh_token'])) {
-                $ch = curl_init('https://oauth2.googleapis.com/token');
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-                    'client_id' => $this->clientId,
-                    'client_secret' => $this->clientSecret,
-                    'refresh_token' => $tokenData['refresh_token'],
-                    'grant_type' => 'refresh_token'
-                ]));
-                $res = curl_exec($ch);
-                curl_close($ch);
+        $needsRefresh = $force || (
+            isset($tokenData['created_at'], $tokenData['expires_in']) &&
+            (time() - $tokenData['created_at'] > $tokenData['expires_in'] - 60)
+        );
 
-                if ($res) {
-                    $newToken = json_decode($res, true);
-                    if (isset($newToken['access_token'])) {
-                        $accessToken = $newToken['access_token'];
-                        $tokenData['access_token'] = $accessToken;
-                        $tokenData['created_at'] = time();
-                        file_put_contents($this->tokenFile, json_encode($tokenData, JSON_PRETTY_PRINT));
-                    }
+        if (!$needsRefresh) {
+            return $tokenData['access_token'] ?? null;
+        }
+
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'client_id' => $this->clientId,
+            'client_secret' => $this->clientSecret,
+            'refresh_token' => $tokenData['refresh_token'],
+            'grant_type' => 'refresh_token'
+        ]));
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        if ($res) {
+            $newToken = json_decode($res, true);
+            if (isset($newToken['access_token'])) {
+                $tokenData['access_token'] = $newToken['access_token'];
+                $tokenData['created_at'] = time();
+                if (isset($newToken['expires_in'])) {
+                    $tokenData['expires_in'] = $newToken['expires_in'];
                 }
+                file_put_contents($this->tokenFile, json_encode($tokenData, JSON_PRETTY_PRINT));
+                return $newToken['access_token'];
             }
         }
 
-        return $accessToken;
+        return $tokenData['access_token'] ?? null;
     }
 
     /**
-     * Check if a folder exists by name under a parent folder (with memory cache)
+     * Get valid access token (refreshing if expired)
      */
+    public function getAccessToken()
+    {
+        return $this->refreshAccessToken(false);
+    }
+
     /**
      * Check if a folder exists by name under a parent folder (with memory cache & persistent Laravel Cache)
      */
@@ -152,7 +166,21 @@ class GoogleDriveService
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
         $res = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        if ($httpCode === 401) {
+            $accessToken = $this->refreshAccessToken(true);
+            if ($accessToken) {
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+                $res = curl_exec($ch);
+                curl_close($ch);
+            }
+        }
 
         $data = json_decode($res, true);
         $folderId = $data['files'][0]['id'] ?? null;
@@ -163,6 +191,70 @@ class GoogleDriveService
         }
 
         return $folderId;
+    }
+
+    /**
+     * Get a map of [folder_name => folder_id] for all child folders under a parent
+     */
+    public function listChildFoldersMap($parentId)
+    {
+        if (empty($parentId)) return [];
+
+        $cacheKey = "gdrive_fldmap_{$parentId}";
+        $cachedMap = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if ($cachedMap && is_array($cachedMap)) {
+            return $cachedMap;
+        }
+
+        $accessToken = $this->getAccessToken();
+        if (!$accessToken) return [];
+
+        $map = [];
+        $pageToken = null;
+
+        do {
+            $q = urlencode("'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+            $url = "https://www.googleapis.com/drive/v3/files?q={$q}&pageSize=1000&fields=nextPageToken,files(id,name)";
+            if ($pageToken) {
+                $url .= "&pageToken=" . urlencode($pageToken);
+            }
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+            $res = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 401) {
+                $accessToken = $this->refreshAccessToken(true);
+                if (!$accessToken) break;
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
+                $res = curl_exec($ch);
+                curl_close($ch);
+            }
+
+            $data = json_decode($res, true);
+            foreach ($data['files'] ?? [] as $file) {
+                $map[$file['name']] = $file['id'];
+                $childCacheKey = "gdrive_fld_{$parentId}_" . md5($file['name']);
+                self::$folderCache[$childCacheKey] = $file['id'];
+                \Illuminate\Support\Facades\Cache::put($childCacheKey, $file['id'], now()->addDays(30));
+            }
+            $pageToken = $data['nextPageToken'] ?? null;
+        } while ($pageToken);
+
+        if (!empty($map)) {
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $map, now()->addHours(6));
+        }
+
+        return $map;
     }
 
     /**
@@ -625,26 +717,135 @@ class GoogleDriveService
     public function getOrCreateUnitFolderUrl($tahun, $triwulan, $unitId, $indicatorId)
     {
         $unit = \Illuminate\Support\Facades\DB::table('v_fakultas_unit')->where('id', $unitId)->first();
+        if (!$unit) {
+            $unit = \Illuminate\Support\Facades\DB::table('v_fakultas_unit')
+                ->where('kode_prodi', $unitId)
+                ->orWhere('kode_fakultas', $unitId)
+                ->first();
+        }
         if (!$unit) return null;
 
         $unitName = trim($unit->nama_fak_prod_unit);
         if (empty($unitName)) return null;
 
         $indObj = \Illuminate\Support\Facades\DB::table('master_indikator')->where('id', $indicatorId)->first();
+        if (!$indObj) {
+            $indObj = \Illuminate\Support\Facades\DB::table('master_indikator')->where('iku', $indicatorId)->first();
+        }
         if (!$indObj) return null;
 
         $indFolderName = trim($indObj->iku);
 
-        $yearFolderId = $this->createFolder((string)$tahun);
+        // 1. Year Folder
+        $yearFolderId = $this->findFolder((string)$tahun, $this->parentFolderId);
+        if (!$yearFolderId) {
+            $yearFolderId = $this->createFolder((string)$tahun, $this->parentFolderId);
+        }
         if (!$yearFolderId) return null;
 
-        $twFolderId = $this->createFolder(strtoupper(trim($triwulan)), $yearFolderId);
+        // 2. Triwulan Folder
+        preg_match('/(\d+)/', (string)$triwulan, $matches);
+        $twNum = $matches[1] ?? '1';
+
+        $twCandidates = [
+            strtoupper(trim($triwulan)),
+            "TW{$twNum}",
+            "TW {$twNum}",
+            "Triwulan {$twNum}",
+            "Triwulan{$twNum}",
+        ];
+        $twCandidates = array_unique(array_filter($twCandidates));
+
+        $twFolderId = null;
+        foreach ($twCandidates as $candidate) {
+            $twFolderId = $this->findFolder($candidate, $yearFolderId);
+            if ($twFolderId) break;
+        }
+
+        // Fallback: search child folders under year
+        if (!$twFolderId) {
+            $childFolders = $this->listChildFoldersMap($yearFolderId);
+            foreach ($childFolders as $cName => $cId) {
+                preg_match('/(\d+)/', $cName, $cm);
+                if (($cm[1] ?? null) === $twNum) {
+                    $twFolderId = $cId;
+                    break;
+                }
+            }
+        }
+
+        if (!$twFolderId) {
+            $twFolderId = $this->createFolder("TW{$twNum}", $yearFolderId);
+        }
         if (!$twFolderId) return null;
 
-        $indFolderId = $this->createFolder($indFolderName, $twFolderId);
+        // 3. Indikator Folder
+        $indCandidates = [
+            $indFolderName,
+            preg_replace('/\s+/', ' ', $indFolderName),
+            str_replace(' ', '', $indFolderName),
+        ];
+        if (!empty($indObj->full_kategori)) {
+            $indCandidates[] = trim($indObj->full_kategori);
+        }
+        $indCandidates = array_unique(array_filter($indCandidates));
+
+        $indFolderId = null;
+        foreach ($indCandidates as $candidate) {
+            $indFolderId = $this->findFolder($candidate, $twFolderId);
+            if ($indFolderId) break;
+        }
+
+        // Fallback: search child folders under triwulan
+        if (!$indFolderId) {
+            $childFolders = $this->listChildFoldersMap($twFolderId);
+            foreach ($childFolders as $cName => $cId) {
+                if (strcasecmp($cName, $indFolderName) === 0 || stripos($cName, $indFolderName) !== false) {
+                    $indFolderId = $cId;
+                    break;
+                }
+            }
+        }
+
+        if (!$indFolderId) {
+            $indFolderId = $this->createFolder($indFolderName, $twFolderId);
+        }
         if (!$indFolderId) return null;
 
-        $unitFolderId = $this->createFolder($unitName, $indFolderId);
+        // 4. Unit Folder
+        $unitCandidates = [
+            $unitName,
+            strtoupper($unitName),
+            strtolower($unitName),
+        ];
+        if (!empty($unit->fakultas)) {
+            $unitCandidates[] = trim($unit->fakultas);
+        }
+        $unitCandidates = array_unique(array_filter($unitCandidates));
+
+        $unitFolderId = null;
+        foreach ($unitCandidates as $candidate) {
+            $unitFolderId = $this->findFolder($candidate, $indFolderId);
+            if ($unitFolderId) break;
+        }
+
+        // Fallback: search child folders under indikator
+        if (!$unitFolderId) {
+            $childFolders = $this->listChildFoldersMap($indFolderId);
+            foreach ($childFolders as $cName => $cId) {
+                if (strcasecmp($cName, $unitName) === 0 || 
+                    stripos($cName, $unitName) !== false || 
+                    stripos($unitName, $cName) !== false) {
+                    $unitFolderId = $cId;
+                    break;
+                }
+            }
+        }
+
+        if (!$unitFolderId) {
+            $unitFolderId = $this->createFolder($unitName, $indFolderId);
+        }
+
         if ($unitFolderId) {
             return "https://drive.google.com/drive/folders/{$unitFolderId}";
         }

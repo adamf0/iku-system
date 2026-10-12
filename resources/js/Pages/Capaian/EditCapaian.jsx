@@ -48,6 +48,7 @@ export default function EditCapaian() {
     const [targetCapaian, setTargetCapaian] = useState('');
     const [catatan, setCatatan] = useState('');
     const [fileUrl, setFileUrl] = useState('');
+    const [driveLoading, setDriveLoading] = useState(false);
     const [formErrors, setFormErrors] = useState({});
     const [toast, setToast] = useState(null);
 
@@ -175,6 +176,7 @@ export default function EditCapaian() {
     const fetchDriveLink = (unitId, yr, tw, ikuId) => {
         const effUnit = unitId || user.fakultas_unit;
         if (!effUnit || !ikuId) return;
+        setDriveLoading(true);
         fetch(`/api/capaian/drive-link?unit=${effUnit}&tahun=${yr}&triwulan=${tw}&id_indikator=${ikuId}`)
             .then(res => res.json())
             .then(data => {
@@ -182,7 +184,10 @@ export default function EditCapaian() {
                     setFileUrl(data.drive_url);
                 }
             })
-            .catch(err => console.error(err));
+            .catch(err => console.error(err))
+            .finally(() => {
+                setDriveLoading(false);
+            });
     };
 
     const loadExistingRecord = (ikuId, capList, ikuList) => {
@@ -198,10 +203,7 @@ export default function EditCapaian() {
             setCatatan(found.catatan || '');
             setFileUrl(found.file_url || '');
             setTargetCapaian(activeIku ? activeIku.target : '');
-
-            if (!found.file_url) {
-                fetchDriveLink(selectedUnitId, tahun, triwulan, ikuId);
-            }
+            fetchDriveLink(selectedUnitId, tahun, triwulan, ikuId);
         } else {
             setNilaiCapaian('');
             setCatatan('');
@@ -214,6 +216,7 @@ export default function EditCapaian() {
         setNilaiCapaian('');
         setCatatan('');
         setFileUrl('');
+        setDriveLoading(false);
         setTargetCapaian('');
         setFormErrors({});
     };
@@ -238,9 +241,7 @@ export default function EditCapaian() {
         const actIku = indicators.find(i => Number(i.id) === Number(item.id_indikator));
         setTargetCapaian(actIku ? actIku.target : '');
 
-        if (!item.file_url) {
-            fetchDriveLink(selectedUnitId, tahun, triwulan, item.id_indikator);
-        }
+        fetchDriveLink(selectedUnitId, tahun, triwulan, item.id_indikator);
     };
 
     const handleSave = (e) => {
@@ -450,7 +451,12 @@ export default function EditCapaian() {
                                 <SearchableSelect 
                                     options={buildGroupedUnitOptions(units, '-- Pilih Unit Pelapor --')}
                                     value={selectedUnitId}
-                                    onChange={(val) => setSelectedUnitId(val)}
+                                    onChange={(val) => {
+                                        setSelectedUnitId(val);
+                                        if (selectedIkuId) {
+                                            fetchDriveLink(val, tahun, triwulan, selectedIkuId);
+                                        }
+                                    }}
                                     disabled={!['ADMIN', 'FAKULTAS', 'LPM'].includes(user.role)}
                                     placeholder="-- Pilih Unit Pelapor --"
                                     searchPlaceholder="Cari Unit (Fakultas, Prodi + Jenjang, Unit)..."
@@ -481,7 +487,13 @@ export default function EditCapaian() {
                                 <SearchableSelect 
                                     options={years.map(y => ({ id: y.tahun, label: String(y.tahun) }))}
                                     value={tahun}
-                                    onChange={(val) => setTahun(Number(val))}
+                                    onChange={(val) => {
+                                        const yr = Number(val);
+                                        setTahun(yr);
+                                        if (selectedIkuId) {
+                                            fetchDriveLink(selectedUnitId, yr, triwulan, selectedIkuId);
+                                        }
+                                    }}
                                     placeholder="-- Pilih Tahun --"
                                     searchPlaceholder="Cari Tahun..."
                                 />
@@ -493,7 +505,12 @@ export default function EditCapaian() {
                                 <SearchableSelect 
                                     options={['TW1', 'TW2', 'TW3', 'TW4'].map(t => ({ id: t, label: t }))}
                                     value={triwulan}
-                                    onChange={(val) => setTriwulan(val)}
+                                    onChange={(val) => {
+                                        setTriwulan(val);
+                                        if (selectedIkuId) {
+                                            fetchDriveLink(selectedUnitId, tahun, val, selectedIkuId);
+                                        }
+                                    }}
                                     placeholder="-- Pilih Triwulan --"
                                     searchPlaceholder="Cari Triwulan..."
                                 />
@@ -553,7 +570,12 @@ export default function EditCapaian() {
                         <div className="space-y-1">
                             <div className="flex items-center justify-between">
                                 <label className="text-[11px] font-bold text-[#535f71] uppercase tracking-wider block">Link Bukti Dukung (Google Drive Unit)</label>
-                                {fileUrl && (
+                                {driveLoading ? (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#005bb1] bg-[#005bb1]/10 px-2.5 py-1 rounded-md animate-pulse">
+                                        <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                                        <span>Memuat link Drive...</span>
+                                    </span>
+                                ) : fileUrl ? (
                                     <a 
                                         href={fileUrl} 
                                         target="_blank" 
@@ -563,15 +585,24 @@ export default function EditCapaian() {
                                         <span className="material-symbols-outlined text-[14px]">folder_open</span>
                                         <span>Buka Folder Google Drive Unit</span>
                                     </a>
+                                ) : null}
+                            </div>
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    value={driveLoading ? 'Memuat link folder Google Drive...' : fileUrl}
+                                    readOnly={true}
+                                    placeholder="Link folder otomatis terisi dari Google Drive"
+                                    className={`w-full bg-gray-100 border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs font-semibold ${
+                                        driveLoading ? 'text-gray-400 italic' : 'text-[#005bb1]'
+                                    } outline-none cursor-not-allowed select-all pr-10`}
+                                />
+                                {driveLoading && (
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                                        <span className="material-symbols-outlined text-[18px] text-[#005bb1] animate-spin">progress_activity</span>
+                                    </div>
                                 )}
                             </div>
-                            <input 
-                                type="text" 
-                                value={fileUrl}
-                                readOnly={true}
-                                placeholder="Link folder otomatis terisi dari Google Drive"
-                                className="w-full bg-gray-100 border border-[#c0c6d6] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#005bb1] outline-none cursor-not-allowed select-all"
-                            />
                             {formErrors.file_url && (
                                 <p className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[14px]">warning</span>

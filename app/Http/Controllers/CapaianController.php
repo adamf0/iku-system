@@ -144,14 +144,21 @@ class CapaianController extends Controller
             ->where('triwulan', $validated['triwulan'])
             ->first();
 
-        $gdriveLog = DB::table('gdrive_folder_logs')
-            ->where('fakultas_unit', $validated['fakultas_unit'])
-            ->where('tahun', $validated['tahun'])
-            ->where('id_indikator', $validated['id_indikator'])
-            ->first();
-
-        if ($gdriveLog && !empty($gdriveLog->folder_url)) {
-            $validated['file_url'] = $gdriveLog->folder_url;
+        if (empty($validated['file_url'])) {
+            try {
+                $driveService = new \App\Services\GoogleDriveService();
+                $driveUrl = $driveService->getOrCreateUnitFolderUrl(
+                    $validated['tahun'],
+                    $validated['triwulan'],
+                    $validated['fakultas_unit'],
+                    $validated['id_indikator']
+                );
+                if ($driveUrl) {
+                    $validated['file_url'] = $driveUrl;
+                }
+            } catch (\Throwable $e) {
+                // Ignore failure on auto-resolving folder
+            }
         }
 
         if ($existing) {
@@ -189,6 +196,7 @@ class CapaianController extends Controller
         $user = $request->user();
         $unitId = $request->query('unit');
         $tahun = $request->query('tahun', 2026);
+        $triwulan = $request->query('triwulan') ?: $request->query('tw', 'TW1');
         $idIndikator = $request->query('id_indikator');
 
         if ($user && !in_array($user->role, ['ADMIN', 'LPM'])) {
@@ -201,17 +209,15 @@ class CapaianController extends Controller
             return response()->json(['drive_url' => null]);
         }
 
-        $gdriveLog = DB::table('gdrive_folder_logs')
-            ->where('fakultas_unit', $unitId)
-            ->where('tahun', $tahun)
-            ->where('id_indikator', $idIndikator)
-            ->first();
+        try {
+            $driveService = new \App\Services\GoogleDriveService();
+            $driveUrl = $driveService->getOrCreateUnitFolderUrl($tahun, $triwulan, $unitId, $idIndikator);
 
-        if ($gdriveLog && !empty($gdriveLog->folder_url)) {
-            return response()->json(['drive_url' => $gdriveLog->folder_url]);
+            return response()->json(['drive_url' => $driveUrl]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to get Google Drive link for unit {$unitId}, tahun {$tahun}, tw {$triwulan}, ind {$idIndikator}: " . $e->getMessage());
+            return response()->json(['drive_url' => null, 'error' => $e->getMessage()]);
         }
-
-        return response()->json(['drive_url' => null]);
     }
 
     public function submit(Request $request, $id)
