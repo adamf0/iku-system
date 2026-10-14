@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import SearchableSelect from '@/Components/SearchableSelect';
+import axios from 'axios';
 import { buildGroupedUnitOptions } from '@/Utils/unitHelper';
 
 export const TW_PERIOD_LABELS = {
@@ -618,6 +619,211 @@ export default function Dashboard() {
     const [chartTwFilter, setChartTwFilter] = useState('ALL');
     const [unitTwFilter, setUnitTwFilter] = useState('ALL');
 
+    // Export ZIP Background & Chunk Download State
+    const [exportModalState, setExportModalState] = useState({
+        isOpen: false,
+        tw: null,
+        tahun: null,
+        jobId: null,
+        status: 'idle', // 'idle' | 'initiating' | 'processing' | 'downloading' | 'completed' | 'failed'
+        progress: 0,
+        message: '',
+        chunkProgress: null, // { current: 1, total: 5, percent: 20 }
+        error: null,
+        zipFilename: null,
+        fileSize: 0,
+        needAuth: false,
+        authUrl: null,
+    });
+
+    const formatBytes = (bytes) => {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const handleStartExportZip = async (twKey, force = false) => {
+        setExportModalState({
+            isOpen: true,
+            tw: twKey,
+            tahun: selectedTahun,
+            jobId: null,
+            status: 'initiating',
+            progress: 5,
+            message: 'Menghubungkan ke server untuk memulai proses ekspor...',
+            chunkProgress: null,
+            error: null,
+            zipFilename: null,
+            fileSize: 0,
+            needAuth: false,
+            authUrl: null,
+        });
+
+        try {
+            const res = await axios.post('/api/dashboard/export-tw-zip/start', {
+                tw: twKey,
+                tahun: selectedTahun,
+                force: force
+            });
+
+            if (res.data.need_auth) {
+                setExportModalState(prev => ({
+                    ...prev,
+                    status: 'failed',
+                    needAuth: true,
+                    authUrl: res.data.auth_url,
+                    message: 'Otentikasi Google Drive Diperlukan',
+                    error: 'Akun Google Drive belum dihubungkan atau izin akses telah kedaluwarsa.'
+                }));
+                return;
+            }
+
+            const { job_id, status, progress, message, total_chunks, file_size, zip_filename } = res.data;
+
+            if (status === 'completed') {
+                setExportModalState(prev => ({
+                    ...prev,
+                    jobId: job_id,
+                    status: 'downloading',
+                    progress: 100,
+                    message: 'Berkas arsip siap! Memulai unduhan bertahap (chunk download)...',
+                    zipFilename: zip_filename,
+                    fileSize: file_size
+                }));
+                startChunkedDownload(job_id, total_chunks, zip_filename, file_size);
+            } else {
+                setExportModalState(prev => ({
+                    ...prev,
+                    jobId: job_id,
+                    status: 'processing',
+                    progress: progress || 10,
+                    message: message || 'Server sedang mengunduh dan menyusun berkas dari Google Drive...'
+                }));
+                startStatusPolling(job_id);
+            }
+        } catch (err) {
+            console.error('Failed to start export zip', err);
+            setExportModalState(prev => ({
+                ...prev,
+                status: 'failed',
+                error: err.response?.data?.error || err.message || 'Terjadi kesalahan saat memulai proses ekspor.'
+            }));
+        }
+    };
+
+    const startStatusPolling = (jobId) => {
+        let isCancelled = false;
+
+        const interval = setInterval(async () => {
+            if (isCancelled) return;
+
+            try {
+                const res = await axios.get(`/api/dashboard/export-tw-zip/status?job_id=${encodeURIComponent(jobId)}`);
+                const data = res.data;
+
+                if (data.status === 'completed') {
+                    clearInterval(interval);
+                    isCancelled = true;
+
+                    setExportModalState(prev => ({
+                        ...prev,
+                        status: 'downloading',
+                        progress: 100,
+                        message: 'Pembuatan berkas ZIP di server selesai! Memulai unduhan ke browser...',
+                        zipFilename: data.zip_filename,
+                        fileSize: data.file_size
+                    }));
+
+                    startChunkedDownload(jobId, data.total_chunks, data.zip_filename, data.file_size);
+                } else if (data.status === 'failed') {
+                    clearInterval(interval);
+                    isCancelled = true;
+
+                    setExportModalState(prev => ({
+                        ...prev,
+                        status: 'failed',
+                        error: data.error || data.message || 'Gagal membuat arsip ZIP di server.'
+                    }));
+                } else {
+                    setExportModalState(prev => ({
+                        ...prev,
+                        status: 'processing',
+                        progress: data.progress || prev.progress,
+                        message: data.message || prev.message
+                    }));
+                }
+            } catch (err) {
+                console.error('Polling export status error', err);
+            }
+        }, 2000);
+    };
+
+    const startChunkedDownload = async (jobId, totalChunks, zipFilename, fileSize) => {
+        const total = totalChunks || 1;
+        const chunkBuffers = [];
+
+        try {
+            for (let i = 0; i < total; i++) {
+                const currentPercent = Math.round((i / total) * 100);
+                setExportModalState(prev => ({
+                    ...prev,
+                    status: 'downloading',
+                    chunkProgress: {
+                        current: i + 1,
+                        total: total,
+                        percent: currentPercent
+                    },
+                    message: `Mengunduh bagian data ${i + 1} dari ${total} (${currentPercent}%)...`
+                }));
+
+                const response = await fetch(`/api/dashboard/export-tw-zip/chunk?job_id=${encodeURIComponent(jobId)}&chunk=${i}`);
+                if (!response.ok) {
+                    throw new Error(`Gagal mengunduh bagian data ${i + 1} (HTTP ${response.status})`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                chunkBuffers.push(arrayBuffer);
+            }
+
+            setExportModalState(prev => ({
+                ...prev,
+                status: 'completed',
+                progress: 100,
+                chunkProgress: {
+                    current: total,
+                    total: total,
+                    percent: 100
+                },
+                message: 'Semua bagian data lengkap! Menyimpan berkas ke komputer Anda...'
+            }));
+
+            const blob = new Blob(chunkBuffers, { type: 'application/zip' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = zipFilename || `IKU_System.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 30000);
+
+            setExportModalState(prev => ({
+                ...prev,
+                message: `Berkas ${zipFilename || 'ZIP'} berhasil diunduh dan disimpan di komputer!`
+            }));
+
+        } catch (err) {
+            console.error('Chunk download error', err);
+            setExportModalState(prev => ({
+                ...prev,
+                status: 'failed',
+                error: err.message || 'Gagal mengunduh bagian data berkas ZIP.'
+            }));
+        }
+    };
+
     useEffect(() => {
         Promise.all([
             fetch('/api/master/units').then(res => res.json()),
@@ -862,16 +1068,15 @@ export default function Dashboard() {
                                                     </div>
                                                 </div>
                                                 {user?.role === 'ADMIN' && (
-                                                    <a 
-                                                        href={`/api/dashboard/export-tw-zip?tw=${twKey}&tahun=${selectedTahun}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleStartExportZip(twKey)}
                                                         title={`Export ${twKey} Google Drive Folder (ZIP)`}
-                                                        className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs flex-shrink-0"
+                                                        className="inline-flex items-center gap-1 bg-[#005bb1]/10 hover:bg-[#005bb1] text-[#005bb1] hover:text-white px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-200 shadow-2xs flex-shrink-0 cursor-pointer"
                                                     >
                                                         <span className="material-symbols-outlined text-[13px]">folder_zip</span>
                                                         <span>Export</span>
-                                                    </a>
+                                                    </button>
                                                 )}
                                             </div>
 
@@ -1114,6 +1319,187 @@ export default function Dashboard() {
             >
                 <span className="material-symbols-outlined text-2xl">add</span>
             </Link>
+
+            {/* Modal Export ZIP dengan Background Processing & Chunked Download */}
+            {exportModalState.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-[#c0c6d6]/30 overflow-hidden transform transition-all">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-[#005bb1] to-[#003e7e] px-6 py-5 text-white flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-2xl bg-white/10 p-2 rounded-xl">folder_zip</span>
+                                <div>
+                                    <h3 className="font-extrabold text-base leading-tight">Export Google Drive Folder (ZIP)</h3>
+                                    <p className="text-xs text-white/80 font-medium mt-0.5">
+                                        Triwulan {exportModalState.tw} • Tahun {exportModalState.tahun}
+                                    </p>
+                                </div>
+                            </div>
+                            {['completed', 'failed'].includes(exportModalState.status) && (
+                                <button 
+                                    onClick={() => setExportModalState(prev => ({ ...prev, isOpen: false }))}
+                                    className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-full transition-colors cursor-pointer"
+                                >
+                                    <span className="material-symbols-outlined text-xl">close</span>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-6">
+                            {/* Status Icon & Message */}
+                            <div className="text-center space-y-2">
+                                {exportModalState.status === 'initiating' && (
+                                    <div className="w-14 h-14 bg-[#005bb1]/10 rounded-2xl flex items-center justify-center mx-auto text-[#005bb1] animate-pulse">
+                                        <span className="material-symbols-outlined text-3xl">sync</span>
+                                    </div>
+                                )}
+                                {exportModalState.status === 'processing' && (
+                                    <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 animate-spin">
+                                        <span className="material-symbols-outlined text-3xl">cloud_sync</span>
+                                    </div>
+                                )}
+                                {exportModalState.status === 'downloading' && (
+                                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto text-[#005bb1] animate-bounce">
+                                        <span className="material-symbols-outlined text-3xl">downloading</span>
+                                    </div>
+                                )}
+                                {exportModalState.status === 'completed' && (
+                                    <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto text-emerald-600">
+                                        <span className="material-symbols-outlined text-3xl">check_circle</span>
+                                    </div>
+                                )}
+                                {exportModalState.status === 'failed' && (
+                                    <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto text-red-600">
+                                        <span className="material-symbols-outlined text-3xl">error</span>
+                                    </div>
+                                )}
+
+                                <h4 className="font-extrabold text-base text-[#181c23]">
+                                    {exportModalState.status === 'initiating' && 'Menyiapkan Ekspor...'}
+                                    {exportModalState.status === 'processing' && 'Memproses Berkas di Server...'}
+                                    {exportModalState.status === 'downloading' && 'Mengunduh Bagian Berkas (Chunk Download)...'}
+                                    {exportModalState.status === 'completed' && 'Unduhan Berhasil Selesai!'}
+                                    {exportModalState.status === 'failed' && 'Proses Ekspor Terkendala'}
+                                </h4>
+
+                                <p className="text-xs text-[#717785] leading-relaxed max-w-sm mx-auto">
+                                    {exportModalState.message || 'Mohon tunggu, proses penelusuran Google Drive sedang berjalan...'}
+                                </p>
+                            </div>
+
+                            {/* Server Processing Progress Bar */}
+                            {['processing', 'initiating'].includes(exportModalState.status) && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center text-xs font-bold text-[#717785]">
+                                        <span>Progres Server</span>
+                                        <span>{exportModalState.progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-[#f1f3fe] h-3 rounded-full overflow-hidden p-0.5 border border-[#c0c6d6]/20">
+                                        <div 
+                                            className="bg-gradient-to-r from-[#005bb1] to-[#3b82f6] h-full rounded-full transition-all duration-300"
+                                            style={{ width: `${Math.max(5, exportModalState.progress)}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-[11px] text-[#717785] italic text-center">
+                                        Server sedang menelusuri folder Google Drive dan menyusun arsip ZIP di latar belakang.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Chunk Download Progress Bar */}
+                            {exportModalState.status === 'downloading' && exportModalState.chunkProgress && (
+                                <div className="space-y-2 bg-[#f8fafc] p-4 rounded-xl border border-[#c0c6d6]/30">
+                                    <div className="flex justify-between items-center text-xs font-bold text-[#181c23]">
+                                        <span>Bagian Data {exportModalState.chunkProgress.current} dari {exportModalState.chunkProgress.total}</span>
+                                        <span className="text-[#005bb1]">{exportModalState.chunkProgress.percent}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 h-3 rounded-full overflow-hidden">
+                                        <div 
+                                            className="bg-emerald-500 h-full rounded-full transition-all duration-200"
+                                            style={{ width: `${Math.max(2, exportModalState.chunkProgress.percent)}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between items-center text-[11px] text-[#717785] pt-1">
+                                        <span>Total Ukuran: {formatBytes(exportModalState.fileSize)}</span>
+                                        <span>Potongan @ 5 MB</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Error Alert & Google Drive Auth */}
+                            {exportModalState.error && (
+                                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 space-y-3">
+                                    <div className="flex items-start gap-2">
+                                        <span className="material-symbols-outlined text-base mt-0.5 flex-shrink-0">warning</span>
+                                        <span>{exportModalState.error}</span>
+                                    </div>
+                                    {exportModalState.needAuth && exportModalState.authUrl && (
+                                        <div className="pt-2">
+                                            <a 
+                                                href={exportModalState.authUrl}
+                                                className="inline-flex items-center gap-1.5 bg-[#005bb1] hover:bg-[#00488c] text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-sm transition-all"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">login</span>
+                                                <span>Hubungkan Akun Google Drive</span>
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Direct Download fallback link when completed */}
+                            {exportModalState.status === 'completed' && exportModalState.jobId && (
+                                <div className="p-3 bg-emerald-50/60 border border-emerald-200/60 rounded-xl text-center space-y-1">
+                                    <p className="text-xs text-emerald-800 font-semibold">
+                                        Unduhan tidak otomatis muncul di peramban Anda?
+                                    </p>
+                                    <a 
+                                        href={`/api/dashboard/export-tw-zip/chunk?job_id=${encodeURIComponent(exportModalState.jobId)}&download=1`}
+                                        className="text-xs text-[#005bb1] hover:underline font-bold inline-flex items-center gap-1"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">download</span>
+                                        <span>Klik di sini untuk mengunduh berkas utuh secara langsung</span>
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="bg-[#f8fafc] px-6 py-4 border-t border-[#c0c6d6]/20 flex items-center justify-between gap-3">
+                            <div className="text-[11px] text-[#717785]">
+                                {exportModalState.zipFilename && <span>File: <strong>{exportModalState.zipFilename}</strong></span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {exportModalState.status === 'failed' && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleStartExportZip(exportModalState.tw, true)}
+                                        className="inline-flex items-center gap-1 bg-[#005bb1] hover:bg-[#00488c] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">refresh</span>
+                                        <span>Coba Lagi</span>
+                                    </button>
+                                )}
+                                {['completed', 'failed'].includes(exportModalState.status) ? (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setExportModalState(prev => ({ ...prev, isOpen: false }))}
+                                        className="bg-white border border-[#c0c6d6]/60 hover:bg-gray-100 text-[#181c23] px-4 py-1.5 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
+                                    >
+                                        Tutup
+                                    </button>
+                                ) : (
+                                    <span className="text-[11px] text-[#717785] italic">
+                                        Jangan tutup jendela ini hingga unduhan selesai...
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </AuthenticatedLayout>
     );
 }

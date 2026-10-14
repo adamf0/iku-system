@@ -803,21 +803,8 @@ class DashboardController extends Controller
 
     private function extractGdriveId($url)
     {
-        if (empty($url)) return null;
-
-        if (preg_match('/\/folders\/([a-zA-Z0-9_-]+)/', $url, $m)) {
-            return $m[1];
-        }
-        if (preg_match('/\/d\/([a-zA-Z0-9_-]+)/', $url, $m)) {
-            return $m[1];
-        }
-        if (preg_match('/[?&]id=([a-zA-Z0-9_-]+)/', $url, $m)) {
-            return $m[1];
-        }
-        if (preg_match('/^[a-zA-Z0-9_-]{25,}$/', trim($url))) {
-            return trim($url);
-        }
-        return null;
+        $service = new \App\Services\ExportTwZipService();
+        return $service->extractGdriveId($url);
     }
 
     private function extractGdriveFileId($url)
@@ -825,202 +812,29 @@ class DashboardController extends Controller
         return $this->extractGdriveId($url);
     }
 
-    private function executeDriveCurl($url, &$accessToken, \App\Services\GoogleDriveService $driveService)
-    {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
-        $res = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode === 401) {
-            $accessToken = $driveService->refreshAccessToken(true);
-            if ($accessToken) {
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
-                $res = curl_exec($ch);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-            }
-        } elseif ($httpCode === 429 || $httpCode === 503) {
-            sleep(1);
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$accessToken}"]);
-            $res = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-        }
-
-        if ($httpCode >= 200 && $httpCode < 300) {
-            return $res;
-        }
-
-        \Illuminate\Support\Facades\Log::warning("Drive API request failed ({$httpCode}) for URL: {$url}");
-        return false;
-    }
-
-    private function prepareDriveDownloadUrl($fileId, $mimeType, $fileName)
-    {
-        if (str_contains($mimeType, 'google-apps.spreadsheet')) {
-            $url = "https://www.googleapis.com/drive/v3/files/{$fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            if (!preg_match('/\.(xlsx|xls)$/i', $fileName)) {
-                $fileName .= '.xlsx';
-            }
-        } elseif (str_contains($mimeType, 'google-apps.document')) {
-            $url = "https://www.googleapis.com/drive/v3/files/{$fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            if (!preg_match('/\.(docx|doc)$/i', $fileName)) {
-                $fileName .= '.docx';
-            }
-        } elseif (str_contains($mimeType, 'google-apps.presentation')) {
-            $url = "https://www.googleapis.com/drive/v3/files/{$fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.presentationml.presentation";
-            if (!preg_match('/\.(pptx|ppt)$/i', $fileName)) {
-                $fileName .= '.pptx';
-            }
-        } else {
-            $url = "https://www.googleapis.com/drive/v3/files/{$fileId}?alt=media";
-        }
-
-        return [
-            'url' => $url,
-            'fileName' => $fileName,
-        ];
-    }
-
-    private function downloadDriveFolderRecursively(
-        $folderId,
-        \ZipArchive $zip,
-        $zipPathPrefix,
-        &$accessToken,
-        \App\Services\GoogleDriveService $driveService,
-        array &$visitedFolderIds,
-        array &$visitedFiles,
-        $maxDepth = 6,
-        $currentDepth = 0
-    ) {
-        if (empty($folderId) || $currentDepth > $maxDepth || isset($visitedFolderIds[$folderId])) {
-            return;
-        }
-        $visitedFolderIds[$folderId] = true;
-
-        $cleanPrefix = trim($zipPathPrefix, '/');
-        if ($cleanPrefix !== '') {
-            $zip->addEmptyDir($cleanPrefix);
-        }
-
-        $pageToken = null;
-        do {
-            $escapedFolderId = str_replace("'", "\\'", $folderId);
-            $q = urlencode("'{$escapedFolderId}' in parents and trashed = false");
-            $url = "https://www.googleapis.com/drive/v3/files?q={$q}&pageSize=1000&fields=nextPageToken,files(id,name,mimeType,shortcutDetails)";
-            if ($pageToken) {
-                $url .= "&pageToken=" . urlencode($pageToken);
-            }
-
-            $res = $this->executeDriveCurl($url, $accessToken, $driveService);
-            if (!$res) break;
-
-            $data = json_decode($res, true);
-            $files = $data['files'] ?? [];
-
-            foreach ($files as $item) {
-                $itemId = $item['id'] ?? null;
-                $itemName = $item['name'] ?? '';
-                $mimeType = $item['mimeType'] ?? '';
-
-                if (!$itemId || $itemName === '') continue;
-
-                if ($mimeType === 'application/vnd.google-apps.shortcut' && !empty($item['shortcutDetails'])) {
-                    $itemId = $item['shortcutDetails']['targetId'] ?? $itemId;
-                    $mimeType = $item['shortcutDetails']['targetMimeType'] ?? $mimeType;
-                }
-
-                $safeName = str_replace(['/', '\\'], '-', $itemName);
-                $safeName = trim(preg_replace('/[\x00-\x1F\x7F]/', '', $safeName));
-                if ($safeName === '') {
-                    $safeName = 'item_' . $itemId;
-                }
-
-                if ($mimeType === 'application/vnd.google-apps.folder') {
-                    $subPrefix = $cleanPrefix !== '' ? "{$cleanPrefix}/{$safeName}" : $safeName;
-                    $this->downloadDriveFolderRecursively(
-                        $itemId,
-                        $zip,
-                        $subPrefix,
-                        $accessToken,
-                        $driveService,
-                        $visitedFolderIds,
-                        $visitedFiles,
-                        $maxDepth,
-                        $currentDepth + 1
-                    );
-                } else {
-                    $downloadInfo = $this->prepareDriveDownloadUrl($itemId, $mimeType, $safeName);
-                    $fileZipPath = $cleanPrefix !== '' ? "{$cleanPrefix}/{$downloadInfo['fileName']}" : $downloadInfo['fileName'];
-
-                    if (isset($visitedFiles[$fileZipPath])) {
-                        $pathInfo = pathinfo($downloadInfo['fileName']);
-                        $base = $pathInfo['filename'] ?? 'file';
-                        $ext = !empty($pathInfo['extension']) ? '.' . $pathInfo['extension'] : '';
-                        $counter = 1;
-                        do {
-                            $uniqueName = "{$base}_{$counter}{$ext}";
-                            $fileZipPath = $cleanPrefix !== '' ? "{$cleanPrefix}/{$uniqueName}" : $uniqueName;
-                            $counter++;
-                        } while (isset($visitedFiles[$fileZipPath]));
-                    }
-                    $visitedFiles[$fileZipPath] = true;
-
-                    $content = $this->executeDriveCurl($downloadInfo['url'], $accessToken, $driveService);
-                    if ($content !== false && $content !== null) {
-                        $zip->addFromString($fileZipPath, $content);
-                        unset($content);
-                    }
-                }
-            }
-
-            $pageToken = $data['nextPageToken'] ?? null;
-        } while ($pageToken);
-    }
-
-    public function exportTwZip(Request $request)
+    public function startExportTwZip(Request $request)
     {
         $user = $request->user();
         if (!$user || $user->role !== 'ADMIN') {
             return response()->json(['error' => 'Akses ditolak. Fitur export ZIP hanya untuk Admin.'], 403);
         }
 
-        @ini_set('memory_limit', '1024M');
-        @set_time_limit(0);
-
-        $tw = strtoupper($request->query('tw', 'TW1'));
+        $tw = strtoupper($request->input('tw', 'TW1'));
         if (!in_array($tw, ['TW1', 'TW2', 'TW3', 'TW4'])) {
             $tw = 'TW1';
         }
-        $tahun = $request->query('tahun', date('Y'));
+        $tahun = $request->input('tahun', date('Y'));
         if ($tahun === 'ALL') {
             $tahun = date('Y');
         }
+        $force = filter_var($request->input('force', false), FILTER_VALIDATE_BOOLEAN);
 
         $clientId = config('services.google.client_id');
         $redirectUri = config('services.google.redirect_uri', 'http://localhost:8000/gdrive-callback');
-        $parentFolderId = config('services.google.parent_folder_id', '1T1W4rzlCHZUa8VYQ7qCbij7aRPyuJtNf');
 
         $driveService = new \App\Services\GoogleDriveService();
         $accessToken = $driveService->getAccessToken();
 
-        // If no access token, redirect user to Google OAuth consent
         if (!$accessToken) {
             $authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" . http_build_query([
                 'response_type' => 'code',
@@ -1031,234 +845,161 @@ class DashboardController extends Controller
                 'prompt' => 'consent',
                 'state' => urlencode(json_encode(['tw' => $tw, 'tahun' => $tahun]))
             ]);
-            return redirect($authUrl);
+            return response()->json([
+                'need_auth' => true,
+                'auth_url' => $authUrl
+            ]);
         }
 
-        // 1. Resolve Year Folder (e.g. 2026) under parent folder or global
-        $yearFolderId = $driveService->findFolder((string)$tahun, $parentFolderId);
-        if (!$yearFolderId) {
-            $escapedTahun = str_replace("'", "\\'", (string)$tahun);
-            $urlYear = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("name = '{$escapedTahun}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-            $resYear = $this->executeDriveCurl($urlYear, $accessToken, $driveService);
-            if ($resYear) {
-                $dataYear = json_decode($resYear, true);
-                $yearFolderId = $dataYear['files'][0]['id'] ?? null;
+        $exportService = new \App\Services\ExportTwZipService();
+
+        if (!$force) {
+            $recent = $exportService->findRecentJob($tw, $tahun);
+            if ($recent) {
+                return response()->json([
+                    'job_id' => $recent['job_id'],
+                    'status' => $recent['status'],
+                    'progress' => $recent['progress'] ?? 0,
+                    'message' => $recent['message'] ?? '',
+                    'total_chunks' => $recent['total_chunks'] ?? 0,
+                    'file_size' => $recent['file_size'] ?? 0,
+                    'zip_filename' => $recent['zip_filename'] ?? "IKU_System_{$tw}_{$tahun}.zip",
+                    'reused' => true
+                ]);
             }
         }
 
-        // 2. Resolve TW Folder (e.g. TW3 / TW 3 / Triwulan 3)
-        preg_match('/(\d+)/', (string)$tw, $mTw);
-        $twNum = $mTw[1] ?? '1';
+        $jobId = $exportService->createJob($tw, $tahun);
+        $exportService->dispatchJob($jobId);
 
-        $twCandidates = [
-            $tw,
-            "TW{$twNum}",
-            "TW {$twNum}",
-            "Triwulan {$twNum}",
-            "Triwulan{$twNum}",
-        ];
-        $twCandidates = array_unique(array_filter($twCandidates));
+        return response()->json([
+            'job_id' => $jobId,
+            'status' => 'processing',
+            'progress' => 5,
+            'message' => 'Memulai proses ekspor berkas...'
+        ]);
+    }
 
-        $twFolderId = null;
-        $searchParents = array_filter([$yearFolderId, $parentFolderId]);
-
-        foreach ($searchParents as $pId) {
-            foreach ($twCandidates as $candidate) {
-                $twFolderId = $driveService->findFolder($candidate, $pId);
-                if ($twFolderId) break 2;
-            }
-
-            // Fallback match child folders by triwulan number
-            $childFolders = $driveService->listChildFoldersMap($pId);
-            foreach ($childFolders as $cName => $cId) {
-                preg_match('/(\d+)/', $cName, $cm);
-                if (($cm[1] ?? null) === $twNum) {
-                    $twFolderId = $cId;
-                    break 2;
-                }
-            }
+    public function statusExportTwZip(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Akses ditolak.'], 403);
         }
 
-        // Global fallback search for TW folder if needed
-        if (!$twFolderId) {
-            foreach ($twCandidates as $candidate) {
-                $escapedCand = str_replace("'", "\\'", $candidate);
-                $urlTwG = "https://www.googleapis.com/drive/v3/files?q=" . urlencode("name = '{$escapedCand}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-                $resTwG = $this->executeDriveCurl($urlTwG, $accessToken, $driveService);
-                if ($resTwG) {
-                    $dataTwG = json_decode($resTwG, true);
-                    if (!empty($dataTwG['files'][0]['id'])) {
-                        $twFolderId = $dataTwG['files'][0]['id'];
-                        break;
-                    }
-                }
-            }
+        $jobId = $request->query('job_id');
+        if (!$jobId || !preg_match('/^[a-zA-Z0-9_-]+$/', $jobId)) {
+            return response()->json(['error' => 'Job ID tidak valid.'], 400);
         }
 
-        // Create ZIP Archive
-        $zipFileName = "IKU_System_{$tw}_{$tahun}.zip";
-        $tempDir = storage_path('app/temp');
-        if (!file_exists($tempDir)) {
-            mkdir($tempDir, 0777, true);
-        }
-        $zipPath = $tempDir . '/' . $zipFileName;
+        $exportService = new \App\Services\ExportTwZipService();
+        $status = $exportService->getStatus($jobId);
 
-        $zip = new \ZipArchive();
-        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-            return response()->json(['error' => 'Gagal membuat archive ZIP.'], 500);
+        if (!$status) {
+            return response()->json(['error' => 'Proses ekspor tidak ditemukan.'], 404);
         }
 
-        $baseDirName = "{$tw}-{$tahun}";
+        return response()->json($status);
+    }
 
-        // Pre-create all standard IKU folders in ZIP
-        $allIkus = DB::table('master_indikator')->orderBy('id', 'asc')->get();
-        $ikuNormalizedMap = [];
-        foreach ($allIkus as $iku) {
-            $folderName = trim($iku->iku);
-            $zip->addEmptyDir("{$baseDirName}/{$folderName}");
-            $norm = strtolower(preg_replace('/\s+/', ' ', $folderName));
-            $ikuNormalizedMap[$norm] = $folderName;
+    public function downloadExportTwZipChunk(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Akses ditolak.'], 403);
         }
 
-        $visitedFolderIds = [];
-        $visitedFiles = [];
-
-        // 3. Recursive traversal from Google Drive TW Folder
-        if ($twFolderId) {
-            $visitedFolderIds[$twFolderId] = true;
-            $pageToken = null;
-
-            do {
-                $escapedTwId = str_replace("'", "\\'", $twFolderId);
-                $q = urlencode("'{$escapedTwId}' in parents and trashed = false");
-                $urlSub = "https://www.googleapis.com/drive/v3/files?q={$q}&pageSize=1000&fields=nextPageToken,files(id,name,mimeType,shortcutDetails)";
-                if ($pageToken) {
-                    $urlSub .= "&pageToken=" . urlencode($pageToken);
-                }
-
-                $resSub = $this->executeDriveCurl($urlSub, $accessToken, $driveService);
-                if (!$resSub) break;
-
-                $subData = json_decode($resSub, true);
-
-                foreach ($subData['files'] ?? [] as $subItem) {
-                    $subId = $subItem['id'] ?? null;
-                    $subName = trim($subItem['name'] ?? '');
-                    $subMime = $subItem['mimeType'] ?? '';
-
-                    if (!$subId || $subName === '') continue;
-
-                    if ($subMime === 'application/vnd.google-apps.shortcut' && !empty($subItem['shortcutDetails'])) {
-                        $subId = $subItem['shortcutDetails']['targetId'] ?? $subId;
-                        $subMime = $subItem['shortcutDetails']['targetMimeType'] ?? $subMime;
-                    }
-
-                    if ($subMime === 'application/vnd.google-apps.folder') {
-                        $normSub = strtolower(preg_replace('/\s+/', ' ', $subName));
-                        $canonicalIku = $ikuNormalizedMap[$normSub] ?? $subName;
-                        $ikuZipPrefix = "{$baseDirName}/{$canonicalIku}";
-
-                        $this->downloadDriveFolderRecursively(
-                            $subId,
-                            $zip,
-                            $ikuZipPrefix,
-                            $accessToken,
-                            $driveService,
-                            $visitedFolderIds,
-                            $visitedFiles
-                        );
-                    } else {
-                        $downloadInfo = $this->prepareDriveDownloadUrl($subId, $subMime, $subName);
-                        $fileZipPath = "{$baseDirName}/{$downloadInfo['fileName']}";
-
-                        if (!isset($visitedFiles[$fileZipPath])) {
-                            $visitedFiles[$fileZipPath] = true;
-                            $fContent = $this->executeDriveCurl($downloadInfo['url'], $accessToken, $driveService);
-                            if ($fContent !== false && $fContent !== null) {
-                                $zip->addFromString($fileZipPath, $fContent);
-                                unset($fContent);
-                            }
-                        }
-                    }
-                }
-
-                $pageToken = $subData['nextPageToken'] ?? null;
-            } while ($pageToken);
+        $jobId = $request->query('job_id');
+        if (!$jobId || !preg_match('/^[a-zA-Z0-9_-]+$/', $jobId)) {
+            return response()->json(['error' => 'Job ID tidak valid.'], 400);
         }
 
-        // 4. Also check DB template_capaian for any submitted folder/file links not yet downloaded
-        $dbRows = DB::table('template_capaian')
-            ->join('master_indikator', 'template_capaian.id_indikator', '=', 'master_indikator.id')
-            ->leftJoin('v_fakultas_unit', 'template_capaian.fakultas_unit', '=', 'v_fakultas_unit.id')
-            ->where('template_capaian.triwulan', $tw)
-            ->where('template_capaian.tahun', $tahun)
-            ->whereNotNull('template_capaian.file_url')
-            ->select(
-                'template_capaian.*',
-                'master_indikator.iku as kode_iku',
-                'v_fakultas_unit.nama_fak_prod_unit'
-            )
-            ->get();
+        $exportService = new \App\Services\ExportTwZipService();
+        $status = $exportService->getStatus($jobId);
 
-        foreach ($dbRows as $row) {
-            $gdriveId = $this->extractGdriveId($row->file_url);
+        if (!$status || ($status['status'] ?? '') !== 'completed') {
+            return response()->json(['error' => 'Berkas ekspor belum selesai diproses atau tidak ditemukan.'], 404);
+        }
 
-            if ($gdriveId) {
-                if (isset($visitedFolderIds[$gdriveId])) {
-                    // Already traversed during Google Drive tree scan
-                    continue;
-                }
+        $zipPath = storage_path("app/exports/{$jobId}.zip");
+        if (!file_exists($zipPath)) {
+            return response()->json(['error' => 'Berkas ZIP tidak ditemukan pada server.'], 404);
+        }
 
-                $urlMeta = "https://www.googleapis.com/drive/v3/files/{$gdriveId}?fields=id,name,mimeType,shortcutDetails";
-                $resMetaStr = $this->executeDriveCurl($urlMeta, $accessToken, $driveService);
+        $zipFilename = $status['zip_filename'] ?? "IKU_System_{$status['tw']}_{$status['tahun']}.zip";
 
-                if ($resMetaStr) {
-                    $resMeta = json_decode($resMetaStr, true);
-                    if (!empty($resMeta['name'])) {
-                        $mId = $resMeta['id'];
-                        $mMime = $resMeta['mimeType'] ?? '';
-                        $mName = $resMeta['name'];
+        if ($request->query('download') === '1') {
+            return response()->download($zipPath, $zipFilename);
+        }
 
-                        if ($mMime === 'application/vnd.google-apps.shortcut' && !empty($resMeta['shortcutDetails'])) {
-                            $mId = $resMeta['shortcutDetails']['targetId'] ?? $mId;
-                            $mMime = $resMeta['shortcutDetails']['targetMimeType'] ?? $mMime;
-                        }
+        $fileSize = filesize($zipPath);
+        $chunkSize = (int)($status['chunk_size'] ?? (5 * 1024 * 1024));
+        $totalChunks = (int)ceil(max(1, $fileSize) / $chunkSize);
+        $chunkIndex = (int)$request->query('chunk', 0);
 
-                        $ikuDir = trim($row->kode_iku);
-                        $unitDir = trim($row->nama_fak_prod_unit ?: $mName);
-                        $safeUnitDir = str_replace(['/', '\\'], '-', $unitDir);
+        $offset = $chunkIndex * $chunkSize;
+        if ($offset >= $fileSize) {
+            return response('', 416, [
+                'Content-Range' => "bytes */{$fileSize}",
+                'X-Total-Chunks' => $totalChunks,
+            ]);
+        }
 
-                        if ($mMime === 'application/vnd.google-apps.folder') {
-                            $targetPath = "{$baseDirName}/{$ikuDir}/{$safeUnitDir}";
-                            $this->downloadDriveFolderRecursively(
-                                $mId,
-                                $zip,
-                                $targetPath,
-                                $accessToken,
-                                $driveService,
-                                $visitedFolderIds,
-                                $visitedFiles
-                            );
-                        } else {
-                            $downloadInfo = $this->prepareDriveDownloadUrl($mId, $mMime, $mName);
-                            $fileZipPath = "{$baseDirName}/{$ikuDir}/{$safeUnitDir}/{$downloadInfo['fileName']}";
+        $length = min($chunkSize, $fileSize - $offset);
 
-                            if (!isset($visitedFiles[$fileZipPath])) {
-                                $visitedFiles[$fileZipPath] = true;
-                                $fContent = $this->executeDriveCurl($downloadInfo['url'], $accessToken, $driveService);
-                                if ($fContent !== false && $fContent !== null) {
-                                    $zip->addFromString($fileZipPath, $fContent);
-                                    unset($fContent);
-                                }
-                            }
-                        }
-                    }
-                }
+        $fp = fopen($zipPath, 'rb');
+        fseek($fp, $offset);
+        $chunkData = fread($fp, $length);
+        fclose($fp);
+
+        return response($chunkData, 200, [
+            'Content-Type' => 'application/octet-stream',
+            'Content-Length' => $length,
+            'Content-Disposition' => 'attachment; filename="' . $zipFilename . '"',
+            'X-Chunk-Index' => $chunkIndex,
+            'X-Total-Chunks' => $totalChunks,
+            'X-Chunk-Size' => $length,
+            'X-File-Size' => $fileSize,
+        ]);
+    }
+
+    public function exportTwZip(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role !== 'ADMIN') {
+            return response()->json(['error' => 'Akses ditolak. Fitur export ZIP hanya untuk Admin.'], 403);
+        }
+
+        $tw = strtoupper($request->query('tw', 'TW1'));
+        if (!in_array($tw, ['TW1', 'TW2', 'TW3', 'TW4'])) {
+            $tw = 'TW1';
+        }
+        $tahun = $request->query('tahun', date('Y'));
+        if ($tahun === 'ALL') {
+            $tahun = date('Y');
+        }
+
+        $exportService = new \App\Services\ExportTwZipService();
+
+        $recent = $exportService->findRecentJob($tw, $tahun);
+        if ($recent && ($recent['status'] ?? '') === 'completed') {
+            $zipPath = storage_path("app/exports/{$recent['job_id']}.zip");
+            if (file_exists($zipPath)) {
+                return response()->download($zipPath, $recent['zip_filename'] ?? "IKU_System_{$tw}_{$tahun}.zip");
             }
         }
 
-        $zip->close();
+        $jobId = $exportService->createJob($tw, $tahun);
+        $success = $exportService->runExport($jobId);
 
-        return response()->download($zipPath, $zipFileName)->deleteFileAfterSend(true);
+        if (!$success) {
+            $status = $exportService->getStatus($jobId);
+            return response()->json(['error' => $status['error'] ?? 'Gagal memproses ekspor ZIP.'], 500);
+        }
+
+        $zipPath = storage_path("app/exports/{$jobId}.zip");
+        $zipFilename = "IKU_System_{$tw}_{$tahun}.zip";
+
+        return response()->download($zipPath, $zipFilename)->deleteFileAfterSend(false);
     }
 }

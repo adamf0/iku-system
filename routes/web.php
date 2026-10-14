@@ -142,6 +142,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/stream', [DashboardController::class, 'streamSummary']);
         Route::get('/rekap-matriks', [DashboardController::class, 'rekapMatriks']);
         Route::get('/antrean-verifikasi', [DashboardController::class, 'antreanVerifikasi']);
+        Route::post('/export-tw-zip/start', [DashboardController::class, 'startExportTwZip']);
+        Route::get('/export-tw-zip/status', [DashboardController::class, 'statusExportTwZip']);
+        Route::get('/export-tw-zip/chunk', [DashboardController::class, 'downloadExportTwZipChunk']);
         Route::get('/export-tw-zip', [DashboardController::class, 'exportTwZip']);
     });
 
