@@ -281,6 +281,82 @@ class CapaianController extends Controller
         return response()->json(['message' => 'Capaian berhasil disahkan.']);
     }
 
+    public function bulkVerify(Request $request)
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['LPM', 'ADMIN'])) {
+            return response()->json(['error' => 'Hanya LPM/Admin yang dapat memverifikasi capaian.'], 403);
+        }
+
+        $ids = $request->input('ids', []);
+        $action = $request->input('action');
+        $catatan = $request->input('catatan', '');
+
+        if (empty($ids) || !is_array($ids)) {
+            return response()->json(['error' => 'Tidak ada data yang dipilih.'], 422);
+        }
+
+        $validIds = array_filter(array_map('intval', $ids), fn($id) => $id > 0);
+
+        if (empty($validIds)) {
+            return response()->json(['error' => 'ID capaian tidak valid.'], 422);
+        }
+
+        if ($action === 'APPROVE') {
+            $count = DB::table('template_capaian')
+                ->whereIn('id', $validIds)
+                ->whereIn('status_validasi', ['DIAJUKAN', 'DITOLAK'])
+                ->update([
+                    'status_validasi' => 'DIVERIFIKASI',
+                    'diverifikasi_oleh' => $user->username,
+                    'alasan_penolakan' => null,
+                    'updated_at' => now()
+                ]);
+
+            return response()->json(['message' => $count . ' capaian berhasil disetujui/diverifikasi.']);
+        } else {
+            $count = DB::table('template_capaian')
+                ->whereIn('id', $validIds)
+                ->whereIn('status_validasi', ['DIAJUKAN', 'DIVERIFIKASI'])
+                ->update([
+                    'status_validasi' => 'DITOLAK',
+                    'alasan_penolakan' => $catatan ?: 'Ditolak secara massal oleh ' . ($user->name ?? $user->username),
+                    'updated_at' => now()
+                ]);
+
+            return response()->json(['message' => $count . ' capaian berhasil ditolak.']);
+        }
+    }
+
+    public function bulkSahkan(Request $request)
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['LPM', 'ADMIN'])) {
+            return response()->json(['error' => 'Hanya LPM/Admin yang dapat mengesahkan capaian.'], 403);
+        }
+
+        $ids = $request->input('ids', []);
+        if (empty($ids) || !is_array($ids)) {
+            return response()->json(['error' => 'Tidak ada data yang dipilih.'], 422);
+        }
+
+        $validIds = array_filter(array_map('intval', $ids), fn($id) => $id > 0);
+
+        if (empty($validIds)) {
+            return response()->json(['error' => 'ID capaian tidak valid.'], 422);
+        }
+
+        $count = DB::table('template_capaian')
+            ->whereIn('id', $validIds)
+            ->where('status_validasi', 'DIVERIFIKASI')
+            ->update([
+                'status_validasi' => 'DISAHKAN',
+                'updated_at' => now()
+            ]);
+
+        return response()->json(['message' => $count . ' capaian berhasil disahkan.']);
+    }
+
     // ---------- PENUGASAN CAPAIAN TARGET ----------
 
     public function listPenugasan(Request $request)

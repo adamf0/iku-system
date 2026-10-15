@@ -58,10 +58,13 @@ export default function Verifikasi() {
     }, [filterUnit, filterTahun]);
 
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [bulkProcessing, setBulkProcessing] = useState(false);
 
     useEffect(() => {
         loadQueue();
         setCurrentPage(1);
+        setSelectedIds([]);
     }, [filterTriwulan, filterTahun, filterUnit, filterIndikator, filterStatus]);
 
     const loadQueue = () => {
@@ -198,6 +201,148 @@ export default function Verifikasi() {
     const endIndex = Math.min(startIndex + 10, totalItems);
     const currentQueue = queue.slice(startIndex, endIndex);
 
+    // Helper to determine if a queue item can be selected for verification / validation
+    const isItemActionable = (item) => {
+        return Boolean(item.real_capaian_id) && ['DIAJUKAN', 'DIVERIFIKASI', 'DITOLAK'].includes(item.status_validasi);
+    };
+
+    const actionableCurrentQueue = currentQueue.filter(isItemActionable);
+    const actionableAllQueue = queue.filter(isItemActionable);
+
+    // Selected items info
+    const selectedItems = queue.filter(item => selectedIds.includes(item.real_capaian_id));
+    const countApprove = selectedItems.filter(item => ['DIAJUKAN', 'DITOLAK'].includes(item.status_validasi)).length;
+    const countReject = selectedItems.filter(item => ['DIAJUKAN', 'DIVERIFIKASI'].includes(item.status_validasi)).length;
+    const countSahkan = selectedItems.filter(item => item.status_validasi === 'DIVERIFIKASI').length;
+
+    // Check if all actionable items on the current page are selected
+    const isCurrentPageAllSelected = actionableCurrentQueue.length > 0 &&
+        actionableCurrentQueue.every(item => selectedIds.includes(item.real_capaian_id));
+
+    const handleToggleSelectAllCurrentPage = () => {
+        if (isCurrentPageAllSelected) {
+            const pageIds = new Set(actionableCurrentQueue.map(item => item.real_capaian_id));
+            setSelectedIds(prev => prev.filter(id => !pageIds.has(id)));
+        } else {
+            const newIds = new Set(selectedIds);
+            actionableCurrentQueue.forEach(item => newIds.add(item.real_capaian_id));
+            setSelectedIds(Array.from(newIds));
+        }
+    };
+
+    const handleSelectAllQueue = () => {
+        const allIds = actionableAllQueue.map(item => item.real_capaian_id);
+        setSelectedIds(allIds);
+    };
+
+    const handleToggleSelectRow = (realId) => {
+        if (!realId) return;
+        setSelectedIds(prev => {
+            if (prev.includes(realId)) {
+                return prev.filter(id => id !== realId);
+            } else {
+                return [...prev, realId];
+            }
+        });
+    };
+
+    const handleBulkVerify = (action) => {
+        if (selectedIds.length === 0) return;
+
+        let targetItems = [];
+        let rejectNote = '';
+
+        if (action === 'APPROVE') {
+            targetItems = selectedItems.filter(item => ['DIAJUKAN', 'DITOLAK'].includes(item.status_validasi));
+            if (targetItems.length === 0) {
+                alert("Tidak ada data berstatus 'DIAJUKAN' atau 'DITOLAK' di antara pilihan.");
+                return;
+            }
+            if (!confirm(`Apakah Anda yakin ingin MENYETUJUI / MEMVERIFIKASI ${targetItems.length} capaian terpilih?`)) {
+                return;
+            }
+        } else {
+            targetItems = selectedItems.filter(item => ['DIAJUKAN', 'DIVERIFIKASI'].includes(item.status_validasi));
+            if (targetItems.length === 0) {
+                alert("Tidak ada data yang dapat ditolak di antara pilihan.");
+                return;
+            }
+            const input = prompt(`Masukkan alasan penolakan untuk ${targetItems.length} capaian terpilih:`);
+            if (input === null) return;
+            if (!input.trim()) {
+                alert('Alasan penolakan tidak boleh kosong.');
+                return;
+            }
+            rejectNote = input.trim();
+        }
+
+        const targetIds = targetItems.map(item => item.real_capaian_id);
+        setBulkProcessing(true);
+
+        fetch('/api/capaian/bulk-verify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ids: targetIds,
+                action,
+                catatan: action === 'REJECT' ? rejectNote : undefined
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message || 'Status verifikasi berhasil diperbarui!');
+            setSelectedIds(prev => prev.filter(id => !targetIds.includes(id)));
+            loadQueue();
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Gagal memproses verifikasi massal.');
+        })
+        .finally(() => {
+            setBulkProcessing(false);
+        });
+    };
+
+    const handleBulkSahkan = () => {
+        if (selectedIds.length === 0) return;
+
+        const targetItems = selectedItems.filter(item => item.status_validasi === 'DIVERIFIKASI');
+        if (targetItems.length === 0) {
+            alert("Tidak ada data berstatus 'DIVERIFIKASI' di antara pilihan untuk disahkan.");
+            return;
+        }
+
+        if (!confirm(`Apakah Anda yakin ingin MENGESAHKAN ${targetItems.length} capaian terpilih?`)) {
+            return;
+        }
+
+        const targetIds = targetItems.map(item => item.real_capaian_id);
+        setBulkProcessing(true);
+
+        fetch('/api/capaian/bulk-sahkan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ids: targetIds })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message || 'Capaian berhasil disahkan!');
+            setSelectedIds(prev => prev.filter(id => !targetIds.includes(id)));
+            loadQueue();
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Gagal mengesahkan capaian massal.');
+        })
+        .finally(() => {
+            setBulkProcessing(false);
+        });
+    };
+
     return (
         <AuthenticatedLayout header="Verifikasi & Pengesahan Capaian IKU">
             <Head title="Verifikasi Capaian - Performance Management" />
@@ -307,10 +452,114 @@ export default function Verifikasi() {
                     </div>
                 ) : (
                     <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-[#c0c6d6]/20 p-6 space-y-4">
+                        {/* Bulk Action Toolbar */}
+                        {selectedIds.length > 0 && (
+                            <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-white border border-[#005bb1]/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-xs">
+                                <div className="flex items-center gap-3">
+                                    <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-[#005bb1] text-white font-black text-xs shadow-xs">
+                                        {selectedIds.length}
+                                    </span>
+                                    <div>
+                                        <p className="font-bold text-[#181c23] text-sm flex items-center gap-2">
+                                            <span>{selectedIds.length} data capaian dipilih</span>
+                                            {bulkProcessing && (
+                                                <span className="material-symbols-outlined animate-spin text-[#005bb1] text-[18px]">progress_activity</span>
+                                            )}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-[#535f71]">
+                                            {actionableAllQueue.length > actionableCurrentQueue.length && selectedIds.length < actionableAllQueue.length ? (
+                                                <span>
+                                                    {selectedIds.filter(id => actionableCurrentQueue.some(i => i.real_capaian_id === id)).length} data di halaman ini terpilih.{' '}
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSelectAllQueue}
+                                                        className="font-bold text-[#005bb1] hover:underline cursor-pointer"
+                                                    >
+                                                        Pilih seluruh {actionableAllQueue.length} data antrean
+                                                    </button>
+                                                </span>
+                                            ) : (
+                                                <span>Pilih aksi massal yang ingin diterapkan pada data terpilih</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={bulkProcessing || countApprove === 0}
+                                        onClick={() => handleBulkVerify('APPROVE')}
+                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                                            countApprove > 0 && !bulkProcessing
+                                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
+                                                : 'bg-emerald-100 text-emerald-300 cursor-not-allowed'
+                                        }`}
+                                        title="Setujui/Verifikasi data terpilih yang berstatus Diajukan atau Ditolak"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                        Setujui Terpilih {countApprove > 0 ? `(${countApprove})` : ''}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        disabled={bulkProcessing || countReject === 0}
+                                        onClick={() => handleBulkVerify('REJECT')}
+                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                                            countReject > 0 && !bulkProcessing
+                                                ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95'
+                                                : 'bg-rose-100 text-rose-300 cursor-not-allowed'
+                                        }`}
+                                        title="Tolak data terpilih yang berstatus Diajukan atau Diverifikasi"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">cancel</span>
+                                        Tolak Terpilih {countReject > 0 ? `(${countReject})` : ''}
+                                    </button>
+
+                                    {countSahkan > 0 && (
+                                        <button
+                                            type="button"
+                                            disabled={bulkProcessing}
+                                            onClick={handleBulkSahkan}
+                                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#005bb1] hover:bg-[#0073dd] text-white transition-all shadow-xs cursor-pointer active:scale-95"
+                                            title="Sahkan data terpilih yang berstatus Diverifikasi"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">verified</span>
+                                            Sahkan Terpilih ({countSahkan})
+                                        </button>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        disabled={bulkProcessing}
+                                        onClick={() => setSelectedIds([])}
+                                        className="px-3 py-2 text-xs font-semibold text-[#535f71] hover:text-[#181c23] hover:bg-white rounded-xl transition-all cursor-pointer border border-transparent hover:border-[#c0c6d6]/40"
+                                    >
+                                        Batal
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs">
                                 <thead>
                                     <tr className="bg-[#f1f3fe]/60 border-b border-[#c0c6d6]/20 text-[#535f71] font-bold uppercase tracking-wider">
+                                        <th className="p-4 w-12 text-center">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-[#c0c6d6] text-[#005bb1] focus:ring-[#005bb1] cursor-pointer w-4 h-4 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                checked={isCurrentPageAllSelected}
+                                                disabled={actionableCurrentQueue.length === 0}
+                                                ref={el => {
+                                                    if (el) {
+                                                        el.indeterminate = !isCurrentPageAllSelected && actionableCurrentQueue.some(item => selectedIds.includes(item.real_capaian_id));
+                                                    }
+                                                }}
+                                                onChange={handleToggleSelectAllCurrentPage}
+                                                title={isCurrentPageAllSelected ? "Batalkan pilihan halaman ini" : "Pilih semua di halaman ini"}
+                                            />
+                                        </th>
                                         <th className="p-4 w-1/5">Unit Pelapor</th>
                                         <th className="p-4 w-1/4">Indikator</th>
                                         <th className="p-4 text-center w-16">TW</th>
@@ -323,9 +572,27 @@ export default function Verifikasi() {
                                 </thead>
                                 <tbody className="divide-y divide-[#c0c6d6]/10">
                                     {currentQueue.map(item => {
-                                        // const progressPct = computeProgress(item.nilai_capaian, item.target);
+                                        const isActionable = isItemActionable(item);
+                                        const isSelected = Boolean(item.real_capaian_id && selectedIds.includes(item.real_capaian_id));
                                         return (
-                                            <tr key={item.id_capaian} className="hover:bg-[#f1f3fe]/20 transition-colors">
+                                            <tr 
+                                                key={item.id_capaian} 
+                                                className={`transition-colors ${
+                                                    isSelected
+                                                        ? 'bg-blue-50/70 hover:bg-blue-50'
+                                                        : 'hover:bg-[#f1f3fe]/20'
+                                                }`}
+                                            >
+                                                <td className="p-4 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="rounded border-[#c0c6d6] text-[#005bb1] focus:ring-[#005bb1] cursor-pointer w-4 h-4 disabled:opacity-20 disabled:cursor-not-allowed"
+                                                        checked={isSelected}
+                                                        disabled={!isActionable}
+                                                        onChange={() => handleToggleSelectRow(item.real_capaian_id)}
+                                                        title={!isActionable ? "Tidak dapat dipilih (belum diisi atau telah disahkan)" : "Pilih capaian ini"}
+                                                    />
+                                                </td>
                                                 <td className="p-4 font-bold text-[#181c23]">
                                                     <div className="flex items-center gap-1.5 flex-wrap">
                                                         {item.jenjang && (

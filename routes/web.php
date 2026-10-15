@@ -154,6 +154,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/stream', [CapaianController::class, 'streamCapaian']);
         Route::get('/drive-link', [CapaianController::class, 'getDriveLink']);
         Route::post('/', [CapaianController::class, 'store']);
+        Route::post('/bulk-verify', [CapaianController::class, 'bulkVerify']);
+        Route::post('/bulk-sahkan', [CapaianController::class, 'bulkSahkan']);
         Route::post('/{id}/submit', [CapaianController::class, 'submit']);
         Route::post('/{id}/verify', [CapaianController::class, 'verify']);
         Route::post('/{id}/sahkan', [CapaianController::class, 'sahkan']);
