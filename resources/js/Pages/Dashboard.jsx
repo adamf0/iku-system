@@ -620,8 +620,6 @@ export default function Dashboard() {
     const [isStreaming, setIsStreaming] = useState(false);
 
     const [activePeriod, setActivePeriod] = useState('TW3');
-    const [chartTwFilter, setChartTwFilter] = useState('ALL');
-    const [unitTwFilter, setUnitTwFilter] = useState('ALL');
 
     // Export ZIP Background & Chunk Download State
     const [exportModalState, setExportModalState] = useState({
@@ -847,7 +845,7 @@ export default function Dashboard() {
     useEffect(() => {
         loadSummary();
 
-        let streamUrl = `/api/dashboard/summary?stream=1&tahun=${selectedTahun}&triwulan=${chartTwFilter}&unit_tw=${unitTwFilter}`;
+        let streamUrl = `/api/dashboard/summary?stream=1&tahun=${selectedTahun}`;
         if (selectedUnit) streamUrl += `&unit=${selectedUnit}`;
 
         const eventSource = new EventSource(streamUrl);
@@ -881,11 +879,11 @@ export default function Dashboard() {
                 removeStartListener();
             }
         };
-    }, [selectedTahun, selectedUnit, chartTwFilter, unitTwFilter]);
+    }, [selectedTahun, selectedUnit]);
 
     const loadSummary = () => {
         setLoading(true);
-        let url = `/api/dashboard/summary?tahun=${selectedTahun}&triwulan=${chartTwFilter}&unit_tw=${unitTwFilter}`;
+        let url = `/api/dashboard/summary?tahun=${selectedTahun}`;
         if (selectedUnit) url += `&unit=${selectedUnit}`;
 
         fetch(url)
@@ -1112,56 +1110,22 @@ export default function Dashboard() {
                                 <span className="material-symbols-outlined text-[#005bb1] text-xl">show_chart</span>
                                 SEBARAN CAPAIAN PER IKU (BASELINE, TARGET & REALISASI)
                             </div>
-
-                            {/* Filter Triwulan Chart */}
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
-                                    <span className="material-symbols-outlined text-[#005bb1] text-base">filter_list</span>
-                                    <select 
-                                        value={chartTwFilter}
-                                        onChange={(e) => setChartTwFilter(e.target.value)}
-                                        className="bg-transparent border-none text-xs font-extrabold text-[#181c23] outline-none cursor-pointer pr-2"
-                                    >
-                                        <option value="ALL">Semua TW</option>
-                                        <option value="TW1">TW1 (Jan – Mar)</option>
-                                        <option value="TW2">TW2 (Apr – Jun)</option>
-                                        <option value="TW3">TW3 (Jul – Sep)</option>
-                                        <option value="TW4">TW4 (Okt – Des)</option>
-                                    </select>
-                                </div>
-                            </div>
                         </div>
 
                         {/* Interactive Full Width Multi-Line Chart */}
                         <SebaranCapaianChart 
                             data={stats?.sebaran_per_iku} 
-                            filterTw={chartTwFilter} 
+                            filterTw="ALL" 
                             selectedTahun={selectedTahun}
                         />
                     </div>
 
-                    {/* CARD 3: CAPAIAN REALISASI SEMUA UNIT KERJA (BAR CHART FULL WIDTH WITH TW FILTER) */}
+                    {/* CARD 3: CAPAIAN REALISASI SEMUA UNIT KERJA (BAR CHART FULL WIDTH) */}
                     <section className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm p-4 sm:p-8 border border-[#c0c6d6]/15 space-y-6">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c0c6d6]/15 pb-4">
                             <div>
                                 <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
                                 <p className="text-xs text-[#535f71]">Persentase data diajukan terhadap indikator yang ditugaskan untuk seluruh Fakultas & Unit Kerja.</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
-                                    <span className="material-symbols-outlined text-[#005bb1] text-base">filter_list</span>
-                                    <select 
-                                        value={unitTwFilter}
-                                        onChange={(e) => setUnitTwFilter(e.target.value)}
-                                        className="bg-transparent border-none text-xs font-extrabold text-[#181c23] outline-none cursor-pointer pr-2"
-                                    >
-                                        <option value="ALL">Semua TW</option>
-                                        <option value="TW1">TW1 (Jan – Mar)</option>
-                                        <option value="TW2">TW2 (Apr – Jun)</option>
-                                        <option value="TW3">TW3 (Jul – Sep)</option>
-                                        <option value="TW4">TW4 (Okt – Des)</option>
-                                    </select>
-                                </div>
                             </div>
                         </div>
 
@@ -1233,7 +1197,7 @@ export default function Dashboard() {
                                             <th className="px-6 py-4">DESKRIPSI INDIKATOR</th>
                                             <th className="px-6 py-4 text-center w-28">BASELINE</th>
                                             <th className="px-6 py-4 text-center w-28">TARGET</th>
-                                            <th className="px-6 py-4 text-center w-44">CAPAIAN & %</th>
+                                            <th className="px-6 py-4 text-center w-36">REALISASI</th>
                                             <th className="px-6 py-4 text-center w-36">STATUS</th>
                                         </tr>
                                     </thead>
@@ -1252,13 +1216,6 @@ export default function Dashboard() {
                                                     capaian: nilaiCapaian,
                                                     status: iku[`status_${twKey}`]
                                                 };
-
-                                                const targetVal = Number(iku.target);
-                                                let progressPct = null;
-                                                if (nilaiCapaian !== null && targetVal > 0) {
-                                                    const pct = ((Number(nilaiCapaian) / targetVal) * 100).toFixed(1);
-                                                    progressPct = `${pct}% dari Target`;
-                                                }
 
                                                 return (
                                                     <tr key={iku.id} className="hover:bg-[#f9f9ff] transition-colors">
@@ -1290,11 +1247,6 @@ export default function Dashboard() {
                                                                     <div className="text-sm font-extrabold text-[#005bb1] mt-0.5">
                                                                         {nilaiCapaian} <span className="text-[10px] font-normal text-[#535f71]">{iku.satuan}</span>
                                                                     </div>
-                                                                    {progressPct && (
-                                                                        <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
-                                                                            {progressPct}
-                                                                        </div>
-                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <span className="text-sm font-bold text-[#717785]">-</span>
