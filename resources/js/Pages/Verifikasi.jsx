@@ -323,7 +323,7 @@ export default function Verifikasi() {
                                 </thead>
                                 <tbody className="divide-y divide-[#c0c6d6]/10">
                                     {currentQueue.map(item => {
-                                        const progressPct = computeProgress(item.nilai_capaian, item.target);
+                                        // const progressPct = computeProgress(item.nilai_capaian, item.target);
                                         return (
                                             <tr key={item.id_capaian} className="hover:bg-[#f1f3fe]/20 transition-colors">
                                                 <td className="p-4 font-bold text-[#181c23]">
@@ -379,9 +379,9 @@ export default function Verifikasi() {
                                                         <div className="text-base font-extrabold text-[#005bb1] mt-0.5">
                                                             {item.status_validasi === 'BELUM DIISI' ? '-' : item.nilai_capaian} <span className="text-xs font-normal text-[#535f71]">{item.satuan || '%'}</span>
                                                         </div>
-                                                        {item.status_validasi !== 'BELUM DIISI' && progressPct && (
+                                                        {item.status_validasi !== 'BELUM DIISI' && item.nilai_capaian && (
                                                             <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
-                                                                {progressPct}
+                                                                {item.nilai_capaian}
                                                             </div>
                                                         )}
                                                     </div>

@@ -607,12 +607,14 @@ class DashboardController extends Controller
             // 1. Persentase data yang statusnya diajukan: (jumlah data diajukan / indikator ditugaskan) * 100%
             $persentaseDiajukan = $denominator > 0 ? min(100, round(($diajukanCount / $denominator) * 100, 1)) : 0;
 
-            // 2. Ketercapaian antara realisasi terhadap target dari data yang diajukan
+            // 2. Ketercapaian antara realisasi terhadap target:
+            // Dihitung terhadap seluruh indikator yang ditugaskan (indikator yang belum ada data dihitung 0%)
+            $submittedUnique = ($unitTwParam !== 'ALL')
+                ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)->keyBy('id_indikator')
+                : $submittedRows->whereIn('id_indikator', $assignedIkuIds)->keyBy(fn($r) => ($r->tahun ?? '') . '_' . ($r->triwulan ?? '') . '_' . $r->id_indikator);
+
             $unitRealPcts = [];
-            foreach ($submittedRows as $r) {
-                if (!in_array($r->id_indikator, $assignedIkuIds)) {
-                    continue;
-                }
+            foreach ($submittedUnique as $r) {
                 $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
                 if ($ikuDef) {
                     $uObj = $unitsMap->get($u->id);
@@ -625,7 +627,8 @@ class DashboardController extends Controller
                     }
                 }
             }
-            $persentaseRealisasi = count($unitRealPcts) > 0 ? round(array_sum($unitRealPcts) / count($unitRealPcts), 1) : 0;
+            // Dibagi total indikator penugasan ($denominator), bukan hanya data yang diinput
+            $persentaseRealisasi = $denominator > 0 ? min(100, round(array_sum($unitRealPcts) / $denominator, 1)) : 0;
 
             $stat = $simakStats->get($u->id);
 
