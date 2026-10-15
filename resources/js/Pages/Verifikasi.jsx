@@ -121,6 +121,14 @@ export default function Verifikasi() {
         .catch(err => console.error(err));
     };
 
+    const computeProgress = (realisasi, target) => {
+        const r = parseFloat(realisasi);
+        const t = parseFloat(target);
+        if (isNaN(r) || isNaN(t) || t === 0) return null;
+        const pct = ((r / t) * 100).toFixed(1);
+        return `${pct}% dari Target`;
+    };
+
     const renderJenisBadge = (jenis) => {
         const val = (jenis || 'WAJIB').toUpperCase();
         if (val === 'PILIHAN') {
@@ -308,13 +316,14 @@ export default function Verifikasi() {
                                         <th className="p-4 text-center w-16">TW</th>
                                         <th className="p-4 text-center w-24">Baseline</th>
                                         <th className="p-4 text-center w-24">Target</th>
-                                        <th className="p-4 text-center w-36">Realisasi</th>
+                                        <th className="p-4 text-center w-48">Realisasi & Progress</th>
                                         <th className="p-4 text-center w-28">Status</th>
                                         <th className="p-4 text-center w-36">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#c0c6d6]/10">
                                     {currentQueue.map(item => {
+                                        const progressPct = computeProgress(item.nilai_capaian, item.target);
                                         return (
                                             <tr key={item.id_capaian} className="hover:bg-[#f1f3fe]/20 transition-colors">
                                                 <td className="p-4 font-bold text-[#181c23]">
@@ -361,7 +370,7 @@ export default function Verifikasi() {
                                                     </div>
                                                 </td>
 
-                                                {/* Realisasi Card */}
+                                                {/* Realisasi Card with % dari Target subtext */}
                                                 <td className="p-4 text-center">
                                                     <div className="relative bg-[#ebedf8] border border-[#005bb1]/20 rounded-2xl px-4 py-2.5 text-center inline-block w-full max-w-[160px]">
                                                         <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 py-0.5 rounded-full text-[9px] font-extrabold text-[#181c23] uppercase tracking-wider border border-[#c0c6d6]/30 shadow-2xs">
@@ -370,6 +379,11 @@ export default function Verifikasi() {
                                                         <div className="text-base font-extrabold text-[#005bb1] mt-0.5">
                                                             {item.status_validasi === 'BELUM DIISI' ? '-' : item.nilai_capaian} <span className="text-xs font-normal text-[#535f71]">{item.satuan || '%'}</span>
                                                         </div>
+                                                        {item.status_validasi !== 'BELUM DIISI' && progressPct && (
+                                                            <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
+                                                                {progressPct}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
 
