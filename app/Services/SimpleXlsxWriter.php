@@ -12,7 +12,7 @@ class SimpleXlsxWriter
     /**
      * Create an .xlsx file at $outputPath using PhpOffice\PhpSpreadsheet
      */
-    public static function create($outputPath, array $headers, array $rows)
+    public static function create($outputPath, array $headers, array $rows, $sheetTitle = 'Capaian IKU 1')
     {
         $dir = dirname($outputPath);
         if (!file_exists($dir)) {
@@ -25,7 +25,7 @@ class SimpleXlsxWriter
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Capaian IKU 1');
+        $sheet->setTitle(substr($sheetTitle ?: 'Sheet1', 0, 31));
 
         $rowIdx = 1;
 

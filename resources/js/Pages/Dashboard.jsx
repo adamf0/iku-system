@@ -337,12 +337,14 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
 }
 
 // Capaian Semua Unit Bar Chart Component with UX/UI Enhancements
-function CapaianSemuaUnitBarChart({ data }) {
+function CapaianSemuaUnitBarChart({ data, selectedTw = 'TW1', selectedTahun = '2026' }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'HIGH' | 'MED' | 'LOW'
     const [sortBy, setSortBy] = useState('REALISASI_DESC');
     const [isExpanded, setIsExpanded] = useState(false);
     const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+    const [isExporting, setIsExporting] = useState(false);
 
     const getProgressStyles = (val) => {
         const num = Number(val) || 0;
@@ -383,16 +385,28 @@ function CapaianSemuaUnitBarChart({ data }) {
     // Unique unit types for tabs
     const unitTypes = ['ALL', ...Array.from(new Set(activeData.map(u => u.type).filter(Boolean)))];
 
-    // Counts by performance status (berdasarkan realisasi thd target)
-    const highCount = activeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) >= 80).length;
-    const medCount = activeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) >= 50 && (Number(u.capaian_realisasi ?? u.capaian) || 0) < 80).length;
-    const lowCount = activeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) < 50).length;
+    // Filter units based on selectedType (ALL, PRODI, UNIT, FAKULTAS)
+    const currentTypeData = useMemo(() => {
+        if (selectedType === 'ALL') return activeData;
+        return activeData.filter(u => (u.type || '').toUpperCase() === selectedType.toUpperCase());
+    }, [activeData, selectedType]);
+
+    // Counts by performance status (berdasarkan realisasi thd target) per selected unit type!
+    const highCount = currentTypeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) >= 80).length;
+    const medCount = currentTypeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) >= 50 && (Number(u.capaian_realisasi ?? u.capaian) || 0) < 80).length;
+    const lowCount = currentTypeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) < 50).length;
 
     // Filter & Sort logic
-    let filteredData = activeData.filter(unit => {
+    let filteredData = currentTypeData.filter(unit => {
         const matchSearch = (unit.nama_unit || '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchType = selectedType === 'ALL' || unit.type === selectedType;
-        return matchSearch && matchType;
+        
+        let matchStatus = true;
+        const real = Number(unit.capaian_realisasi ?? unit.capaian) || 0;
+        if (statusFilter === 'HIGH') matchStatus = real >= 80;
+        else if (statusFilter === 'MED') matchStatus = real >= 50 && real < 80;
+        else if (statusFilter === 'LOW') matchStatus = real < 50;
+
+        return matchSearch && matchStatus;
     });
 
     filteredData = [...filteredData].sort((a, b) => {
@@ -409,6 +423,83 @@ function CapaianSemuaUnitBarChart({ data }) {
         return 0;
     });
 
+    const handleExportXlsx = async () => {
+        if (!filteredData || filteredData.length === 0) {
+            alert('Tidak ada data capaian unit kerja untuk diexport.');
+            return;
+        }
+
+        setIsExporting(true);
+
+        const rowsForExport = filteredData.map((u, index) => {
+            const pctDiajukan = Number(u.capaian_diajukan) || 0;
+            const pctRealisasi = Number(u.capaian_realisasi ?? u.capaian) || 0;
+            let statusText = 'Perlu Perhatian (<50%)';
+            if (pctRealisasi >= 80) statusText = 'Tinggi (≥80%)';
+            else if (pctRealisasi >= 50) statusText = 'Sedang (50-79%)';
+
+            return {
+                no: index + 1,
+                nama_unit: u.nama_unit || '-',
+                type: u.type || '-',
+                triwulan: selectedTw || 'TW1',
+                data_diajukan: u.total_laporan || 0,
+                total_penugasan: u.total_assigned || 0,
+                persentase_diajukan: `${pctDiajukan}%`,
+                persentase_realisasi: `${pctRealisasi}%`,
+                status_ketercapaian: statusText
+            };
+        });
+
+        try {
+            const res = await fetch('/api/dashboard/export-capaian-unit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    tw: selectedTw || 'TW1',
+                    tahun: selectedTahun || '2026',
+                    type: selectedType,
+                    status_filter: statusFilter,
+                    rows: rowsForExport
+                })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const typeSuffix = selectedType !== 'ALL' ? `_${selectedType}` : '';
+                a.download = `Capaian_Unit_Kerja_${selectedTw || 'TW1'}_${selectedTahun || '2026'}${typeSuffix}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                return;
+            }
+            throw new Error('Server export failed');
+        } catch (err) {
+            console.warn('Fallback to client-side CSV export:', err);
+            let csv = "data:text/csv;charset=utf-8,\uFEFF";
+            csv += "No;Nama Unit Kerja;Tipe Unit;Triwulan;Data Diajukan;Total Indikator Ditugaskan;Persentase Diajukan;Ketercapaian Realisasi thd Target;Kategori Status\n";
+            rowsForExport.forEach(r => {
+                csv += `${r.no};"${(r.nama_unit || '').replace(/"/g, '""')}";"${r.type}";"${r.triwulan}";${r.data_diajukan};${r.total_penugasan};"${r.persentase_diajukan}";"${r.persentase_realisasi}";"${r.status_ketercapaian}"\n`;
+            });
+            const encodedUri = encodeURI(csv);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            const typeSuffix = selectedType !== 'ALL' ? `_${selectedType}` : '';
+            link.setAttribute('download', `Capaian_Unit_Kerja_${selectedTw || 'TW1'}_${selectedTahun || '2026'}${typeSuffix}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const DEFAULT_LIMIT = 6;
     const visibleData = isExpanded ? filteredData : filteredData.slice(0, DEFAULT_LIMIT);
     const hiddenCount = filteredData.length - DEFAULT_LIMIT;
@@ -419,37 +510,115 @@ function CapaianSemuaUnitBarChart({ data }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-[#f9f9ff] p-3 rounded-2xl border border-[#c0c6d6]/20">
                 {/* Status Badges */}
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
-                    <span className="text-[#535f71] mr-1 font-extrabold uppercase text-[10px] tracking-wider">Ringkasan Status:</span>
-                    <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        Tinggi (≥80%): <strong className="font-mono text-emerald-900">{highCount}</strong>
+                    <span className="text-[#535f71] mr-1 font-extrabold uppercase text-[10px] tracking-wider">
+                        Ringkasan Status {selectedType !== 'ALL' ? `(${selectedType})` : ''}:
                     </span>
-                    <span className="bg-blue-100 text-[#005bb1] px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-[#005bb1]"></span>
-                        Sedang (50-79%): <strong className="font-mono text-[#001b3d]">{medCount}</strong>
-                    </span>
-                    <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                        Perlu Perhatian (&lt;50%): <strong className="font-mono text-red-900">{lowCount}</strong>
-                    </span>
+
+                    {/* Button High */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setStatusFilter(prev => prev === 'HIGH' ? 'ALL' : 'HIGH');
+                            setIsExpanded(false);
+                        }}
+                        className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all cursor-pointer ${
+                            statusFilter === 'HIGH'
+                                ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/40 font-black'
+                                : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                        }`}
+                        title={statusFilter === 'HIGH' ? "Klik untuk membatalkan filter" : "Klik untuk memfilter unit status Tinggi"}
+                    >
+                        <span className={`w-2 h-2 rounded-full ${statusFilter === 'HIGH' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+                        <span>Tinggi (≥80%):</span>
+                        <strong className={`font-mono ${statusFilter === 'HIGH' ? 'text-white' : 'text-emerald-900'}`}>{highCount}</strong>
+                    </button>
+
+                    {/* Button Medium */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setStatusFilter(prev => prev === 'MED' ? 'ALL' : 'MED');
+                            setIsExpanded(false);
+                        }}
+                        className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all cursor-pointer ${
+                            statusFilter === 'MED'
+                                ? 'bg-[#005bb1] text-white shadow-xs ring-2 ring-[#005bb1]/40 font-black'
+                                : 'bg-blue-100 text-[#005bb1] hover:bg-blue-200'
+                        }`}
+                        title={statusFilter === 'MED' ? "Klik untuk membatalkan filter" : "Klik untuk memfilter unit status Sedang"}
+                    >
+                        <span className={`w-2 h-2 rounded-full ${statusFilter === 'MED' ? 'bg-white' : 'bg-[#005bb1]'}`}></span>
+                        <span>Sedang (50-79%):</span>
+                        <strong className={`font-mono ${statusFilter === 'MED' ? 'text-white' : 'text-[#001b3d]'}`}>{medCount}</strong>
+                    </button>
+
+                    {/* Button Low */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setStatusFilter(prev => prev === 'LOW' ? 'ALL' : 'LOW');
+                            setIsExpanded(false);
+                        }}
+                        className={`px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all cursor-pointer ${
+                            statusFilter === 'LOW'
+                                ? 'bg-red-600 text-white shadow-xs ring-2 ring-red-600/40 font-black'
+                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                        }`}
+                        title={statusFilter === 'LOW' ? "Klik untuk membatalkan filter" : "Klik untuk memfilter unit status Perlu Perhatian"}
+                    >
+                        <span className={`w-2 h-2 rounded-full ${statusFilter === 'LOW' ? 'bg-white' : 'bg-red-500'}`}></span>
+                        <span>Perlu Perhatian (&lt;50%):</span>
+                        <strong className={`font-mono ${statusFilter === 'LOW' ? 'text-white' : 'text-red-900'}`}>{lowCount}</strong>
+                    </button>
+
+                    {/* Reset Status Filter Button if active */}
+                    {statusFilter !== 'ALL' && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStatusFilter('ALL');
+                                setIsExpanded(false);
+                            }}
+                            className="text-[10px] text-[#535f71] hover:text-[#181c23] hover:underline flex items-center gap-0.5 ml-1 cursor-pointer font-bold"
+                            title="Tampilkan semua status"
+                        >
+                            <span className="material-symbols-outlined text-[13px]">close</span>
+                            Reset Filter Status
+                        </button>
+                    )}
                 </div>
 
-                {/* View Mode Switcher */}
-                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#c0c6d6]/30 self-end md:self-auto shadow-2xs">
-                    <button 
-                        onClick={() => setViewMode('grid')}
-                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[#005bb1] text-white' : 'text-[#535f71] hover:bg-[#f1f3fe]'}`}
-                        title="Tampilan Grid Kartu"
+                {/* Right controls: Export XLSX & View Mode Switcher */}
+                <div className="flex items-center gap-2 self-end md:self-auto">
+                    <button
+                        type="button"
+                        onClick={handleExportXlsx}
+                        disabled={isExporting}
+                        className="flex items-center gap-1.5 bg-[#005bb1] text-white hover:bg-[#0073dd] px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                        title="Download Rekap Capaian Unit Kerja format Excel (.xlsx)"
                     >
-                        <span className="material-symbols-outlined text-sm block">grid_view</span>
+                        <span className={`material-symbols-outlined text-[16px] ${isExporting ? 'animate-spin' : ''}`}>
+                            {isExporting ? 'progress_activity' : 'download'}
+                        </span>
+                        <span>{isExporting ? 'Mengunduh...' : 'Export XLSX'}</span>
                     </button>
-                    <button 
-                        onClick={() => setViewMode('list')}
-                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[#005bb1] text-white' : 'text-[#535f71] hover:bg-[#f1f3fe]'}`}
-                        title="Tampilan Ranking List"
-                    >
-                        <span className="material-symbols-outlined text-sm block">format_list_bulleted</span>
-                    </button>
+
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#c0c6d6]/30 shadow-2xs">
+                        <button 
+                            onClick={() => setViewMode('grid')}
+                            className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[#005bb1] text-white' : 'text-[#535f71] hover:bg-[#f1f3fe]'}`}
+                            title="Tampilan Grid Kartu"
+                        >
+                            <span className="material-symbols-outlined text-sm block">grid_view</span>
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('list')}
+                            className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[#005bb1] text-white' : 'text-[#535f71] hover:bg-[#f1f3fe]'}`}
+                            title="Tampilan Ranking List"
+                        >
+                            <span className="material-symbols-outlined text-sm block">format_list_bulleted</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -466,6 +635,7 @@ function CapaianSemuaUnitBarChart({ data }) {
                                 onClick={() => {
                                     setSelectedType(type);
                                     setIsExpanded(false);
+                                    setStatusFilter('ALL');
                                 }}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all ${
                                     selectedType === type
@@ -1239,7 +1409,11 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        <CapaianSemuaUnitBarChart data={stats?.capaian_per_unit} />
+                        <CapaianSemuaUnitBarChart 
+                            data={stats?.capaian_per_unit} 
+                            selectedTw={unitTwFilter} 
+                            selectedTahun={selectedTahun} 
+                        />
                     </section>
 
                     {/* CARD 4: PERFORMANCE DISTRIBUTION TABLE (FULL WIDTH) */}

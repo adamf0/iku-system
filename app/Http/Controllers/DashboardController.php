@@ -1067,4 +1067,50 @@ class DashboardController extends Controller
 
         return response()->download($zipPath, $zipFilename)->deleteFileAfterSend(false);
     }
+
+    public function exportCapaianUnit(Request $request)
+    {
+        $tw = $request->input('tw', 'TW1');
+        $tahun = $request->input('tahun', date('Y'));
+        $type = $request->input('type', 'ALL');
+        $rowsData = $request->input('rows', []);
+
+        $headers = [
+            'No',
+            'Nama Unit Kerja',
+            'Tipe Unit',
+            'Triwulan',
+            'Data Diajukan',
+            'Total Indikator Ditugaskan',
+            'Persentase Diajukan (%)',
+            'Ketercapaian Realisasi thd Target (%)',
+            'Kategori Status'
+        ];
+
+        $rows = [];
+        $no = 1;
+        foreach ($rowsData as $r) {
+            $rows[] = [
+                $no++,
+                $r['nama_unit'] ?? '-',
+                $r['type'] ?? '-',
+                $r['triwulan'] ?? $tw,
+                $r['data_diajukan'] ?? 0,
+                $r['total_penugasan'] ?? 0,
+                $r['persentase_diajukan'] ?? '0%',
+                $r['persentase_realisasi'] ?? '0%',
+                $r['status_ketercapaian'] ?? '-'
+            ];
+        }
+
+        $typeSuffix = ($type && $type !== 'ALL') ? "_{$type}" : '';
+        $filename = "Capaian_Unit_Kerja_{$tw}_{$tahun}{$typeSuffix}.xlsx";
+        $tempPath = storage_path("app/exports/temp_" . uniqid() . ".xlsx");
+
+        \App\Services\SimpleXlsxWriter::create($tempPath, $headers, $rows, "Capaian Unit Kerja");
+
+        return response()->download($tempPath, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
 }
