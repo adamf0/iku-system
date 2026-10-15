@@ -1286,7 +1286,7 @@ export default function Dashboard() {
                                                                         Realisasi
                                                                     </span>
                                                                     <div className="text-sm font-extrabold text-[#005bb1] mt-0.5">
-                                                                        {nilaiCapaian} <span className="text-[10px] font-normal text-[#535f71]">{iku.satuan}</span>
+                                                                        {nilaiCapaian} {/* <span className="text-[10px] font-normal text-[#535f71]">{iku.satuan}</span> */}
                                                                     </div>
                                                                     {/* {progressPct && (
                                                                         <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
