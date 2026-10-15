@@ -604,15 +604,38 @@ class DashboardController extends Controller
                     : 0;
             }
 
-            // Persentase capaian bar: (jumlah data diajukan / indikator ditugaskan) * 100%
-            $persentase = $denominator > 0 ? min(100, round(($diajukanCount / $denominator) * 100, 1)) : 0;
+            // 1. Persentase data yang statusnya diajukan: (jumlah data diajukan / indikator ditugaskan) * 100%
+            $persentaseDiajukan = $denominator > 0 ? min(100, round(($diajukanCount / $denominator) * 100, 1)) : 0;
+
+            // 2. Ketercapaian antara realisasi terhadap target dari data yang diajukan
+            $unitRealPcts = [];
+            foreach ($submittedRows as $r) {
+                if (!in_array($r->id_indikator, $assignedIkuIds)) {
+                    continue;
+                }
+                $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
+                if ($ikuDef) {
+                    $uObj = $unitsMap->get($u->id);
+                    $targetYear = $r->tahun ?? ($tahun !== 'ALL' ? $tahun : date('Y'));
+                    $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $targetYear) : null;
+                    $targetVal = $this->getUnitTarget($ikuDef, $uObj, $tObj);
+                    if ($targetVal > 0) {
+                        $pct = min(100, round(((float)$r->nilai_capaian / $targetVal) * 100, 1));
+                        $unitRealPcts[] = $pct;
+                    }
+                }
+            }
+            $persentaseRealisasi = count($unitRealPcts) > 0 ? round(array_sum($unitRealPcts) / count($unitRealPcts), 1) : 0;
+
             $stat = $simakStats->get($u->id);
 
             $capaianPerUnit[] = [
                 'id' => $u->id,
                 'nama_unit' => $u->nama_fak_prod_unit,
                 'type' => strtoupper($u->type),
-                'capaian' => $persentase,
+                'capaian_diajukan' => $persentaseDiajukan,
+                'capaian_realisasi' => $persentaseRealisasi,
+                'capaian' => $persentaseRealisasi, // default capaian value
                 'total_laporan' => $diajukanCount,
                 'total_assigned' => $denominator,
                 'total_lulusan' => $stat ? (int)$stat->total_lulusan : 0,

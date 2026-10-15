@@ -340,9 +340,32 @@ function SebaranCapaianChart({ data, filterTw, selectedTahun }) {
 function CapaianSemuaUnitBarChart({ data }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState('ALL');
-    const [sortBy, setSortBy] = useState('CAPAIAN_DESC');
+    const [sortBy, setSortBy] = useState('REALISASI_DESC');
     const [isExpanded, setIsExpanded] = useState(false);
     const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+
+    const getProgressStyles = (val) => {
+        const num = Number(val) || 0;
+        if (num >= 80) {
+            return {
+                barColor: 'bg-emerald-500',
+                badgeColor: 'bg-emerald-100 text-emerald-700',
+                textColor: 'text-emerald-700'
+            };
+        }
+        if (num >= 50) {
+            return {
+                barColor: 'bg-[#005bb1]',
+                badgeColor: 'bg-blue-100 text-[#005bb1]',
+                textColor: 'text-[#005bb1]'
+            };
+        }
+        return {
+            barColor: 'bg-red-500',
+            badgeColor: 'bg-red-100 text-red-700',
+            textColor: 'text-red-700'
+        };
+    };
 
     // Filter only active units
     const activeData = useMemo(() => {
@@ -360,10 +383,10 @@ function CapaianSemuaUnitBarChart({ data }) {
     // Unique unit types for tabs
     const unitTypes = ['ALL', ...Array.from(new Set(activeData.map(u => u.type).filter(Boolean)))];
 
-    // Counts by performance status
-    const highCount = activeData.filter(u => (Number(u.capaian) || 0) >= 80).length;
-    const medCount = activeData.filter(u => (Number(u.capaian) || 0) >= 50 && (Number(u.capaian) || 0) < 80).length;
-    const lowCount = activeData.filter(u => (Number(u.capaian) || 0) < 50).length;
+    // Counts by performance status (berdasarkan realisasi thd target)
+    const highCount = activeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) >= 80).length;
+    const medCount = activeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) >= 50 && (Number(u.capaian_realisasi ?? u.capaian) || 0) < 80).length;
+    const lowCount = activeData.filter(u => (Number(u.capaian_realisasi ?? u.capaian) || 0) < 50).length;
 
     // Filter & Sort logic
     let filteredData = activeData.filter(unit => {
@@ -373,10 +396,15 @@ function CapaianSemuaUnitBarChart({ data }) {
     });
 
     filteredData = [...filteredData].sort((a, b) => {
-        const capA = Number(a.capaian) || 0;
-        const capB = Number(b.capaian) || 0;
-        if (sortBy === 'CAPAIAN_DESC') return capB - capA;
-        if (sortBy === 'CAPAIAN_ASC') return capA - capB;
+        const realA = Number(a.capaian_realisasi ?? a.capaian) || 0;
+        const realB = Number(b.capaian_realisasi ?? b.capaian) || 0;
+        const diajukanA = Number(a.capaian_diajukan) || 0;
+        const diajukanB = Number(b.capaian_diajukan) || 0;
+
+        if (sortBy === 'REALISASI_DESC' || sortBy === 'CAPAIAN_DESC') return realB - realA;
+        if (sortBy === 'REALISASI_ASC' || sortBy === 'CAPAIAN_ASC') return realA - realB;
+        if (sortBy === 'DIAJUKAN_DESC') return diajukanB - diajukanA;
+        if (sortBy === 'DIAJUKAN_ASC') return diajukanA - diajukanB;
         if (sortBy === 'NAME_ASC') return (a.nama_unit || '').localeCompare(b.nama_unit || '');
         return 0;
     });
@@ -477,8 +505,10 @@ function CapaianSemuaUnitBarChart({ data }) {
                         onChange={(e) => setSortBy(e.target.value)}
                         className="bg-white border border-[#c0c6d6]/40 rounded-xl px-3 py-1.5 text-xs font-bold text-[#181c23] outline-none cursor-pointer focus:border-[#005bb1]"
                     >
-                        <option value="CAPAIAN_DESC">Capaian Tertinggi</option>
-                        <option value="CAPAIAN_ASC">Capaian Terendah</option>
+                        <option value="REALISASI_DESC">Realisasi Tertinggi</option>
+                        <option value="REALISASI_ASC">Realisasi Terendah</option>
+                        <option value="DIAJUKAN_DESC">Pengajuan Tertinggi</option>
+                        <option value="DIAJUKAN_ASC">Pengajuan Terendah</option>
                         <option value="NAME_ASC">Nama (A-Z)</option>
                     </select>
                 </div>
@@ -491,44 +521,69 @@ function CapaianSemuaUnitBarChart({ data }) {
                     <p className="text-xs text-[#535f71] font-medium">Tidak ada unit kerja yang sesuai dengan kata kunci "{searchQuery}".</p>
                 </div>
             ) : viewMode === 'grid' ? (
-                /* GRID CARD VIEW */
+                /* GRID CARD VIEW (2 BARS: DIAJUKAN & REALISASI TARGET) */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {visibleData.map((unit, idx) => {
-                        const pct = Number(unit.capaian) || 0;
-                        let barColor = 'bg-red-500';
-                        let badgeColor = 'bg-red-100 text-red-700';
+                        const pctDiajukan = Number(unit.capaian_diajukan) || 0;
+                        const pctRealisasi = Number(unit.capaian_realisasi ?? unit.capaian) || 0;
 
-                        if (pct >= 80) {
-                            barColor = 'bg-emerald-500';
-                            badgeColor = 'bg-emerald-100 text-emerald-700';
-                        } else if (pct >= 50) {
-                            barColor = 'bg-[#005bb1]';
-                            badgeColor = 'bg-blue-100 text-[#005bb1]';
-                        }
+                        const styleDiajukan = getProgressStyles(pctDiajukan);
+                        const styleRealisasi = getProgressStyles(pctRealisasi);
 
                         return (
-                            <div key={unit.id} className="bg-[#f9f9ff] border border-[#c0c6d6]/25 rounded-2xl p-4 space-y-3 hover:shadow-md transition-all">
+                            <div key={unit.id} className="bg-[#f9f9ff] border border-[#c0c6d6]/25 rounded-2xl p-4 space-y-3.5 hover:shadow-md transition-all">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
                                         <h4 className="text-xs font-extrabold text-[#181c23] truncate" title={unit.nama_unit}>{unit.nama_unit}</h4>
                                         <span className="text-[9px] font-bold text-[#717785] uppercase tracking-wider">{unit.type}</span>
                                     </div>
-                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase flex-shrink-0 ${badgeColor}`}>
-                                        {pct}%
+                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase flex-shrink-0 ${styleRealisasi.badgeColor}`}>
+                                        {pctRealisasi}%
                                     </span>
                                 </div>
 
-                                {/* Progress bar container */}
-                                <div className="space-y-1">
-                                    <div className="w-full bg-[#e8ecf4] h-2.5 rounded-full overflow-hidden">
-                                        <div 
-                                            className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
-                                            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                                        ></div>
+                                {/* 2 Progress Bars */}
+                                <div className="space-y-3 pt-0.5">
+                                    {/* Bar 1: Total Status Diajukan */}
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between items-center text-[10px]">
+                                            <span className="font-bold text-[#535f71] flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-xs text-[#005bb1]">upload_file</span>
+                                                Data Diajukan ({unit.total_laporan || 0}/{unit.total_assigned || 0})
+                                            </span>
+                                            <span className={`font-black ${styleDiajukan.textColor}`}>
+                                                {pctDiajukan}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-[#e8ecf4] h-2 rounded-full overflow-hidden">
+                                            <div 
+                                                className={`h-full rounded-full transition-all duration-500 ${styleDiajukan.barColor}`} 
+                                                style={{ width: `${Math.min(100, Math.max(0, pctDiajukan))}%` }}
+                                            ></div>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between items-center text-[9px] text-[#717785] font-semibold">
-                                        <span>Laporan: {unit.total_laporan || 0}{unit.total_assigned ? ` / ${unit.total_assigned}` : ''}</span>
-                                        <span>Target 100%</span>
+
+                                    {/* Bar 2: Ketercapaian Realisasi thd Target */}
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between items-center text-[10px]">
+                                            <span className="font-bold text-[#535f71] flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-xs text-emerald-600">track_changes</span>
+                                                Realisasi thd Target
+                                            </span>
+                                            <span className={`font-black ${styleRealisasi.textColor}`}>
+                                                {pctRealisasi}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-[#e8ecf4] h-2 rounded-full overflow-hidden">
+                                            <div 
+                                                className={`h-full rounded-full transition-all duration-500 ${styleRealisasi.barColor}`} 
+                                                style={{ width: `${Math.min(100, Math.max(0, pctRealisasi))}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[9px] text-[#717785] font-semibold pt-0.5">
+                                            <span>Ketercapaian Kinerja</span>
+                                            <span>Target 100%</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -536,43 +591,64 @@ function CapaianSemuaUnitBarChart({ data }) {
                     })}
                 </div>
             ) : (
-                /* RANKING LIST VIEW */
+                /* RANKING LIST VIEW (2 BARS) */
                 <div className="bg-[#f9f9ff] border border-[#c0c6d6]/25 rounded-2xl divide-y divide-[#c0c6d6]/15 overflow-hidden">
                     {visibleData.map((unit, idx) => {
-                        const pct = Number(unit.capaian) || 0;
-                        let barColor = 'bg-red-500';
-                        let badgeColor = 'bg-red-100 text-red-700';
+                        const pctDiajukan = Number(unit.capaian_diajukan) || 0;
+                        const pctRealisasi = Number(unit.capaian_realisasi ?? unit.capaian) || 0;
 
-                        if (pct >= 80) {
-                            barColor = 'bg-emerald-500';
-                            badgeColor = 'bg-emerald-100 text-emerald-700';
-                        } else if (pct >= 50) {
-                            barColor = 'bg-[#005bb1]';
-                            badgeColor = 'bg-blue-100 text-[#005bb1]';
-                        }
+                        const styleDiajukan = getProgressStyles(pctDiajukan);
+                        const styleRealisasi = getProgressStyles(pctRealisasi);
 
                         return (
                             <div key={unit.id} className="p-3.5 flex items-center gap-4 hover:bg-white transition-colors">
                                 <span className="w-6 text-center text-xs font-black text-[#717785]">#{idx + 1}</span>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <h4 className="text-xs font-bold text-[#181c23] truncate">{unit.nama_unit}</h4>
                                             <span className="text-[9px] font-bold text-[#717785] bg-[#ebedf8] px-2 py-0.5 rounded uppercase flex-shrink-0">{unit.type}</span>
                                         </div>
-                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeColor}`}>
-                                            {pct}%
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${styleRealisasi.badgeColor}`}>
+                                            {pctRealisasi}%
                                         </span>
                                     </div>
-                                    <div className="w-full bg-[#e8ecf4] h-2 rounded-full overflow-hidden">
-                                        <div 
-                                            className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
-                                            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                                        ></div>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[8px] text-[#717785] font-semibold mt-1">
-                                        <span>Laporan: {unit.total_laporan || 0}{unit.total_assigned ? ` / ${unit.total_assigned}` : ''}</span>
-                                        <span>Target 100%</span>
+
+                                    {/* 2 Progress Bars in List View */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+                                        {/* Bar 1: Status Diajukan */}
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-[9px] font-bold text-[#535f71]">
+                                                <span className="flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-xs text-[#005bb1]">upload_file</span>
+                                                    Diajukan ({unit.total_laporan || 0}/{unit.total_assigned || 0})
+                                                </span>
+                                                <span className={styleDiajukan.textColor}>{pctDiajukan}%</span>
+                                            </div>
+                                            <div className="w-full bg-[#e8ecf4] h-1.5 rounded-full overflow-hidden">
+                                                <div 
+                                                    className={`h-full rounded-full transition-all duration-500 ${styleDiajukan.barColor}`} 
+                                                    style={{ width: `${Math.min(100, Math.max(0, pctDiajukan))}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+
+                                        {/* Bar 2: Realisasi thd Target */}
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-[9px] font-bold text-[#535f71]">
+                                                <span className="flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-xs text-emerald-600">track_changes</span>
+                                                    Realisasi thd Target
+                                                </span>
+                                                <span className={styleRealisasi.textColor}>{pctRealisasi}%</span>
+                                            </div>
+                                            <div className="w-full bg-[#e8ecf4] h-1.5 rounded-full overflow-hidden">
+                                                <div 
+                                                    className={`h-full rounded-full transition-all duration-500 ${styleRealisasi.barColor}`} 
+                                                    style={{ width: `${Math.min(100, Math.max(0, pctRealisasi))}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1144,7 +1220,7 @@ export default function Dashboard() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c0c6d6]/15 pb-4">
                             <div>
                                 <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
-                                <p className="text-xs text-[#535f71]">Persentase data diajukan terhadap indikator yang ditugaskan untuk seluruh Fakultas & Unit Kerja.</p>
+                                <p className="text-xs text-[#535f71]">Perbandingan persentase data diajukan serta ketercapaian realisasi terhadap target untuk seluruh Fakultas & Unit Kerja.</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
