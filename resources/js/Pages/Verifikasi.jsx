@@ -377,13 +377,8 @@ export default function Verifikasi() {
                                                             Realisasi
                                                         </span>
                                                         <div className="text-base font-extrabold text-[#005bb1] mt-0.5">
-                                                            {item.status_validasi === 'BELUM DIISI' ? '-' : item.nilai_capaian}
+                                                            {item.nilai_capaian ?? "-"}
                                                         </div>
-                                                        {item.status_validasi !== 'BELUM DIISI' && item.nilai_capaian && (
-                                                            <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
-                                                                {item.nilai_capaian}
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </td>
 
