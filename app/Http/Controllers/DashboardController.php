@@ -533,6 +533,7 @@ class DashboardController extends Controller
         }
 
         // Capaian Semua Unit (Evaluated per year & triwulan filter, only active units)
+        // Rumus persentase bar: jumlah data status diajukan / indikator yg ditugaskan ke fakultas unit
         $unitTwParam = strtoupper($request->query('unit_tw', 'ALL'));
         $unitsList = DB::table('v_fakultas_unit')
             ->where(function($w) {
@@ -543,39 +544,74 @@ class DashboardController extends Controller
         }
         $unitsList = $unitsList->get();
 
+        $unitIds = $unitsList->pluck('id')->all();
+
+        // 1. Ambil data penugasan indikator (penugasan_target) sebagai penyebut
+        $penugasanByUnit = !empty($unitIds)
+            ? DB::table('penugasan_target')
+                ->whereIn('fakultas_unit', $unitIds)
+                ->whereNull('deleted_at')
+                ->when($tahun !== 'ALL', fn($q) => $q->where('tahun', $tahun))
+                ->get()
+                ->groupBy('fakultas_unit')
+            : collect();
+
+        // 2. Ambil data realisasi capaian (template_capaian) sebagai pembilang
+        $capaianByUnit = !empty($unitIds)
+            ? DB::table('template_capaian')
+                ->whereIn('fakultas_unit', $unitIds)
+                ->when($tahun !== 'ALL', fn($q) => $q->where('tahun', $tahun))
+                ->when($unitTwParam !== 'ALL', fn($q) => $q->where('triwulan', $unitTwParam))
+                ->get()
+                ->groupBy('fakultas_unit')
+            : collect();
+
         $capaianPerUnit = [];
         foreach ($unitsList as $u) {
-            $rowsUnit = $sebaranCapaianRows->where('fakultas_unit', $u->id);
-            if ($tahun !== 'ALL') {
-                $rowsUnit = $rowsUnit->where('tahun', $tahun);
-            }
+            $unitAssignments = $penugasanByUnit->get($u->id, collect());
+            $unitRows = $capaianByUnit->get($u->id, collect());
+
+            // Status yang tergolong telah diajukan oleh unit kerja
+            $submittedRows = $unitRows->filter(function($r) {
+                $status = strtoupper(trim($r->status_validasi ?? ''));
+                return in_array($status, ['DIAJUKAN', 'DIVERIFIKASI', 'DISAHKAN']);
+            });
+
+            $assignedIkuIds = $unitAssignments->pluck('id_indikator')->unique()->values()->toArray();
+            $totalAssigned = count($assignedIkuIds);
+
             if ($unitTwParam !== 'ALL') {
-                $rowsUnit = $rowsUnit->where('triwulan', $unitTwParam);
-            }
-
-            $unitPcts = [];
-            foreach ($rowsUnit as $r) {
-                $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
-                if ($ikuDef) {
-                    $uObj = $unitsMap->get($r->fakultas_unit);
-                    $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
-                    $targetVal = $this->getUnitTarget($ikuDef, $uObj, $tObj);
-                    if ($targetVal > 0) {
-                        $pct = min(100, round(((float)$r->nilai_capaian / $targetVal) * 100, 1));
-                        $unitPcts[] = $pct;
-                    }
+                $denominator = $totalAssigned;
+                $diajukanCount = $denominator > 0 
+                    ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)->pluck('id_indikator')->unique()->count() 
+                    : 0;
+            } else {
+                if ($tahun !== 'ALL') {
+                    $denominator = $totalAssigned * 4;
+                } else {
+                    $assignedRecords = $unitAssignments->map(fn($a) => ($a->tahun ?? '') . '_' . $a->id_indikator)->unique()->count();
+                    $denominator = $assignedRecords * 4;
                 }
+
+                $diajukanCount = $denominator > 0
+                    ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)
+                        ->map(fn($r) => ($r->tahun ?? '') . '_' . ($r->triwulan ?? '') . '_' . $r->id_indikator)
+                        ->unique()
+                        ->count()
+                    : 0;
             }
 
-            $capaianAvg = count($unitPcts) > 0 ? round(array_sum($unitPcts) / count($unitPcts), 1) : 0;
+            // Persentase capaian bar: (jumlah data diajukan / indikator ditugaskan) * 100%
+            $persentase = $denominator > 0 ? min(100, round(($diajukanCount / $denominator) * 100, 1)) : 0;
             $stat = $simakStats->get($u->id);
 
             $capaianPerUnit[] = [
                 'id' => $u->id,
                 'nama_unit' => $u->nama_fak_prod_unit,
                 'type' => strtoupper($u->type),
-                'capaian' => $capaianAvg,
-                'total_laporan' => $rowsUnit->count(),
+                'capaian' => $persentase,
+                'total_laporan' => $diajukanCount,
+                'total_assigned' => $denominator,
                 'total_lulusan' => $stat ? (int)$stat->total_lulusan : 0,
                 'avg_lama_kuliah' => $stat ? (float)$stat->avg_lama_kuliah : null,
                 'is_active' => (bool)($u->is_active ?? true),

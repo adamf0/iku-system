@@ -527,7 +527,7 @@ function CapaianSemuaUnitBarChart({ data }) {
                                         ></div>
                                     </div>
                                     <div className="flex justify-between items-center text-[9px] text-[#717785] font-semibold">
-                                        <span>Laporan: {unit.total_laporan || 0}</span>
+                                        <span>Laporan: {unit.total_laporan || 0}{unit.total_assigned ? ` / ${unit.total_assigned}` : ''}</span>
                                         <span>Target 100%</span>
                                     </div>
                                 </div>
@@ -569,6 +569,10 @@ function CapaianSemuaUnitBarChart({ data }) {
                                             className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
                                             style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
                                         ></div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[8px] text-[#717785] font-semibold mt-1">
+                                        <span>Laporan: {unit.total_laporan || 0}{unit.total_assigned ? ` / ${unit.total_assigned}` : ''}</span>
+                                        <span>Target 100%</span>
                                     </div>
                                 </div>
                             </div>
@@ -1141,7 +1145,7 @@ export default function Dashboard() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c0c6d6]/15 pb-4">
                             <div>
                                 <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
-                                <p className="text-xs text-[#535f71]">Perbandingan persentase rata-rata capaian IKU untuk seluruh Fakultas & Unit Kerja.</p>
+                                <p className="text-xs text-[#535f71]">Persentase data diajukan terhadap indikator yang ditugaskan untuk seluruh Fakultas & Unit Kerja.</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
