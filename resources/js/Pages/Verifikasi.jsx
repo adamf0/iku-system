@@ -60,6 +60,7 @@ export default function Verifikasi() {
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState([]);
     const [bulkProcessing, setBulkProcessing] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         loadQueue();
@@ -161,36 +162,49 @@ export default function Verifikasi() {
         }
     };
 
-    const handleExportXlsx = () => {
+    const handleExportXlsx = async () => {
         if (queue.length === 0) {
             alert('Tidak ada data verifikasi untuk diexport.');
             return;
         }
 
-        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-        csvContent += "Unit Pelapor;Kode IKU;Nama Indikator;Triwulan;Baseline;Target;Realisasi;Satuan;Status Validasi;Diinput Oleh\n";
+        setIsExporting(true);
 
-        queue.forEach(item => {
-            const unit = `"${(item.nama_unit || '').replace(/"/g, '""')}"`;
-            const kode = `"${(item.kode_iku || '').replace(/"/g, '""')}"`;
-            const nama = `"${(item.nama_iku || item.full_kategori || '').replace(/"/g, '""')}"`;
-            const tw = `"${item.triwulan || ''}"`;
-            const base = `"${item.base_line || '-'}"`;
-            const target = `"${item.target || '-'}"`;
-            const real = `"${item.nilai_capaian || 0}"`;
-            const satuan = `"${(item.satuan || '%').replace(/"/g, '""')}"`;
-            const status = `"${(item.status_validasi || '').replace(/"/g, '""')}"`;
-            const inputter = `"${(item.diinput_oleh || '').replace(/"/g, '""')}"`;
-            csvContent += `${unit};${kode};${nama};${tw};${base};${target};${real};${satuan};${status};${inputter}\n`;
-        });
+        try {
+            const res = await fetch('/api/dashboard/export-verifikasi-xlsx', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    triwulan: filterTriwulan,
+                    tahun: filterTahun,
+                    status: filterStatus,
+                    unit: filterUnit,
+                    indikator: filterIndikator,
+                    items: queue
+                })
+            });
 
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `Verifikasi_Capaian_${filterTriwulan}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Verifikasi_Capaian_${filterTriwulan}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                return;
+            }
+            throw new Error('Gagal mengunduh berkas XLSX dari server.');
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('Terjadi kesalahan saat mengekspor XLSX: ' + err.message);
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     // Pagination calculations (Limit 10 per page)
@@ -355,11 +369,16 @@ export default function Verifikasi() {
                     </div>
 
                     <button 
+                        type="button"
                         onClick={handleExportXlsx}
-                        className="flex items-center gap-2 bg-[#005bb1] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#0073dd] transition-all shadow-sm"
+                        disabled={isExporting}
+                        className="flex items-center gap-2 bg-[#005bb1] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#0073dd] transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                        title="Download Berkas Excel (.xlsx) dengan Lembar 1 & Lembar 2"
                     >
-                        <span className="material-symbols-outlined text-[18px]">download</span>
-                        Export XLSX
+                        <span className={`material-symbols-outlined text-[18px] ${isExporting ? 'animate-spin' : ''}`}>
+                            {isExporting ? 'progress_activity' : 'download'}
+                        </span>
+                        <span>{isExporting ? 'Mengunduh XLSX...' : 'Export XLSX'}</span>
                     </button>
                 </div>
 

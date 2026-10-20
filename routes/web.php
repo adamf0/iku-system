@@ -147,6 +147,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/export-tw-zip/chunk', [DashboardController::class, 'downloadExportTwZipChunk']);
         Route::get('/export-tw-zip', [DashboardController::class, 'exportTwZip']);
         Route::post('/export-capaian-unit', [DashboardController::class, 'exportCapaianUnit']);
+        Route::post('/export-verifikasi-xlsx', [DashboardController::class, 'exportVerifikasiXlsx']);
     });
 
     // API - Capaian & Penugasan

@@ -5,6 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class DashboardController extends Controller
 {
@@ -1108,6 +1112,227 @@ class DashboardController extends Controller
         $tempPath = storage_path("app/exports/temp_" . uniqid() . ".xlsx");
 
         \App\Services\SimpleXlsxWriter::create($tempPath, $headers, $rows, "Capaian Unit Kerja");
+
+        return response()->download($tempPath, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    public function exportVerifikasiXlsx(Request $request)
+    {
+        $tw = $request->input('triwulan', 'TW1');
+        $tahun = $request->input('tahun', date('Y'));
+        $itemsData = $request->input('items', []);
+
+        if (empty($itemsData)) {
+            $request->query->add($request->all());
+            $antreanResponse = $this->antreanVerifikasi($request);
+            $itemsData = json_decode($antreanResponse->getContent(), true) ?: [];
+        }
+
+        if (empty($itemsData)) {
+            return response()->json(['message' => 'Tidak ada data verifikasi untuk diexport.'], 400);
+        }
+
+        $spreadsheet = new Spreadsheet();
+
+        // ====================================================
+        // LEMBAR 1: Detail Data Verifikasi Capaian per Unit
+        // ====================================================
+        $sheet1 = $spreadsheet->getActiveSheet();
+        $sheet1->setTitle('Lembar 1');
+        $sheet1->setShowGridLines(true);
+
+        $headersSheet1 = [
+            'Unit Pelapor',
+            'Kode IKU',
+            'Nama Indikator',
+            'Triwulan',
+            'Baseline',
+            'Target',
+            'Realisasi',
+            'Satuan',
+            'Status Validasi',
+            'Diinput Oleh'
+        ];
+
+        // Header Styling Sheet 1
+        $colIdx = 1;
+        foreach ($headersSheet1 as $h) {
+            $cellRef = Coordinate::stringFromColumnIndex($colIdx) . '1';
+            $sheet1->setCellValue($cellRef, $h);
+            $colIdx++;
+        }
+        $highestCol1 = $sheet1->getHighestColumn();
+        $sheet1->getStyle("A1:{$highestCol1}1")->getFont()->setBold(true);
+        $sheet1->getStyle("A1:{$highestCol1}1")->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('EAEAEA');
+
+        $rowIdx1 = 2;
+        $sheet1Rows = [];
+        foreach ($itemsData as $item) {
+            $unit = $item['nama_unit'] ?? '-';
+            $kode = $item['kode_iku'] ?? '-';
+            $nama = $item['nama_iku'] ?? $item['full_kategori'] ?? '-';
+            $triwulan = $item['triwulan'] ?? $tw;
+            $base = $item['base_line'] ?? '-';
+            $target = $item['target'] ?? '-';
+            $realisasi = isset($item['nilai_capaian']) && is_numeric($item['nilai_capaian']) 
+                ? (float)$item['nilai_capaian'] 
+                : 0;
+            $satuan = $item['satuan'] ?? '%';
+            $status = $item['status_validasi'] ?? 'BELUM DIISI';
+            $diinputOleh = $item['diinput_oleh'] ?? '-';
+
+            $rowData = [
+                $unit,
+                $kode,
+                $nama,
+                $triwulan,
+                is_numeric($base) ? (float)$base : (string)$base,
+                is_numeric($target) ? (float)$target : (string)$target,
+                $realisasi,
+                $satuan,
+                $status,
+                $diinputOleh
+            ];
+
+            $sheet1Rows[] = [
+                'unit' => $unit,
+                'id_indikator' => $item['id_indikator'] ?? 0,
+                'kode_iku' => $kode,
+                'nama_indikator' => $nama,
+                'triwulan' => $triwulan,
+                'base_line' => $base,
+                'target' => $target,
+                'realisasi' => $realisasi,
+                'status_validasi' => $status
+            ];
+
+            $c = 1;
+            foreach ($rowData as $val) {
+                $cellRef = Coordinate::stringFromColumnIndex($c) . $rowIdx1;
+                if (is_numeric($val) && !preg_match('/^0\d+/', (string)$val)) {
+                    $sheet1->setCellValue($cellRef, (float)$val);
+                } else {
+                    $sheet1->setCellValue($cellRef, (string)($val ?? ''));
+                }
+                $c++;
+            }
+            $rowIdx1++;
+        }
+
+        // Auto-fit column widths Sheet 1
+        for ($col = 1; $col <= count($headersSheet1); $col++) {
+            $colLetter = Coordinate::stringFromColumnIndex($col);
+            $sheet1->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
+        // ====================================================
+        // LEMBAR 2: Rekap Rata-Rata Realisasi Capaian Indikator
+        // Kolom: Kode IKU, Nama Indikator, Triwulan, Baseline, Target, Realisasi
+        // Aturan: Realisasi merupakan rata-rata realisasi pada Sheet 1 (status validasi apapun)
+        // ====================================================
+        $sheet2 = $spreadsheet->createSheet();
+        $sheet2->setTitle('Lembar 2');
+        $sheet2->setShowGridLines(true);
+
+        $headersSheet2 = [
+            'Kode IKU',
+            'Nama Indikator',
+            'Triwulan',
+            'Baseline',
+            'Target',
+            'Realisasi'
+        ];
+
+        // Header Styling Sheet 2
+        $colIdx = 1;
+        foreach ($headersSheet2 as $h) {
+            $cellRef = Coordinate::stringFromColumnIndex($colIdx) . '1';
+            $sheet2->setCellValue($cellRef, $h);
+            $colIdx++;
+        }
+        $highestCol2 = $sheet2->getHighestColumn();
+        $sheet2->getStyle("A1:{$highestCol2}1")->getFont()->setBold(true);
+        $sheet2->getStyle("A1:{$highestCol2}1")->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('EAEAEA');
+
+        // Grouping data Sheet 1 berdasarkan indikator & triwulan
+        $grouped = [];
+        foreach ($sheet1Rows as $r) {
+            $groupKey = ($r['id_indikator'] ?: $r['kode_iku']) . '___' . $r['triwulan'];
+            if (!isset($grouped[$groupKey])) {
+                $grouped[$groupKey] = [
+                    'id_indikator' => $r['id_indikator'],
+                    'kode_iku' => $r['kode_iku'],
+                    'nama_indikator' => $r['nama_indikator'],
+                    'triwulan' => $r['triwulan'],
+                    'base_line' => $r['base_line'],
+                    'target' => $r['target'],
+                    'realisasi_values' => []
+                ];
+            }
+            // Tambahkan nilai realisasi dari sheet 1 tanpa memandang status validasi
+            $grouped[$groupKey]['realisasi_values'][] = (float)$r['realisasi'];
+        }
+
+        // Urutkan Sheet 2 berdasarkan ID indikator dan triwulan
+        uasort($grouped, function($a, $b) {
+            if ($a['id_indikator'] != $b['id_indikator']) {
+                return $a['id_indikator'] <=> $b['id_indikator'];
+            }
+            return strcmp($a['triwulan'], $b['triwulan']);
+        });
+
+        $rowIdx2 = 2;
+        foreach ($grouped as $g) {
+            $count = count($g['realisasi_values']);
+            $avgRealisasi = $count > 0 ? round(array_sum($g['realisasi_values']) / $count, 2) : 0;
+
+            $row2Data = [
+                $g['kode_iku'],
+                $g['nama_indikator'],
+                $g['triwulan'],
+                is_numeric($g['base_line']) ? (float)$g['base_line'] : (string)$g['base_line'],
+                is_numeric($g['target']) ? (float)$g['target'] : (string)$g['target'],
+                $avgRealisasi
+            ];
+
+            $c = 1;
+            foreach ($row2Data as $val) {
+                $cellRef = Coordinate::stringFromColumnIndex($c) . $rowIdx2;
+                if (is_numeric($val) && !preg_match('/^0\d+/', (string)$val)) {
+                    $sheet2->setCellValue($cellRef, (float)$val);
+                } else {
+                    $sheet2->setCellValue($cellRef, (string)($val ?? ''));
+                }
+                $c++;
+            }
+            $rowIdx2++;
+        }
+
+        // Auto-fit column widths Sheet 2
+        for ($col = 1; $col <= count($headersSheet2); $col++) {
+            $colLetter = Coordinate::stringFromColumnIndex($col);
+            $sheet2->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
+        // Kembalikan active sheet ke Lembar 1 saat file dibuka
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $dir = storage_path('app/exports');
+        if (!file_exists($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+
+        $filename = "Verifikasi_Capaian_{$tw}.xlsx";
+        $tempPath = $dir . '/temp_' . uniqid() . '.xlsx';
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempPath);
 
         return response()->download($tempPath, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
