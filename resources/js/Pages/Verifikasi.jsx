@@ -178,7 +178,7 @@ export default function Verifikasi() {
                 },
                 body: JSON.stringify({
                     triwulan: filterTriwulan,
-                    tahun: filterTahun,
+                    tahun: filterTahun !== 'ALL' ? filterTahun : (years.length > 0 ? years[0].tahun : '2026'),
                     status: filterStatus,
                     unit: filterUnit,
                     indikator: filterIndikator,
@@ -191,7 +191,8 @@ export default function Verifikasi() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Verifikasi_Capaian_${filterTriwulan}.xlsx`;
+                const exportTh = filterTahun !== 'ALL' ? filterTahun : (years.length > 0 ? years[0].tahun : '2026');
+                a.download = `Verifikasi_Capaian_${filterTriwulan}_${exportTh}.xlsx`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
