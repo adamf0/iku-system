@@ -198,7 +198,15 @@ export default function Verifikasi() {
                 window.URL.revokeObjectURL(url);
                 return;
             }
-            throw new Error('Gagal mengunduh berkas XLSX dari server.');
+
+            let errMsg = 'Gagal mengunduh berkas XLSX dari server.';
+            try {
+                const errData = await res.json();
+                if (errData && (errData.message || errData.error)) {
+                    errMsg = errData.message || errData.error;
+                }
+            } catch (e) {}
+            throw new Error(errMsg);
         } catch (err) {
             console.error('Export error:', err);
             alert('Terjadi kesalahan saat mengekspor XLSX: ' + err.message);
