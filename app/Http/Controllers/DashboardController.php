@@ -1358,44 +1358,6 @@ class DashboardController extends Controller
             $byKode[$cfg['kode_iku']] = $itemData;
             $byId[$cfg['id_indikator']] = $itemData;
 
-            // Update template_capaian untuk unit pelapor BPSI (id: 41) jika ada
-            try {
-                $exists = DB::table('template_capaian')
-                    ->where('id_indikator', $cfg['id_indikator'])
-                    ->where('fakultas_unit', 41)
-                    ->where('tahun', $tahun)
-                    ->where('triwulan', $tw)
-                    ->first();
-
-                if (!$exists) {
-                    DB::table('template_capaian')->insert([
-                        'id_indikator' => $cfg['id_indikator'],
-                        'fakultas_unit' => 41,
-                        'tahun' => $tahun,
-                        'triwulan' => $tw,
-                        'pembilang' => $s['lulus_tepat'],
-                        'penyebut' => $den,
-                        'nilai_capaian' => $capaian,
-                        'catatan' => $catatan,
-                        'status_validasi' => 'DIAJUKAN',
-                        'diinput_oleh' => 'system_simak',
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                } else {
-                    if (!in_array($exists->status_validasi, ['DIVERIFIKASI', 'DISAHKAN']) || (float)$exists->nilai_capaian == 0) {
-                        DB::table('template_capaian')
-                            ->where('id', $exists->id)
-                            ->update([
-                                'pembilang' => $s['lulus_tepat'],
-                                'penyebut' => $den,
-                                'nilai_capaian' => $capaian,
-                                'catatan' => $catatan,
-                                'updated_at' => now(),
-                            ]);
-                    }
-                }
-            } catch (\Throwable $eDb) {}
         }
 
         // IKU 1 (AEE PT) = rata-rata realisasi IKU 1 - a sampai IKU 1 - h (sum / count)
@@ -1417,42 +1379,6 @@ class DashboardController extends Controller
         ];
         $byKode['IKU 1'] = $iku1Data;
         $byId[1] = $iku1Data;
-
-        try {
-            $exists1 = DB::table('template_capaian')
-                ->where('id_indikator', 1)
-                ->where('fakultas_unit', 41)
-                ->where('tahun', $tahun)
-                ->where('triwulan', $tw)
-                ->first();
-
-            if (!$exists1) {
-                DB::table('template_capaian')->insert([
-                    'id_indikator' => 1,
-                    'fakultas_unit' => 41,
-                    'tahun' => $tahun,
-                    'triwulan' => $tw,
-                    'pembilang' => $iku1Data['lulus_tepat'],
-                    'penyebut' => $iku1Data['tot_mhs'],
-                    'nilai_capaian' => $aeePt,
-                    'catatan' => $iku1Data['catatan'],
-                    'status_validasi' => 'DIAJUKAN',
-                    'diinput_oleh' => 'system_simak',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            } else {
-                if (!in_array($exists1->status_validasi, ['DIVERIFIKASI', 'DISAHKAN']) || (float)$exists1->nilai_capaian == 0) {
-                    DB::table('template_capaian')
-                        ->where('id', $exists1->id)
-                        ->update([
-                            'nilai_capaian' => $aeePt,
-                            'catatan' => $iku1Data['catatan'],
-                            'updated_at' => now(),
-                        ]);
-                }
-            }
-        } catch (\Throwable $eDb1) {}
 
         return [
             'by_kode' => $byKode,
@@ -1565,17 +1491,12 @@ class DashboardController extends Controller
                 $status = $item['status_validasi'] ?? 'BELUM DIISI';
                 $diinputOleh = $item['diinput_oleh'] ?? '-';
 
-                // Nilai Realisasi untuk IKU 1 dan sub-indikatornya dari hitungan SIMAK
-                $curSimak = $simakLookup[$triwulan] ?? reset($simakLookup);
-                if ($curSimak) {
-                    if (isset($curSimak['by_kode'][$kode])) {
-                        $realisasi = (float)$curSimak['by_kode'][$kode]['tingkat_pencapaian'];
-                        if (empty($diinputOleh) || $diinputOleh === '-') $diinputOleh = 'system_simak';
-                        if (empty($status) || $status === 'BELUM DIISI') $status = 'DIAJUKAN';
-                    } elseif (isset($curSimak['by_id'][$idInd])) {
-                        $realisasi = (float)$curSimak['by_id'][$idInd]['tingkat_pencapaian'];
-                        if (empty($diinputOleh) || $diinputOleh === '-') $diinputOleh = 'system_simak';
-                        if (empty($status) || $status === 'BELUM DIISI') $status = 'DIAJUKAN';
+                // BPSI adalah unit (bukan prodi), sehingga realisasinya pada Lembar 1 adalah 0
+                if (strtoupper($unit) === 'BPSI' || str_contains(strtoupper($unit), 'BPSI')) {
+                    $realisasi = 0;
+                    if ($status === 'DIAJUKAN' && $diinputOleh === 'system_simak') {
+                        $status = 'BELUM DIISI';
+                        $diinputOleh = '-';
                     }
                 }
 
@@ -1833,7 +1754,7 @@ class DashboardController extends Controller
             // ====================================================
             // Tabel Rekapitulasi Rumus AEE per Jenjang (Gambar 2 & Gambar 3)
             // ====================================================
-            $sheet3->setCellValue("A{$rowIdx3}", "REKAPITULASI CAPAIAN AEE PER JENJANG (RUMUS GAMBAR 2 & GAMBAR 3)");
+            $sheet3->setCellValue("A{$rowIdx3}", "REKAPITULASI CAPAIAN AEE PER JENJANG");
             $sheet3->mergeCells("A{$rowIdx3}:K{$rowIdx3}");
             $sheet3->getStyle("A{$rowIdx3}")->getFont()->setBold(true)->setSize(12);
             $rowIdx3++;
