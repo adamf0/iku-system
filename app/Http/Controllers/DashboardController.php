@@ -1118,6 +1118,315 @@ class DashboardController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
+    /**
+     * Hitung otomatis capaian IKU 1 dan sub-indikator (IKU 1 - a s/d IKU 1 - h)
+     * Mengambil data langsung dari SIMAK, menjumlahkan kolom per jenjang:
+     * - total mahasiswa
+     * - total lulus tepat waktu
+     * - total drop out
+     * - total lulus tidak tepat waktu
+     * Lalu menghitung:
+     * - AEE Realisasi = (Total Lulus Tepat Waktu / (Total Mahasiswa - Drop Out)) * 100%
+     * - Tingkat Pencapaian AEE = (AEE Realisasi / AEE Ideal) * 100%
+     * - AEE PT (IKU 1) = Rata-rata Tingkat Pencapaian AEE seluruh jenjang aktif
+     */
+    public function calculateSimakIku1All($tahun, $tw = 'TW1')
+    {
+        $triwulanCutOffs = [
+            'TW1' => '-03-31 23:59:59',
+            'TW2' => '-06-30 23:59:59',
+            'TW3' => '-09-30 23:59:59',
+            'TW4' => '-12-31 23:59:59',
+        ];
+
+        $cutOffDate = $tahun . ($triwulanCutOffs[$tw] ?? '-12-31 23:59:59');
+
+        $jenjangConfig = [
+            'd1' => [
+                'kode_iku' => 'IKU 1 - a',
+                'id_indikator' => 2,
+                'jenjang' => 'D1',
+                'ideal' => 100.0,
+                'max_days' => 366, // 1 tahun / 2 semester
+            ],
+            'd2' => [
+                'kode_iku' => 'IKU 1 - b',
+                'id_indikator' => 3,
+                'jenjang' => 'D2',
+                'ideal' => 50.0,
+                'max_days' => 731, // 2 tahun / 4 semester
+            ],
+            'd3' => [
+                'kode_iku' => 'IKU 1 - c',
+                'id_indikator' => 4,
+                'jenjang' => 'D3',
+                'ideal' => 33.0,
+                'max_days' => 1096, // 3 tahun / 6 semester
+            ],
+            'd4' => [
+                'kode_iku' => 'IKU 1 - d',
+                'id_indikator' => 5,
+                'jenjang' => 'D4',
+                'ideal' => 25.0,
+                'max_days' => 1461, // 4 tahun / 8 semester
+            ],
+            's1' => [
+                'kode_iku' => 'IKU 1 - e',
+                'id_indikator' => 6,
+                'jenjang' => 'S1',
+                'ideal' => 25.0,
+                'max_days' => 1461, // 4 tahun / 8 semester
+            ],
+            's2' => [
+                'kode_iku' => 'IKU 1 - f',
+                'id_indikator' => 7,
+                'jenjang' => 'S2',
+                'ideal' => 50.0,
+                'max_days' => 731, // 2 tahun / min 3 semester
+            ],
+            's3' => [
+                'kode_iku' => 'IKU 1 - g',
+                'id_indikator' => 8,
+                'jenjang' => 'S3',
+                'ideal' => 33.0,
+                'max_days' => 1096, // 3 tahun / 6 semester
+            ],
+            'profesi' => [
+                'kode_iku' => 'IKU 1 - h',
+                'id_indikator' => 9,
+                'jenjang' => 'Profesi',
+                'ideal' => 100.0,
+                'max_days' => 366, // 1 tahun
+            ],
+        ];
+
+        try {
+            $simakMhs = DB::connection('simak')->table('m_mahasiswa')
+                ->selectRaw("
+                    COALESCE(kode_prodi, '') as kode_prodi,
+                    COUNT(*) as total_mhs,
+                    SUM(CASE WHEN status_aktif IN ('DO', 'D', 'DROP OUT', 'KELUAR', 'K', 'Non-Aktif') THEN 1 ELSE 0 END) as drop_out
+                ")
+                ->groupBy('kode_prodi')
+                ->get()
+                ->keyBy('kode_prodi');
+
+            $simakGrads = DB::connection('simak')->table('m_mahasiswa')
+                ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, DATEDIFF(tanggal_lulus, tanggal_masuk) as masa_studi_hari")
+                ->whereNotNull('tanggal_lulus')
+                ->whereNotNull('tanggal_masuk')
+                ->where('tanggal_lulus', '!=', '0000-00-00')
+                ->where('tanggal_lulus', '<=', $cutOffDate)
+                ->get()
+                ->groupBy('kode_prodi');
+        } catch (\Throwable $eSimak) {
+            $simakMhs = collect();
+            $simakGrads = collect();
+        }
+
+        $allProdis = DB::table('sijamu_fakultas_unit as s')
+            ->leftJoin('v_fakultas_unit as v', 's.id', '=', 'v.id')
+            ->where('v.type', 'prodi')
+            ->select('v.nama_fak_prod_unit', 's.kode_fakultas', 's.kode_prodi', 'v.jenjang')
+            ->orderBy('v.jenjang')
+            ->orderBy('v.nama_fak_prod_unit')
+            ->get();
+
+        $statsByJenjang = [];
+        foreach ($jenjangConfig as $jKey => $cfg) {
+            $statsByJenjang[$jKey] = [
+                'config' => $cfg,
+                'tot_mhs' => 0,
+                'lulus_tepat' => 0,
+                'drop_out' => 0,
+                'lulus_tidak_tepat' => 0,
+                'prodis' => [],
+            ];
+        }
+
+        foreach ($allProdis as $p) {
+            $j = strtolower(trim($p->jenjang ?? ''));
+            if (preg_match('/\b(d1|d2|d3|d4|s1|s2|s3|profesi)\b/i', $p->nama_fak_prod_unit ?? '', $m)) {
+                $j = strtolower($m[1]);
+            }
+            if (empty($j) && $p->kode_prodi === '85202') {
+                $j = 's1';
+            }
+            if (!isset($statsByJenjang[$j])) {
+                continue;
+            }
+
+            $mRecord = $simakMhs->get($p->kode_prodi);
+            $tot = $mRecord ? (int)$mRecord->total_mhs : 0;
+            $do = $mRecord ? (int)$mRecord->drop_out : 0;
+
+            $pGrads = $simakGrads->get($p->kode_prodi, collect());
+            $maxDays = $jenjangConfig[$j]['max_days'];
+
+            $tepat = 0;
+            $tidak = 0;
+            foreach ($pGrads as $g) {
+                if ($g->masa_studi_hari !== null && $g->masa_studi_hari <= $maxDays) {
+                    $tepat++;
+                } else {
+                    $tidak++;
+                }
+            }
+
+            $statsByJenjang[$j]['tot_mhs'] += $tot;
+            $statsByJenjang[$j]['lulus_tepat'] += $tepat;
+            $statsByJenjang[$j]['drop_out'] += $do;
+            $statsByJenjang[$j]['lulus_tidak_tepat'] += $tidak;
+            $statsByJenjang[$j]['prodis'][] = [
+                'nama_prodi' => $p->nama_fak_prod_unit,
+                'kode_fakultas' => $p->kode_fakultas,
+                'kode_prodi' => $p->kode_prodi,
+                'jenjang' => $jenjangConfig[$j]['jenjang'],
+                'kode_iku' => $jenjangConfig[$j]['kode_iku'],
+                'tot_mhs' => $tot,
+                'lulus_tepat' => $tepat,
+                'drop_out' => $do,
+                'lulus_tidak_tepat' => $tidak,
+            ];
+        }
+
+        $byKode = [];
+        $byId = [];
+        $activeCapaian = [];
+
+        foreach ($jenjangConfig as $jKey => $cfg) {
+            $s = $statsByJenjang[$jKey];
+            $den = ($s['tot_mhs'] - $s['drop_out'] > 0) ? ($s['tot_mhs'] - $s['drop_out']) : $s['tot_mhs'];
+            $aeeReal = $den > 0 ? round(($s['lulus_tepat'] / $den) * 100, 2) : 0;
+            $capaian = $cfg['ideal'] > 0 ? round(($aeeReal / $cfg['ideal']) * 100, 2) : 0;
+
+            if ($s['tot_mhs'] > 0) {
+                $activeCapaian[] = $capaian;
+            }
+
+            $catatan = "Perhitungan SIMAK (Cut-off {$tw} {$tahun}): Total Mhs {$s['tot_mhs']}, Lulus Tepat {$s['lulus_tepat']}, DO {$s['drop_out']}, Tidak Tepat {$s['lulus_tidak_tepat']}. AEE Realisasi {$aeeReal}%, AEE Ideal {$cfg['ideal']}%, Tingkat Pencapaian AEE {$capaian}%";
+
+            $itemData = [
+                'id_indikator' => $cfg['id_indikator'],
+                'kode_iku' => $cfg['kode_iku'],
+                'jenjang' => $cfg['jenjang'],
+                'tot_mhs' => $s['tot_mhs'],
+                'lulus_tepat' => $s['lulus_tepat'],
+                'drop_out' => $s['drop_out'],
+                'lulus_tidak_tepat' => $s['lulus_tidak_tepat'],
+                'penyebut' => $den,
+                'aee_realisasi' => $aeeReal,
+                'aee_ideal' => $cfg['ideal'],
+                'tingkat_pencapaian' => $capaian,
+                'catatan' => $catatan,
+            ];
+
+            $byKode[$cfg['kode_iku']] = $itemData;
+            $byId[$cfg['id_indikator']] = $itemData;
+
+            // Sinkronisasi ke template_capaian untuk unit pelapor BPSI (id: 41)
+            try {
+                $exists = DB::table('template_capaian')
+                    ->where('id_indikator', $cfg['id_indikator'])
+                    ->where('fakultas_unit', 41)
+                    ->where('tahun', $tahun)
+                    ->where('triwulan', $tw)
+                    ->first();
+
+                if (!$exists) {
+                    DB::table('template_capaian')->insert([
+                        'id_indikator' => $cfg['id_indikator'],
+                        'fakultas_unit' => 41,
+                        'tahun' => $tahun,
+                        'triwulan' => $tw,
+                        'pembilang' => $s['lulus_tepat'],
+                        'penyebut' => $den,
+                        'nilai_capaian' => $capaian,
+                        'catatan' => $catatan,
+                        'status_validasi' => 'DIAJUKAN',
+                        'diinput_oleh' => 'system_simak',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                } else {
+                    if (!in_array($exists->status_validasi, ['DIVERIFIKASI', 'DISAHKAN']) || (float)$exists->nilai_capaian == 0) {
+                        DB::table('template_capaian')
+                            ->where('id', $exists->id)
+                            ->update([
+                                'pembilang' => $s['lulus_tepat'],
+                                'penyebut' => $den,
+                                'nilai_capaian' => $capaian,
+                                'catatan' => $catatan,
+                                'updated_at' => now(),
+                            ]);
+                    }
+                }
+            } catch (\Throwable $eDb) {}
+        }
+
+        // IKU 1 (AEE PT) = rata-rata tingkat pencapaian seluruh jenjang aktif
+        $aeePt = !empty($activeCapaian) ? round(array_sum($activeCapaian) / count($activeCapaian), 2) : 0;
+        $iku1Data = [
+            'id_indikator' => 1,
+            'kode_iku' => 'IKU 1',
+            'jenjang' => 'PT',
+            'tot_mhs' => array_sum(array_column($statsByJenjang, 'tot_mhs')),
+            'lulus_tepat' => array_sum(array_column($statsByJenjang, 'lulus_tepat')),
+            'drop_out' => array_sum(array_column($statsByJenjang, 'drop_out')),
+            'lulus_tidak_tepat' => array_sum(array_column($statsByJenjang, 'lulus_tidak_tepat')),
+            'penyebut' => 0,
+            'aee_realisasi' => 0,
+            'aee_ideal' => 0,
+            'tingkat_pencapaian' => $aeePt,
+            'catatan' => "Perhitungan SIMAK (Cut-off {$tw} {$tahun}): AEE PT (Rata-rata Tingkat Pencapaian Seluruh Jenjang): {$aeePt}%",
+        ];
+        $byKode['IKU 1'] = $iku1Data;
+        $byId[1] = $iku1Data;
+
+        try {
+            $exists1 = DB::table('template_capaian')
+                ->where('id_indikator', 1)
+                ->where('fakultas_unit', 41)
+                ->where('tahun', $tahun)
+                ->where('triwulan', $tw)
+                ->first();
+
+            if (!$exists1) {
+                DB::table('template_capaian')->insert([
+                    'id_indikator' => 1,
+                    'fakultas_unit' => 41,
+                    'tahun' => $tahun,
+                    'triwulan' => $tw,
+                    'pembilang' => $iku1Data['lulus_tepat'],
+                    'penyebut' => $iku1Data['tot_mhs'],
+                    'nilai_capaian' => $aeePt,
+                    'catatan' => $iku1Data['catatan'],
+                    'status_validasi' => 'DIAJUKAN',
+                    'diinput_oleh' => 'system_simak',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                if (!in_array($exists1->status_validasi, ['DIVERIFIKASI', 'DISAHKAN']) || (float)$exists1->nilai_capaian == 0) {
+                    DB::table('template_capaian')
+                        ->where('id', $exists1->id)
+                        ->update([
+                            'nilai_capaian' => $aeePt,
+                            'catatan' => $iku1Data['catatan'],
+                            'updated_at' => now(),
+                        ]);
+                }
+            }
+        } catch (\Throwable $eDb1) {}
+
+        return [
+            'by_kode' => $byKode,
+            'by_id' => $byId,
+            'aee_pt' => $aeePt,
+            'stats_by_jenjang' => $statsByJenjang,
+        ];
+    }
+
     public function exportVerifikasiXlsx(Request $request)
     {
         $tw = $request->input('triwulan', 'TW1');
@@ -1132,6 +1441,24 @@ class DashboardController extends Controller
 
         if (empty($itemsData)) {
             return response()->json(['message' => 'Tidak ada data verifikasi untuk diexport.'], 400);
+        }
+
+        // Kumpulkan triwulan yang dibutuhkan untuk sinkronisasi live SIMAK IKU 1
+        $uniqueTws = [];
+        foreach ($itemsData as $item) {
+            $itemTw = $item['triwulan'] ?? $tw;
+            if ($itemTw && $itemTw !== 'ALL') {
+                $uniqueTws[$itemTw] = true;
+            }
+        }
+        if (empty($uniqueTws)) {
+            $uniqueTws[$tw === 'ALL' ? 'TW1' : $tw] = true;
+        }
+
+        // Ambil data SIMAK IKU 1 untuk setiap triwulan
+        $simakLookup = [];
+        foreach (array_keys($uniqueTws) as $targetTw) {
+            $simakLookup[$targetTw] = $this->calculateSimakIku1All($tahun, $targetTw);
         }
 
         $spreadsheet = new Spreadsheet();
@@ -1173,7 +1500,8 @@ class DashboardController extends Controller
         $sheet1Rows = [];
         foreach ($itemsData as $item) {
             $unit = $item['nama_unit'] ?? '-';
-            $kode = $item['kode_iku'] ?? '-';
+            $kode = trim($item['kode_iku'] ?? '-');
+            $idInd = (int)($item['id_indikator'] ?? 0);
             $nama = $item['nama_iku'] ?? $item['full_kategori'] ?? '-';
             $triwulan = $item['triwulan'] ?? $tw;
             $base = $item['base_line'] ?? '-';
@@ -1184,6 +1512,20 @@ class DashboardController extends Controller
             $satuan = $item['satuan'] ?? '%';
             $status = $item['status_validasi'] ?? 'BELUM DIISI';
             $diinputOleh = $item['diinput_oleh'] ?? '-';
+
+            // Override nilai Realisasi untuk IKU 1 dan sub-indikatornya dengan hasil hitungan live SIMAK
+            $curSimak = $simakLookup[$triwulan] ?? reset($simakLookup);
+            if ($curSimak) {
+                if (isset($curSimak['by_kode'][$kode])) {
+                    $realisasi = (float)$curSimak['by_kode'][$kode]['tingkat_pencapaian'];
+                    if (empty($diinputOleh) || $diinputOleh === '-') $diinputOleh = 'system_simak';
+                    if (empty($status) || $status === 'BELUM DIISI') $status = 'DIAJUKAN';
+                } elseif (isset($curSimak['by_id'][$idInd])) {
+                    $realisasi = (float)$curSimak['by_id'][$idInd]['tingkat_pencapaian'];
+                    if (empty($diinputOleh) || $diinputOleh === '-') $diinputOleh = 'system_simak';
+                    if (empty($status) || $status === 'BELUM DIISI') $status = 'DIAJUKAN';
+                }
+            }
 
             $rowData = [
                 $unit,
@@ -1200,7 +1542,7 @@ class DashboardController extends Controller
 
             $sheet1Rows[] = [
                 'unit' => $unit,
-                'id_indikator' => $item['id_indikator'] ?? 0,
+                'id_indikator' => $idInd,
                 'kode_iku' => $kode,
                 'nama_indikator' => $nama,
                 'triwulan' => $triwulan,
@@ -1320,6 +1662,187 @@ class DashboardController extends Controller
             $sheet2->getColumnDimension($colLetter)->setAutoSize(true);
         }
 
+        // ====================================================
+        // LEMBAR 3: Rincian Data SIMAK IKU 1 (Sesuai Gambar 2, 3, 4)
+        // Menampilkan rincian prodi, sum kolom per jenjang, serta
+        // rekapitulasi perhitungan rumus AEE Realisasi, AEE Ideal, dan Tingkat Pencapaian
+        // ====================================================
+        $sheet3 = $spreadsheet->createSheet();
+        $sheet3->setTitle('Rincian SIMAK IKU 1');
+        $sheet3->setShowGridLines(true);
+
+        $mainSimak = $simakLookup[$tw] ?? reset($simakLookup);
+        $statsByJenjang = $mainSimak['stats_by_jenjang'] ?? [];
+
+        // Header Banner Lembar 3
+        $sheet3->setCellValue('A1', "DATA RINCIAN IKU 1 DARI SIMAK (TAHUN {$tahun} - " . ($tw === 'ALL' ? 'TW1' : $tw) . ")");
+        $sheet3->mergeCells('A1:H1');
+        $sheet3->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+        $sheet3->setCellValue('A2', "Sumber: unpak_simak.m_mahasiswa | Rumus: AEE Realisasi = (Lulus Tepat / (Total Mhs - DO)) x 100% | Tingkat Pencapaian = (AEE Real / AEE Ideal) x 100%");
+        $sheet3->mergeCells('A2:H2');
+        $sheet3->getStyle('A2')->getFont()->setItalic(true)->setSize(10);
+
+        $headersTable1 = [
+            'No',
+            'Kode IKU',
+            'Jenjang',
+            'Program Studi',
+            'Total Mahasiswa',
+            'Total Lulus Tepat Waktu',
+            'Total Drop Out',
+            'Total Lulus Tidak Tepat Waktu'
+        ];
+
+        $colIdx = 1;
+        foreach ($headersTable1 as $h) {
+            $cellRef = Coordinate::stringFromColumnIndex($colIdx) . '4';
+            $sheet3->setCellValue($cellRef, $h);
+            $colIdx++;
+        }
+        $sheet3->getStyle("A4:H4")->getFont()->setBold(true);
+        $sheet3->getStyle("A4:H4")->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('EAEAEA');
+
+        $rowIdx3 = 5;
+        $globalNo = 1;
+
+        foreach ($statsByJenjang as $jKey => $s) {
+            $cfg = $s['config'];
+            $prodis = $s['prodis'];
+
+            if (!empty($prodis)) {
+                foreach ($prodis as $p) {
+                    $sheet3->setCellValue("A{$rowIdx3}", $globalNo++);
+                    $sheet3->setCellValue("B{$rowIdx3}", $cfg['kode_iku']);
+                    $sheet3->setCellValue("C{$rowIdx3}", $cfg['jenjang']);
+                    $sheet3->setCellValue("D{$rowIdx3}", $p['nama_prodi']);
+                    $sheet3->setCellValue("E{$rowIdx3}", (int)$p['tot_mhs']);
+                    $sheet3->setCellValue("F{$rowIdx3}", (int)$p['lulus_tepat']);
+                    $sheet3->setCellValue("G{$rowIdx3}", (int)$p['drop_out']);
+                    $sheet3->setCellValue("H{$rowIdx3}", (int)$p['lulus_tidak_tepat']);
+                    $rowIdx3++;
+                }
+            }
+
+            // Subtotal / SUM row per jenjang
+            $sheet3->setCellValue("A{$rowIdx3}", '');
+            $sheet3->setCellValue("B{$rowIdx3}", $cfg['kode_iku']);
+            $sheet3->setCellValue("C{$rowIdx3}", $cfg['jenjang']);
+            $sheet3->setCellValue("D{$rowIdx3}", "TOTAL / SUM " . strtoupper($cfg['jenjang']));
+            $sheet3->setCellValue("E{$rowIdx3}", (int)$s['tot_mhs']);
+            $sheet3->setCellValue("F{$rowIdx3}", (int)$s['lulus_tepat']);
+            $sheet3->setCellValue("G{$rowIdx3}", (int)$s['drop_out']);
+            $sheet3->setCellValue("H{$rowIdx3}", (int)$s['lulus_tidak_tepat']);
+
+            $sheet3->getStyle("A{$rowIdx3}:H{$rowIdx3}")->getFont()->setBold(true);
+            $sheet3->getStyle("A{$rowIdx3}:H{$rowIdx3}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('D9E1F2');
+            $rowIdx3++;
+        }
+
+        $rowIdx3 += 2; // Spasi sebelum tabel rekapitulasi
+
+        // ====================================================
+        // Tabel Rekapitulasi Rumus AEE per Jenjang (Gambar 2 & Gambar 3)
+        // ====================================================
+        $sheet3->setCellValue("A{$rowIdx3}", "REKAPITULASI CAPAIAN AEE PER JENJANG (RUMUS GAMBAR 2 & GAMBAR 3)");
+        $sheet3->mergeCells("A{$rowIdx3}:K{$rowIdx3}");
+        $sheet3->getStyle("A{$rowIdx3}")->getFont()->setBold(true)->setSize(12);
+        $rowIdx3++;
+
+        $headersTable2 = [
+            'Kode IKU',
+            'Jenjang',
+            'Total Mahasiswa',
+            'Lulus Tepat Waktu',
+            'Drop Out',
+            'Lulus Tidak Tepat',
+            'AEE Realisasi (%)',
+            'AEE Ideal (%)',
+            'Tingkat Pencapaian AEE (%)',
+            'Target (%)',
+            'Status Capaian'
+        ];
+
+        $colIdx = 1;
+        foreach ($headersTable2 as $h) {
+            $cellRef = Coordinate::stringFromColumnIndex($colIdx) . $rowIdx3;
+            $sheet3->setCellValue($cellRef, $h);
+            $colIdx++;
+        }
+        $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFont()->setBold(true);
+        $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('EAEAEA');
+        $rowIdx3++;
+
+        foreach ($statsByJenjang as $jKey => $s) {
+            $cfg = $s['config'];
+            $kode = $cfg['kode_iku'];
+            $simakItem = $mainSimak['by_kode'][$kode] ?? null;
+
+            // Target indikator
+            $tObj = DB::table('target_indikator_tahun')
+                ->where('id_indikator', $cfg['id_indikator'])
+                ->where('tahun', $tahun)
+                ->first();
+            if (!$tObj) {
+                $tObj = DB::table('master_indikator')->where('id', $cfg['id_indikator'])->first();
+            }
+            $targetVal = $tObj->target ?? '-';
+            if ($targetVal === null || $targetVal === '') $targetVal = '-';
+
+            $capaianPct = $simakItem['tingkat_pencapaian'] ?? 0;
+            $statusCapaian = 'BELUM TERCAPAI';
+            if (is_numeric($targetVal)) {
+                $statusCapaian = ($capaianPct >= (float)$targetVal) ? 'TERCAPAI' : 'BELUM TERCAPAI';
+            } else {
+                $statusCapaian = ($capaianPct > 0) ? 'TERCAPAI' : 'BELUM TERCAPAI';
+            }
+
+            $sheet3->setCellValue("A{$rowIdx3}", $cfg['kode_iku']);
+            $sheet3->setCellValue("B{$rowIdx3}", $cfg['jenjang']);
+            $sheet3->setCellValue("C{$rowIdx3}", (int)$s['tot_mhs']);
+            $sheet3->setCellValue("D{$rowIdx3}", (int)$s['lulus_tepat']);
+            $sheet3->setCellValue("E{$rowIdx3}", (int)$s['drop_out']);
+            $sheet3->setCellValue("F{$rowIdx3}", (int)$s['lulus_tidak_tepat']);
+            $sheet3->setCellValue("G{$rowIdx3}", (float)($simakItem['aee_realisasi'] ?? 0));
+            $sheet3->setCellValue("H{$rowIdx3}", (float)$cfg['ideal']);
+            $sheet3->setCellValue("I{$rowIdx3}", (float)$capaianPct);
+            $sheet3->setCellValue("J{$rowIdx3}", is_numeric($targetVal) ? (float)$targetVal : (string)$targetVal);
+            $sheet3->setCellValue("K{$rowIdx3}", $statusCapaian);
+            $rowIdx3++;
+        }
+
+        // Baris AEE PT (IKU 1 Utama)
+        $aeePt = $mainSimak['aee_pt'] ?? 0;
+        $tIku1 = DB::table('target_indikator_tahun')->where('id_indikator', 1)->where('tahun', $tahun)->first();
+        if (!$tIku1) $tIku1 = DB::table('master_indikator')->where('id', 1)->first();
+        $targetIku1 = $tIku1->target ?? 86;
+        $statusIku1 = (is_numeric($targetIku1) && $aeePt >= (float)$targetIku1) ? 'TERCAPAI' : 'BELUM TERCAPAI';
+
+        $sheet3->setCellValue("A{$rowIdx3}", "IKU 1");
+        $sheet3->setCellValue("B{$rowIdx3}", "AEE PT (Rata-rata Tingkat Pencapaian Seluruh Jenjang)");
+        $sheet3->mergeCells("B{$rowIdx3}:H{$rowIdx3}");
+        $sheet3->setCellValue("I{$rowIdx3}", (float)$aeePt);
+        $sheet3->setCellValue("J{$rowIdx3}", is_numeric($targetIku1) ? (float)$targetIku1 : (string)$targetIku1);
+        $sheet3->setCellValue("K{$rowIdx3}", $statusIku1);
+
+        $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFont()->setBold(true);
+        $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('C6EFCE');
+        $rowIdx3++;
+
+        // Auto-fit column widths Sheet 3
+        for ($col = 1; $col <= 11; $col++) {
+            $colLetter = Coordinate::stringFromColumnIndex($col);
+            $sheet3->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
         // Kembalikan active sheet ke Lembar 1 saat file dibuka
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -1339,3 +1862,4 @@ class DashboardController extends Controller
         ])->deleteFileAfterSend(true);
     }
 }
+
