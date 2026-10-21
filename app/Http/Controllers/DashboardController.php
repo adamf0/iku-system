@@ -1223,13 +1223,17 @@ class DashboardController extends Controller
             $simakGrads = collect();
         }
 
-        $allProdis = DB::table('sijamu_fakultas_unit as s')
-            ->leftJoin('v_fakultas_unit as v', 's.id', '=', 'v.id')
-            ->where('v.type', 'prodi')
-            ->select('v.nama_fak_prod_unit', 's.kode_fakultas', 's.kode_prodi', 'v.jenjang')
-            ->orderBy('v.jenjang')
-            ->orderBy('v.nama_fak_prod_unit')
-            ->get();
+        $allProdis = DB::table('v_fakultas_unit')
+            ->whereNotNull('kode_prodi')
+            ->where('kode_prodi', '!=', '')
+            ->where('standalone', 0)
+            ->select('nama_fak_prod_unit', 'kode_fakultas', 'kode_prodi', 'jenjang', 'type')
+            ->orderBy('jenjang')
+            ->orderBy('nama_fak_prod_unit')
+            ->get()
+            ->filter(function($p) {
+                return strtolower(trim($p->type ?? 'prodi')) === 'prodi';
+            });
 
         $statsByJenjang = [];
         foreach ($jenjangConfig as $jKey => $cfg) {
