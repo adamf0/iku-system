@@ -172,7 +172,7 @@ class DashboardController extends Controller
         $simakByTw = [];
         foreach ($this->TRIWULAN as $tKey) {
             $simakByTw[$tKey] = \Illuminate\Support\Facades\Cache::remember(
-                "simak_iku1_v2_{$calcTahun}_{$tKey}",
+                "simak_iku1_v3_{$calcTahun}_{$tKey}",
                 300,
                 function() use ($calcTahun, $tKey) {
                     return $this->calculateSimakIku1All($calcTahun, $tKey);
@@ -1392,7 +1392,7 @@ class DashboardController extends Controller
     /**
      * Menghitung capaian SIMAK IKU 1 (IKU 1 dan IKU 1 - a s/d IKU 1 - h)
      * Mengikuti logika SyncSimakIku1Command (tanpa upload GDrive)
-     * Menjumlahkan masing-masing kolom: total mahasiswa, total lulus tepat waktu, total drop out, total lulus tidak tepat waktu
+     * Menjumlahkan masing-masing kolom: total mahasiswa, total lulus tepat waktu, total lulus tidak tepat waktu
      * Menghitung sesuai rumus:
      * 1) AEE Realisasi = (Total Lulus Tepat / Total Mhs) x 100%
      * 2) Tingkat Pencapaian AEE = (AEE Realisasi / AEE Ideal) x 100%
@@ -1485,12 +1485,11 @@ class DashboardController extends Controller
         ];
 
         try {
-            // 1. Total Mahasiswa Terdaftar & Drop Out per prodi dari SIMAK (sesuai SyncSimakIku1Command & data Gambar 4)
+            // 1. Total Mahasiswa Terdaftar per prodi dari SIMAK (sesuai SyncSimakIku1Command & data Gambar 4)
             $simakMhs = DB::connection('simak')->table('m_mahasiswa')
                 ->selectRaw("
                     COALESCE(kode_prodi, '') as kode_prodi,
-                    COUNT(*) as total_mhs,
-                    SUM(CASE WHEN status_aktif IN ('DO', 'D', 'DROP OUT', 'KELUAR', 'K', 'Non-Aktif') THEN 1 ELSE 0 END) as drop_out
+                    COUNT(*) as total_mhs
                 ")
                 ->groupBy('kode_prodi')
                 ->get()
@@ -1543,7 +1542,6 @@ class DashboardController extends Controller
                 'config' => $cfg,
                 'tot_mhs' => 0,
                 'lulus_tepat' => 0,
-                'drop_out' => 0,
                 'lulus_tidak_tepat' => 0,
                 'prodis' => [],
             ];
@@ -1563,7 +1561,6 @@ class DashboardController extends Controller
 
             $mRecord = $simakMhs->get($p->kode_prodi);
             $tot = $mRecord ? (int)$mRecord->total_mhs : 0;
-            $do = $mRecord ? (int)$mRecord->drop_out : 0;
 
             $pGrads = $simakGrads->get($p->kode_prodi, collect());
             $maxDays = $jenjangConfig[$j]['max_days'];
@@ -1580,7 +1577,6 @@ class DashboardController extends Controller
 
             $statsByJenjang[$j]['tot_mhs'] += $tot;
             $statsByJenjang[$j]['lulus_tepat'] += $tepat;
-            $statsByJenjang[$j]['drop_out'] += $do;
             $statsByJenjang[$j]['lulus_tidak_tepat'] += $tidak;
             $statsByJenjang[$j]['prodis'][] = [
                 'nama_prodi' => $p->nama_fak_prod_unit,
@@ -1590,7 +1586,6 @@ class DashboardController extends Controller
                 'kode_iku' => $jenjangConfig[$j]['kode_iku'],
                 'tot_mhs' => $tot,
                 'lulus_tepat' => $tepat,
-                'drop_out' => $do,
                 'lulus_tidak_tepat' => $tidak,
             ];
         }
@@ -1608,7 +1603,7 @@ class DashboardController extends Controller
 
             $subRealValues[$cfg['kode_iku']] = $capaian;
 
-            $catatan = "Perhitungan SIMAK (Cut-off {$tw} {$tahun}, Semester {$targetTahunId}): Total Mhs {$s['tot_mhs']}, Lulus Tepat {$s['lulus_tepat']}, DO {$s['drop_out']}, Tidak Tepat {$s['lulus_tidak_tepat']}. AEE Realisasi {$aeeReal}%, AEE Ideal {$cfg['ideal']}%, Tingkat Pencapaian AEE {$capaian}%";
+            $catatan = "Perhitungan SIMAK (Cut-off {$tw} {$tahun}, Semester {$targetTahunId}): Total Mhs {$s['tot_mhs']}, Lulus Tepat {$s['lulus_tepat']}, Tidak Tepat {$s['lulus_tidak_tepat']}. AEE Realisasi {$aeeReal}%, AEE Ideal {$cfg['ideal']}%, Tingkat Pencapaian AEE {$capaian}%";
 
             $itemData = [
                 'id_indikator' => $cfg['id_indikator'],
@@ -1617,7 +1612,6 @@ class DashboardController extends Controller
                 'target_tahun_id' => $targetTahunId,
                 'tot_mhs' => $s['tot_mhs'],
                 'lulus_tepat' => $s['lulus_tepat'],
-                'drop_out' => $s['drop_out'],
                 'lulus_tidak_tepat' => $s['lulus_tidak_tepat'],
                 'penyebut' => $den,
                 'aee_realisasi' => $aeeReal,
@@ -1640,7 +1634,6 @@ class DashboardController extends Controller
             'target_tahun_id' => $targetTahunId,
             'tot_mhs' => array_sum(array_column($statsByJenjang, 'tot_mhs')),
             'lulus_tepat' => array_sum(array_column($statsByJenjang, 'lulus_tepat')),
-            'drop_out' => array_sum(array_column($statsByJenjang, 'drop_out')),
             'lulus_tidak_tepat' => array_sum(array_column($statsByJenjang, 'lulus_tidak_tepat')),
             'penyebut' => 0,
             'aee_realisasi' => 0,
@@ -1953,11 +1946,11 @@ class DashboardController extends Controller
             // Header Banner Lembar 3
             $mainTargetTahunId = in_array(($tw === 'ALL' ? 'TW1' : $tw), ['TW1', 'TW2']) ? (($tahun - 1) . '2') : ($tahun . '1');
             $sheet3->setCellValue('A1', "DATA RINCIAN IKU 1 DARI SIMAK (TAHUN {$tahun} - " . ($tw === 'ALL' ? 'TW1' : $tw) . " - SEMESTER {$mainTargetTahunId})");
-            $sheet3->mergeCells('A1:H1');
+            $sheet3->mergeCells('A1:G1');
             $sheet3->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
             $sheet3->setCellValue('A2', "Sumber: unpak_simak.m_mahasiswa | Rumus: AEE Realisasi = (Lulus Tepat / Total Mhs) x 100% | Tingkat Pencapaian = (AEE Real / AEE Ideal) x 100%");
-            $sheet3->mergeCells('A2:H2');
+            $sheet3->mergeCells('A2:G2');
             $sheet3->getStyle('A2')->getFont()->setItalic(true)->setSize(10);
 
             $headersTable1 = [
@@ -1967,7 +1960,6 @@ class DashboardController extends Controller
                 'Program Studi',
                 'Total Mahasiswa',
                 'Total Lulus Tepat Waktu',
-                'Total Drop Out',
                 'Total Lulus Tidak Tepat Waktu'
             ];
 
@@ -1977,8 +1969,8 @@ class DashboardController extends Controller
                 $sheet3->setCellValue($cellRef, $h);
                 $colIdx++;
             }
-            $sheet3->getStyle("A4:H4")->getFont()->setBold(true);
-            $sheet3->getStyle("A4:H4")->getFill()
+            $sheet3->getStyle("A4:G4")->getFont()->setBold(true);
+            $sheet3->getStyle("A4:G4")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setARGB('EAEAEA');
 
@@ -1997,8 +1989,7 @@ class DashboardController extends Controller
                         $sheet3->setCellValue("D{$rowIdx3}", $p['nama_prodi']);
                         $sheet3->setCellValue("E{$rowIdx3}", (int)$p['tot_mhs']);
                         $sheet3->setCellValue("F{$rowIdx3}", (int)$p['lulus_tepat']);
-                        $sheet3->setCellValue("G{$rowIdx3}", (int)$p['drop_out']);
-                        $sheet3->setCellValue("H{$rowIdx3}", (int)$p['lulus_tidak_tepat']);
+                        $sheet3->setCellValue("G{$rowIdx3}", (int)$p['lulus_tidak_tepat']);
                         $rowIdx3++;
                     }
                 }
@@ -2010,11 +2001,10 @@ class DashboardController extends Controller
                 $sheet3->setCellValue("D{$rowIdx3}", "TOTAL / SUM " . strtoupper($cfg['jenjang']));
                 $sheet3->setCellValue("E{$rowIdx3}", (int)$s['tot_mhs']);
                 $sheet3->setCellValue("F{$rowIdx3}", (int)$s['lulus_tepat']);
-                $sheet3->setCellValue("G{$rowIdx3}", (int)$s['drop_out']);
-                $sheet3->setCellValue("H{$rowIdx3}", (int)$s['lulus_tidak_tepat']);
+                $sheet3->setCellValue("G{$rowIdx3}", (int)$s['lulus_tidak_tepat']);
 
-                $sheet3->getStyle("A{$rowIdx3}:H{$rowIdx3}")->getFont()->setBold(true);
-                $sheet3->getStyle("A{$rowIdx3}:H{$rowIdx3}")->getFill()
+                $sheet3->getStyle("A{$rowIdx3}:G{$rowIdx3}")->getFont()->setBold(true);
+                $sheet3->getStyle("A{$rowIdx3}:G{$rowIdx3}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setARGB('D9E1F2');
                 $rowIdx3++;
@@ -2026,7 +2016,7 @@ class DashboardController extends Controller
             // Tabel Rekapitulasi Rumus AEE per Jenjang (Gambar 2 & Gambar 3)
             // ====================================================
             $sheet3->setCellValue("A{$rowIdx3}", "REKAPITULASI CAPAIAN AEE PER JENJANG");
-            $sheet3->mergeCells("A{$rowIdx3}:K{$rowIdx3}");
+            $sheet3->mergeCells("A{$rowIdx3}:J{$rowIdx3}");
             $sheet3->getStyle("A{$rowIdx3}")->getFont()->setBold(true)->setSize(12);
             $rowIdx3++;
 
@@ -2035,7 +2025,6 @@ class DashboardController extends Controller
                 'Jenjang',
                 'Total Mahasiswa',
                 'Lulus Tepat Waktu',
-                'Drop Out',
                 'Lulus Tidak Tepat',
                 'AEE Realisasi (%)',
                 'AEE Ideal (%)',
@@ -2050,8 +2039,8 @@ class DashboardController extends Controller
                 $sheet3->setCellValue($cellRef, $h);
                 $colIdx++;
             }
-            $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFont()->setBold(true);
-            $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFill()
+            $sheet3->getStyle("A{$rowIdx3}:J{$rowIdx3}")->getFont()->setBold(true);
+            $sheet3->getStyle("A{$rowIdx3}:J{$rowIdx3}")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setARGB('EAEAEA');
             $rowIdx3++;
@@ -2084,13 +2073,12 @@ class DashboardController extends Controller
                 $sheet3->setCellValue("B{$rowIdx3}", $cfg['jenjang']);
                 $sheet3->setCellValue("C{$rowIdx3}", (int)$s['tot_mhs']);
                 $sheet3->setCellValue("D{$rowIdx3}", (int)$s['lulus_tepat']);
-                $sheet3->setCellValue("E{$rowIdx3}", (int)$s['drop_out']);
-                $sheet3->setCellValue("F{$rowIdx3}", (int)$s['lulus_tidak_tepat']);
-                $sheet3->setCellValue("G{$rowIdx3}", (float)($simakItem['aee_realisasi'] ?? 0));
-                $sheet3->setCellValue("H{$rowIdx3}", (float)$cfg['ideal']);
-                $sheet3->setCellValue("I{$rowIdx3}", (float)$capaianPct);
-                $sheet3->setCellValue("J{$rowIdx3}", is_numeric($targetVal) ? (float)$targetVal : (string)$targetVal);
-                $sheet3->setCellValue("K{$rowIdx3}", $statusCapaian);
+                $sheet3->setCellValue("E{$rowIdx3}", (int)$s['lulus_tidak_tepat']);
+                $sheet3->setCellValue("F{$rowIdx3}", (float)($simakItem['aee_realisasi'] ?? 0));
+                $sheet3->setCellValue("G{$rowIdx3}", (float)$cfg['ideal']);
+                $sheet3->setCellValue("H{$rowIdx3}", (float)$capaianPct);
+                $sheet3->setCellValue("I{$rowIdx3}", is_numeric($targetVal) ? (float)$targetVal : (string)$targetVal);
+                $sheet3->setCellValue("J{$rowIdx3}", $statusCapaian);
                 $rowIdx3++;
             }
 
@@ -2106,19 +2094,19 @@ class DashboardController extends Controller
 
             $sheet3->setCellValue("A{$rowIdx3}", "IKU 1");
             $sheet3->setCellValue("B{$rowIdx3}", "AEE PT (Rata-rata Realisasi IKU 1 - a s/d IKU 1 - h)");
-            $sheet3->mergeCells("B{$rowIdx3}:H{$rowIdx3}");
-            $sheet3->setCellValue("I{$rowIdx3}", "=ROUND(AVERAGE(I{$startTable2}:I{$endTable2}), 2)");
-            $sheet3->setCellValue("J{$rowIdx3}", is_numeric($targetIku1) ? (float)$targetIku1 : (string)$targetIku1);
-            $sheet3->setCellValue("K{$rowIdx3}", $statusIku1);
+            $sheet3->mergeCells("B{$rowIdx3}:G{$rowIdx3}");
+            $sheet3->setCellValue("H{$rowIdx3}", "=ROUND(AVERAGE(H{$startTable2}:H{$endTable2}), 2)");
+            $sheet3->setCellValue("I{$rowIdx3}", is_numeric($targetIku1) ? (float)$targetIku1 : (string)$targetIku1);
+            $sheet3->setCellValue("J{$rowIdx3}", $statusIku1);
 
-            $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFont()->setBold(true);
-            $sheet3->getStyle("A{$rowIdx3}:K{$rowIdx3}")->getFill()
+            $sheet3->getStyle("A{$rowIdx3}:J{$rowIdx3}")->getFont()->setBold(true);
+            $sheet3->getStyle("A{$rowIdx3}:J{$rowIdx3}")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setARGB('C6EFCE');
             $rowIdx3++;
 
             // Auto-fit column widths Sheet 3
-            for ($col = 1; $col <= 11; $col++) {
+            for ($col = 1; $col <= 10; $col++) {
                 $colLetter = Coordinate::stringFromColumnIndex($col);
                 $sheet3->getColumnDimension($colLetter)->setAutoSize(true);
             }
