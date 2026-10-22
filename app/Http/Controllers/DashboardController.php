@@ -1007,7 +1007,7 @@ class DashboardController extends Controller
             : ($user && !in_array($user->role, ['ADMIN', 'LPM']) ? (int)$user->fakultas_unit : null);
 
         $selectedUnitRow = $selectedUnitId ? DB::table('v_fakultas_unit')->where('id', $selectedUnitId)->first() : null;
-        $isFacultyUnit = $selectedUnitRow && strtolower($selectedUnitRow->type ?? '') === 'fakultas';
+        $isFacultyUnit = $selectedUnitRow && (strtolower($selectedUnitRow->type ?? '') === 'fakultas' || (int)($selectedUnitRow->standalone ?? 0) === 1);
         $isWarekUnit = $selectedUnitRow && str_contains(strtoupper($selectedUnitRow->nama_fak_prod_unit ?? ''), 'WAKIL REKTOR');
 
         if ($selectedUnitId && $selectedUnitRow) {
@@ -1015,10 +1015,17 @@ class DashboardController extends Controller
                 // Faculty selected: include faculty itself ("data dirinya") AND all prodis under that faculty ("prodi")
                 $facProdis = DB::table('v_fakultas_unit')
                     ->where(function($w) { $w->whereNull('is_active')->orWhere('is_active', 1); })
-                    ->where('type', 'prodi')
+                    ->where(function($q) {
+                        $q->where('standalone', 0)->orWhereNull('standalone');
+                    })
+                    ->whereNotNull('kode_prodi')
                     ->where(function($w) use ($selectedUnitRow) {
-                        $w->where('fakultas', $selectedUnitRow->nama_fak_prod_unit)
-                          ->orWhere('kode_fakultas', $selectedUnitRow->kode_fakultas);
+                        if (!empty($selectedUnitRow->kode_fakultas)) {
+                            $w->where('kode_fakultas', $selectedUnitRow->kode_fakultas);
+                        }
+                        if (!empty($selectedUnitRow->nama_fak_prod_unit)) {
+                            $w->orWhere('fakultas', $selectedUnitRow->nama_fak_prod_unit);
+                        }
                     })
                     ->pluck('id')
                     ->toArray();
@@ -1027,7 +1034,7 @@ class DashboardController extends Controller
                 // Warek unit selected: include Warek itself ("diri sendiri") AND all faculties ("data fakultas")
                 $allFacIds = DB::table('v_fakultas_unit')
                     ->where(function($w) { $w->whereNull('is_active')->orWhere('is_active', 1); })
-                    ->where('type', 'fakultas')
+                    ->where('standalone', 1)
                     ->pluck('id')
                     ->toArray();
                 $targetScope = array_values(array_unique(array_merge([$selectedUnitRow->id], $allFacIds)));

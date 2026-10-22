@@ -80,7 +80,7 @@ class User extends Authenticatable
                 ->where(function($w) {
                     $w->whereNull('is_active')->orWhere('is_active', 1);
                 })
-                ->where('type', 'fakultas')
+                ->where('standalone', 1)
                 ->pluck('id')
                 ->toArray();
             if ($this->fakultas_unit && !in_array($this->fakultas_unit, $facIds)) {
