@@ -172,7 +172,7 @@ class DashboardController extends Controller
         $simakByTw = [];
         foreach ($this->TRIWULAN as $tKey) {
             $simakByTw[$tKey] = \Illuminate\Support\Facades\Cache::remember(
-                "simak_iku1_v3_{$calcTahun}_{$tKey}",
+                "simak_iku1_v4_{$calcTahun}_{$tKey}",
                 300,
                 function() use ($calcTahun, $tKey) {
                     return $this->calculateSimakIku1All($calcTahun, $tKey);
@@ -1415,15 +1415,14 @@ class DashboardController extends Controller
         // TW1 & TW2 = Genap tahun sebelumnya ((tahun - 1) . '2'), TW3 & TW4 = Ganjil tahun berjalan (tahun . '1')
         $targetTahunId = in_array($tw, ['TW1', 'TW2']) ? (($tahun - 1) . '2') : ($tahun . '1');
 
-        $triwulanCutOffs = [
-            'TW1' => '-03-31 23:59:59',
-            'TW2' => '-06-30 23:59:59',
-            'TW3' => '-09-30 23:59:59',
-            'TW4' => '-12-31 23:59:59',
+        $triwulanDates = [
+            'TW1' => ['start' => "{$tahun}-01-01", 'end' => "{$tahun}-04-01"],
+            'TW2' => ['start' => "{$tahun}-04-01", 'end' => "{$tahun}-07-01"],
+            'TW3' => ['start' => "{$tahun}-07-01", 'end' => "{$tahun}-10-01"],
+            'TW4' => ['start' => "{$tahun}-10-01", 'end' => ($tahun + 1) . "-01-01"],
+            'ALL' => ['start' => "{$tahun}-01-01", 'end' => ($tahun + 1) . "-01-01"],
         ];
-
-        $cutOffSuffix = $triwulanCutOffs[$tw] ?? '-12-31 23:59:59';
-        $cutOffDate = $tahun . $cutOffSuffix;
+        $twRange = $triwulanDates[$tw] ?? $triwulanDates['TW1'];
 
         $jenjangConfig = [
             'd1' => [
@@ -1431,61 +1430,61 @@ class DashboardController extends Controller
                 'id_indikator' => 2,
                 'jenjang' => 'D1',
                 'ideal' => 100.0,
-                'max_days' => 366, // 1 tahun / 2 semester
+                'years' => 1,
             ],
             'd2' => [
                 'kode_iku' => 'IKU 1 - b',
                 'id_indikator' => 3,
                 'jenjang' => 'D2',
                 'ideal' => 50.0,
-                'max_days' => 731, // 2 tahun / 4 semester
+                'years' => 2,
             ],
             'd3' => [
                 'kode_iku' => 'IKU 1 - c',
                 'id_indikator' => 4,
                 'jenjang' => 'D3',
                 'ideal' => 33.0,
-                'max_days' => 1096, // 3 tahun / 6 semester
+                'years' => 3,
             ],
             'd4' => [
                 'kode_iku' => 'IKU 1 - d',
                 'id_indikator' => 5,
                 'jenjang' => 'D4',
                 'ideal' => 25.0,
-                'max_days' => 1461, // 4 tahun / 8 semester
+                'years' => 4,
             ],
             's1' => [
                 'kode_iku' => 'IKU 1 - e',
                 'id_indikator' => 6,
                 'jenjang' => 'S1',
                 'ideal' => 25.0,
-                'max_days' => 1461, // 4 tahun / 8 semester
+                'years' => 4,
             ],
             's2' => [
                 'kode_iku' => 'IKU 1 - f',
                 'id_indikator' => 7,
                 'jenjang' => 'S2',
                 'ideal' => 50.0,
-                'max_days' => 731, // 2 tahun / min 3 semester
+                'years' => 2,
             ],
             's3' => [
                 'kode_iku' => 'IKU 1 - g',
                 'id_indikator' => 8,
                 'jenjang' => 'S3',
                 'ideal' => 33.0,
-                'max_days' => 1096, // 3 tahun / 6 semester
+                'years' => 3,
             ],
             'profesi' => [
                 'kode_iku' => 'IKU 1 - h',
                 'id_indikator' => 9,
                 'jenjang' => 'Profesi',
                 'ideal' => 100.0,
-                'max_days' => 366, // 1 tahun
+                'years' => 1,
             ],
         ];
 
         try {
-            // 1. Total Mahasiswa Terdaftar per prodi dari SIMAK (sesuai SyncSimakIku1Command & data Gambar 4)
+            // 1. Total Mahasiswa Terdaftar per prodi dari SIMAK (m_mahasiswa)
             $simakMhs = DB::connection('simak')->table('m_mahasiswa')
                 ->selectRaw("
                     COALESCE(kode_prodi, '') as kode_prodi,
@@ -1495,29 +1494,22 @@ class DashboardController extends Controller
                 ->get()
                 ->keyBy('kode_prodi');
 
-            // 2. Query lulusan dari t_mahasiswa_status_lulus_do berdasarkan targetTahunId (SyncSimakIku1Command)
-            $simakGradsBySem = DB::connection('simak')->table('t_mahasiswa_status_lulus_do as s')
-                ->join('m_mahasiswa as m', function($j) {
-                    $j->on('s.NIM', '=', 'm.NIM')->on('s.kode_fak', '=', 'm.kode_fak');
-                })
-                ->selectRaw("COALESCE(s.kode_prodi, '') as kode_prodi, DATEDIFF(s.tanggal_lulus, m.tanggal_masuk) as masa_studi_hari")
-                ->where('s.status', 'L')
-                ->where('s.tahun_id', $targetTahunId)
+            // 2. Query lulusan dari m_mahasiswa berdasarkan rentang tanggal lulus per triwulan
+            $simakGrads = DB::connection('simak')->table('m_mahasiswa')
+                ->selectRaw("
+                    COALESCE(kode_prodi, '') as kode_prodi,
+                    tanggal_masuk,
+                    tanggal_lulus,
+                    TIMESTAMPDIFF(MONTH, tanggal_masuk, tanggal_lulus) as lama_studi_bulan
+                ")
+                ->where('tanggal_lulus', '>=', $twRange['start'])
+                ->where('tanggal_lulus', '<', $twRange['end'])
+                ->whereNotNull('tanggal_lulus')
+                ->whereNotNull('tanggal_masuk')
+                ->where('tanggal_lulus', '!=', '0000-00-00')
+                ->where('tanggal_masuk', '!=', '0000-00-00')
                 ->get()
                 ->groupBy('kode_prodi');
-
-            // 3. Query lulusan kumulatif dengan cut-off tanggal per triwulan (fallback jika semester berjalan targetTahunId belum ada data yudisium lengkap di SIMAK)
-            // $simakGradsByDate = DB::connection('simak')->table('m_mahasiswa')
-            //     ->selectRaw("COALESCE(kode_prodi, '') as kode_prodi, DATEDIFF(tanggal_lulus, tanggal_masuk) as masa_studi_hari")
-            //     ->whereNotNull('tanggal_lulus')
-            //     ->whereNotNull('tanggal_masuk')
-            //     ->where('tanggal_lulus', '!=', '0000-00-00')
-            //     ->where('tanggal_lulus', '<=', $cutOffDate)
-            //     ->get()
-            //     ->groupBy('kode_prodi');
-
-            // Jika lulusan pada targetTahunId mencukupi (>= 50), gunakan semester target; jika belum, gunakan cut-off date kumulatif
-            $simakGrads = $simakGradsBySem;
         } catch (\Throwable $eSimak) {
             \Log::warning("SIMAK Query warning in calculateSimakIku1All: " . $eSimak->getMessage());
             $simakMhs = collect();
@@ -1563,12 +1555,14 @@ class DashboardController extends Controller
             $tot = $mRecord ? (int)$mRecord->total_mhs : 0;
 
             $pGrads = $simakGrads->get($p->kode_prodi, collect());
-            $maxDays = $jenjangConfig[$j]['max_days'];
+            $years = $jenjangConfig[$j]['years'];
 
             $tepat = 0;
             $tidak = 0;
             foreach ($pGrads as $g) {
-                if ($g->masa_studi_hari !== null && $g->masa_studi_hari <= $maxDays) {
+                // Sesuai SQL: WHEN tanggal_lulus <= DATE_ADD(tanggal_masuk, INTERVAL X YEAR) THEN 'Tepat Waktu' ELSE 'Terlambat'
+                $limitDate = date('Y-m-d', strtotime("+{$years} years", strtotime($g->tanggal_masuk)));
+                if ($g->tanggal_lulus <= $limitDate) {
                     $tepat++;
                 } else {
                     $tidak++;
@@ -1603,7 +1597,7 @@ class DashboardController extends Controller
 
             $subRealValues[$cfg['kode_iku']] = $capaian;
 
-            $catatan = "Perhitungan SIMAK (Cut-off {$tw} {$tahun}, Semester {$targetTahunId}): Total Mhs {$s['tot_mhs']}, Lulus Tepat {$s['lulus_tepat']}, Tidak Tepat {$s['lulus_tidak_tepat']}. AEE Realisasi {$aeeReal}%, AEE Ideal {$cfg['ideal']}%, Tingkat Pencapaian AEE {$capaian}%";
+            $catatan = "Perhitungan SIMAK ({$tw} {$tahun}, Periode {$twRange['start']} s/d {$twRange['end']}, Semester {$targetTahunId}): Total Mhs {$s['tot_mhs']}, Lulus Tepat {$s['lulus_tepat']}, Tidak Tepat {$s['lulus_tidak_tepat']}. AEE Realisasi {$aeeReal}%, AEE Ideal {$cfg['ideal']}%, Tingkat Pencapaian AEE {$capaian}%";
 
             $itemData = [
                 'id_indikator' => $cfg['id_indikator'],
