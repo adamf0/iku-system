@@ -407,10 +407,15 @@ class DashboardController extends Controller
                         $sumRealisasiTw = 0;
                         $sumTargetTw = 0;
                         foreach ($rowsTw as $r) {
+                            $realVal = (float)$r->nilai_capaian;
+                            if ($realVal <= 0) continue; // Hilangkan realisasi 0
                             $uObj = $unitsMap->get($r->fakultas_unit);
                             $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
-                            $sumRealisasiTw += (float)$r->nilai_capaian;
-                            $sumTargetTw += $this->getUnitTarget($iku, $uObj, $tObj);
+                            $targetVal = $this->getUnitTarget($iku, $uObj, $tObj);
+                            if ($targetVal > 0) {
+                                $sumRealisasiTw += $realVal;
+                                $sumTargetTw += $targetVal;
+                            }
                         }
                         $twPcts[$tw] = $sumTargetTw > 0 ? min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1)) : 0;
                     } else {
@@ -425,10 +430,15 @@ class DashboardController extends Controller
                     $sumRealisasiTotal = 0;
                     $sumTargetTotal = 0;
                     foreach ($rowsSebaranTahun as $r) {
+                        $realVal = (float)$r->nilai_capaian;
+                        if ($realVal <= 0) continue; // Hilangkan realisasi 0
                         $uObj = $unitsMap->get($r->fakultas_unit);
                         $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
-                        $sumRealisasiTotal += (float)$r->nilai_capaian;
-                        $sumTargetTotal += $this->getUnitTarget($iku, $uObj, $tObj);
+                        $targetVal = $this->getUnitTarget($iku, $uObj, $tObj);
+                        if ($targetVal > 0) {
+                            $sumRealisasiTotal += $realVal;
+                            $sumTargetTotal += $targetVal;
+                        }
                     }
                     $allPct = $sumTargetTotal > 0 ? min(100, round(($sumRealisasiTotal / $sumTargetTotal) * 100, 1)) : 0;
                 } else {
@@ -448,10 +458,15 @@ class DashboardController extends Controller
                             $sumRealisasiTw = 0;
                             $sumTargetTw = 0;
                             foreach ($rowsYrTw as $r) {
+                                $realVal = (float)$r->nilai_capaian;
+                                if ($realVal <= 0) continue; // Hilangkan realisasi 0
                                 $uObj = $unitsMap->get($r->fakultas_unit);
                                 $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $yr) : null;
-                                $sumRealisasiTw += (float)$r->nilai_capaian;
-                                $sumTargetTw += $this->getUnitTarget($iku, $uObj, $tObj);
+                                $targetVal = $this->getUnitTarget($iku, $uObj, $tObj);
+                                if ($targetVal > 0) {
+                                    $sumRealisasiTw += $realVal;
+                                    $sumTargetTw += $targetVal;
+                                }
                             }
                             $twPctsYr[$tw] = $sumTargetTw > 0 ? min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1)) : 0;
                         } else {
@@ -466,10 +481,15 @@ class DashboardController extends Controller
                         $sumRealisasiYr = 0;
                         $sumTargetYr = 0;
                         foreach ($rowsYr as $r) {
+                            $realVal = (float)$r->nilai_capaian;
+                            if ($realVal <= 0) continue; // Hilangkan realisasi 0
                             $uObj = $unitsMap->get($r->fakultas_unit);
                             $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $yr) : null;
-                            $sumRealisasiYr += (float)$r->nilai_capaian;
-                            $sumTargetYr += $this->getUnitTarget($iku, $uObj, $tObj);
+                            $targetVal = $this->getUnitTarget($iku, $uObj, $tObj);
+                            if ($targetVal > 0) {
+                                $sumRealisasiYr += $realVal;
+                                $sumTargetYr += $targetVal;
+                            }
                         }
                         $capaianPctYr = $sumTargetYr > 0 ? min(100, round(($sumRealisasiYr / $sumTargetYr) * 100, 1)) : 0;
                     } else {
@@ -665,35 +685,45 @@ class DashboardController extends Controller
                 if (in_array((int)$r->id_indikator, range(1, 9))) {
                     continue;
                 }
+                $realVal = (float)$r->nilai_capaian;
+                // Hilangkan dari perhitungan jika realisasi bernilai 0
+                if ($realVal <= 0) {
+                    continue;
+                }
                 $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
                 if ($ikuDef) {
                     $uObj = $unitsMap->get($r->fakultas_unit);
                     $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
                     $targetVal = $this->getUnitTarget($ikuDef, $uObj, $tObj);
                     if ($targetVal > 0) {
-                        $pct = min(100, round(((float)$r->nilai_capaian / $targetVal) * 100, 2));
+                        $pct = min(100, round(($realVal / $targetVal) * 100, 2));
                         $capaianPctList[] = $pct;
                     }
                 }
             }
 
-            // Tambahkan persentase ketercapaian resmi SIMAK IKU 1 (AEE PT - ID 1)
+            // Tambahkan persentase ketercapaian resmi SIMAK IKU 1 (AEE PT - ID 1) jika > 0
             $aeePt = (float)($simakByTw[$tw]['aee_pt'] ?? 0);
-            $tObj1 = isset($targetYearMap[1]) ? $targetYearMap[1]->firstWhere('tahun', $calcTahun) : null;
-            $targetVal1 = ($tObj1 && is_numeric($tObj1->target) && (float)$tObj1->target > 0) ? (float)$tObj1->target : (float)($allIkuList->firstWhere('id', 1)->target ?? 86);
-            if ($targetVal1 > 0) {
-                $capaianPctList[] = min(100, round(($aeePt / $targetVal1) * 100, 2));
+            if ($aeePt > 0) {
+                $tObj1 = isset($targetYearMap[1]) ? $targetYearMap[1]->firstWhere('tahun', $calcTahun) : null;
+                $targetVal1 = ($tObj1 && is_numeric($tObj1->target) && (float)$tObj1->target > 0) ? (float)$tObj1->target : (float)($allIkuList->firstWhere('id', 1)->target ?? 86);
+                if ($targetVal1 > 0) {
+                    $capaianPctList[] = min(100, round(($aeePt / $targetVal1) * 100, 2));
+                }
             }
 
-            // Tambahkan persentase ketercapaian resmi SIMAK Sub-IKU (ID 2 s/d 9) yang memiliki target
+            // Tambahkan persentase ketercapaian resmi SIMAK Sub-IKU (ID 2 s/d 9) yang memiliki target dan realisasi > 0
             foreach (range(2, 9) as $subId) {
+                $subVal = (float)($simakByTw[$tw]['by_id'][$subId]['tingkat_pencapaian'] ?? 0);
+                if ($subVal <= 0) {
+                    continue;
+                }
                 $subDef = $allIkuList->firstWhere('id', $subId);
                 $tObjSub = isset($targetYearMap[$subId]) ? $targetYearMap[$subId]->firstWhere('tahun', $calcTahun) : null;
                 $targetSub = ($tObjSub && is_numeric($tObjSub->target) && (float)$tObjSub->target > 0) 
                     ? (float)$tObjSub->target 
                     : (is_numeric($subDef->target ?? null) ? (float)$subDef->target : 0);
                 if ($targetSub > 0) {
-                    $subVal = (float)($simakByTw[$tw]['by_id'][$subId]['tingkat_pencapaian'] ?? 0);
                     $capaianPctList[] = min(100, round(($subVal / $targetSub) * 100, 2));
                 }
             }
@@ -858,6 +888,11 @@ class DashboardController extends Controller
 
             $unitRealPcts = [];
             foreach ($submittedUnique as $r) {
+                $realVal = (float)$r->nilai_capaian;
+                // Hilangkan dari perhitungan jika realisasi bernilai 0
+                if ($realVal <= 0) {
+                    continue;
+                }
                 $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
                 if ($ikuDef) {
                     $uObj = $unitsMap->get($u->id);
@@ -865,34 +900,38 @@ class DashboardController extends Controller
                     $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $targetYear) : null;
                     $targetVal = $this->getUnitTarget($ikuDef, $uObj, $tObj);
                     if ($targetVal > 0) {
-                        $pct = min(100, round(((float)$r->nilai_capaian / $targetVal) * 100, 1));
+                        $pct = min(100, round(($realVal / $targetVal) * 100, 1));
                         $unitRealPcts[] = $pct;
                     }
                 }
             }
 
-            // Tambahkan realisasi IKU 1 jenjang resmi dari SIMAK untuk prodi
+            // Tambahkan realisasi IKU 1 jenjang resmi dari SIMAK untuk prodi jika > 0
             if ($prodiIku1Id && !(str_contains(strtoupper($u->nama_fak_prod_unit), 'BPSI') || $u->id == 41)) {
                 if ($unitTwParam !== 'ALL') {
                     $simakTwData = $simakByTw[$unitTwParam] ?? ($simakByTw['TW3'] ?? reset($simakByTw));
                     $realisasiVal = (float)($simakTwData['by_id'][$prodiIku1Id]['tingkat_pencapaian'] ?? 0);
-                    $ikuDef = $allIkuList->firstWhere('id', $prodiIku1Id);
-                    $tObj = isset($targetYearMap[$prodiIku1Id]) ? $targetYearMap[$prodiIku1Id]->firstWhere('tahun', $calcTahun) : null;
-                    $targetVal = $this->getUnitTarget($ikuDef, $u, $tObj);
-                    if ($targetVal > 0) {
-                        $pct = min(100, round(($realisasiVal / $targetVal) * 100, 1));
-                        $unitRealPcts[] = $pct;
-                    }
-                } else {
-                    foreach ($this->TRIWULAN as $twKey) {
-                        $simakTwData = $simakByTw[$twKey] ?? reset($simakByTw);
-                        $realisasiVal = (float)($simakTwData['by_id'][$prodiIku1Id]['tingkat_pencapaian'] ?? 0);
+                    if ($realisasiVal > 0) {
                         $ikuDef = $allIkuList->firstWhere('id', $prodiIku1Id);
                         $tObj = isset($targetYearMap[$prodiIku1Id]) ? $targetYearMap[$prodiIku1Id]->firstWhere('tahun', $calcTahun) : null;
                         $targetVal = $this->getUnitTarget($ikuDef, $u, $tObj);
                         if ($targetVal > 0) {
                             $pct = min(100, round(($realisasiVal / $targetVal) * 100, 1));
                             $unitRealPcts[] = $pct;
+                        }
+                    }
+                } else {
+                    foreach ($this->TRIWULAN as $twKey) {
+                        $simakTwData = $simakByTw[$twKey] ?? reset($simakByTw);
+                        $realisasiVal = (float)($simakTwData['by_id'][$prodiIku1Id]['tingkat_pencapaian'] ?? 0);
+                        if ($realisasiVal > 0) {
+                            $ikuDef = $allIkuList->firstWhere('id', $prodiIku1Id);
+                            $tObj = isset($targetYearMap[$prodiIku1Id]) ? $targetYearMap[$prodiIku1Id]->firstWhere('tahun', $calcTahun) : null;
+                            $targetVal = $this->getUnitTarget($ikuDef, $u, $tObj);
+                            if ($targetVal > 0) {
+                                $pct = min(100, round(($realisasiVal / $targetVal) * 100, 1));
+                                $unitRealPcts[] = $pct;
+                            }
                         }
                     }
                 }
@@ -902,7 +941,8 @@ class DashboardController extends Controller
             if (str_contains(strtoupper($u->nama_fak_prod_unit), 'BPSI') || $u->id == 41) {
                 $persentaseRealisasi = 0;
             } else {
-                $persentaseRealisasi = $denominator > 0 ? min(100, round(array_sum($unitRealPcts) / $denominator, 1)) : 0;
+                $countValid = count($unitRealPcts);
+                $persentaseRealisasi = $countValid > 0 ? min(100, round(array_sum($unitRealPcts) / $countValid, 1)) : 0;
             }
 
             $stat = $simakStats->get($u->id);
