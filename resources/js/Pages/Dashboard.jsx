@@ -868,6 +868,7 @@ export default function Dashboard() {
     const [activePeriod, setActivePeriod] = useState('TW3');
     const [chartTwFilter, setChartTwFilter] = useState('ALL');
     const [unitTwFilter, setUnitTwFilter] = useState('TW3');
+    const [capaianTab, setCapaianTab] = useState('trim'); // 'trim' | 'real'
 
     // Export ZIP Background & Chunk Download State
     const [exportModalState, setExportModalState] = useState({
@@ -1146,8 +1147,21 @@ export default function Dashboard() {
             });
     };
 
-    const twSummary = stats?.triwulan_summary || {};
-    const overallCapaian = stats?.overall_capaian || 0;
+    const twSummary = capaianTab === 'real'
+        ? (stats?.triwulan_summary_real ?? stats?.triwulan_summary ?? {})
+        : (stats?.triwulan_summary_trim ?? stats?.triwulan_summary ?? {});
+
+    const overallCapaian = capaianTab === 'real'
+        ? (stats?.overall_capaian_real ?? stats?.overall_capaian ?? 0)
+        : (stats?.overall_capaian_trim ?? stats?.overall_capaian ?? 0);
+
+    const sebaranPerIku = capaianTab === 'real'
+        ? (stats?.sebaran_per_iku_real ?? stats?.sebaran_per_iku ?? [])
+        : (stats?.sebaran_per_iku_trim ?? stats?.sebaran_per_iku ?? []);
+
+    const capaianPerUnit = capaianTab === 'real'
+        ? (stats?.capaian_per_unit_real ?? stats?.capaian_per_unit ?? [])
+        : (stats?.capaian_per_unit_trim ?? stats?.capaian_per_unit ?? []);
 
     const renderStatusBadge = (status) => {
         if (!status) {
@@ -1207,8 +1221,38 @@ export default function Dashboard() {
                     <p className="text-xs text-[#535f71] mt-0.5">Evaluasi realisasi capaian secara real-time</p>
                 </div>
 
-                {/* Single Filter Tahun Header Selector */}
-                <div className="flex items-center gap-3">
+                {/* Header Actions: Tab Switcher & Filter Tahun */}
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* Mode Tabs Switcher in Header */}
+                    <div className="flex items-center bg-white border border-[#c0c6d6]/40 rounded-xl p-1 shadow-xs">
+                        <button
+                            type="button"
+                            onClick={() => setCapaianTab('real')}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-black transition-all duration-200 cursor-pointer ${
+                                capaianTab === 'real'
+                                    ? 'bg-[#005bb1] text-white shadow-xs'
+                                    : 'text-[#535f71] hover:text-[#181c23]'
+                            }`}
+                            title="Tampilkan data apa adanya (termasuk realisasi 0)"
+                        >
+                            <span className="material-symbols-outlined text-[15px]">bar_chart</span>
+                            <span>Tab Real</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setCapaianTab('trim')}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-black transition-all duration-200 cursor-pointer ${
+                                capaianTab === 'trim'
+                                    ? 'bg-[#005bb1] text-white shadow-xs'
+                                    : 'text-[#535f71] hover:text-[#181c23]'
+                            }`}
+                            title="Tampilkan data tanpa mengikutsertakan realisasi 0"
+                        >
+                            <span className="material-symbols-outlined text-[15px]">tune</span>
+                            <span>Tab Trim</span>
+                        </button>
+                    </div>
+
                     <div className="flex items-center gap-2 bg-white border border-[#c0c6d6]/40 rounded-xl px-4 py-2 text-xs font-bold text-[#181c23] shadow-xs">
                         <span className="material-symbols-outlined text-[#005bb1] text-lg">calendar_today</span>
                         <span className="text-xs font-bold text-[#717785]">Tahun:</span>
@@ -1234,20 +1278,86 @@ export default function Dashboard() {
                 <div className="space-y-8">
                     {/* CARD 1: OVERALL CAPAIAN & 4 TRIWULAN CARDS (FULL WIDTH 1 COLUMN) */}
                     <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-8 shadow-sm border border-[#c0c6d6]/20 space-y-6">
+                        {/* Section Header with Tab Real / Tab Trim Switcher */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#c0c6d6]/15">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-[#005bb1]/10 flex items-center justify-center text-[#005bb1]">
+                                    <span className="material-symbols-outlined text-lg">insights</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-extrabold text-[#181c23] uppercase tracking-wider">
+                                        Ringkasan Capaian Triwulan & Keseluruhan
+                                    </h3>
+                                    <p className="text-[11px] text-[#717785]">
+                                        {capaianTab === 'real'
+                                            ? 'Mode Tab Real: Menghitung seluruh capaian indikator apa adanya (termasuk nilai 0)'
+                                            : 'Mode Tab Trim: Mengabaikan indikator dengan realisasi 0 dari pembagi rata-rata capaian'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Dual Tabs Control */}
+                            <div className="flex items-center bg-[#f1f3fe] p-1.5 rounded-2xl border border-[#c0c6d6]/30 shadow-2xs">
+                                <button
+                                    type="button"
+                                    onClick={() => setCapaianTab('real')}
+                                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer ${
+                                        capaianTab === 'real'
+                                            ? 'bg-white text-[#005bb1] shadow-xs ring-1 ring-black/5'
+                                            : 'text-[#535f71] hover:text-[#181c23]'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-sm">bar_chart</span>
+                                    <span>Tab Real</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
+                                        capaianTab === 'real' ? 'bg-[#005bb1]/10 text-[#005bb1]' : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                        Semua Data
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCapaianTab('trim')}
+                                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer ${
+                                        capaianTab === 'trim'
+                                            ? 'bg-[#005bb1] text-white shadow-xs'
+                                            : 'text-[#535f71] hover:text-[#181c23]'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-sm">tune</span>
+                                    <span>Tab Trim</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
+                                        capaianTab === 'trim' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                        Tanpa Realisasi 0
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                             {/* Overall Capaian Banner */}
                             <div className="lg:col-span-4 bg-[#005bb1] text-white p-6 rounded-[1.8rem] shadow-lg relative overflow-hidden flex flex-col justify-between h-52">
-                                <div className="text-[10px] font-extrabold uppercase tracking-widest text-white/80">
-                                    OVERALL CAPAIAN PERFORMA ({selectedTahun === 'ALL' ? 'SEMUA TAHUN' : selectedTahun})
-                                </div>
-                                <div className="mt-2 flex items-baseline gap-1">
-                                    <span className="text-5xl font-extrabold tracking-tight">
-                                        {overallCapaian.toString().replace('.', ',')}
-                                    </span>
-                                    <span className="text-2xl font-bold opacity-80">%</span>
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-widest text-white/80">
+                                            OVERALL CAPAIAN ({selectedTahun === 'ALL' ? 'SEMUA TAHUN' : selectedTahun})
+                                        </div>
+                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/20 text-white backdrop-blur-xs">
+                                            {capaianTab === 'real' ? 'MODE REAL' : 'MODE TRIM'}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 flex items-baseline gap-1">
+                                        <span className="text-5xl font-extrabold tracking-tight">
+                                            {overallCapaian.toString().replace('.', ',')}
+                                        </span>
+                                        <span className="text-2xl font-bold opacity-80">%</span>
+                                    </div>
                                 </div>
                                 <p className="text-xs text-white/80 mt-1 font-medium">
-                                    Rata-rata kumulatif capaian realisasi terhadap target
+                                    {capaianTab === 'real' 
+                                        ? 'Rata-rata kumulatif capaian realisasi (termasuk indikator bernilai 0)'
+                                        : 'Rata-rata kumulatif capaian realisasi (indikator bernilai 0 tidak dihitung)'}
                                 </p>
                             </div>
 
@@ -1356,7 +1466,14 @@ export default function Dashboard() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#c0c6d6]/15">
                             <div className="flex items-center gap-2 text-[#181c23] font-extrabold text-sm uppercase tracking-wider">
                                 <span className="material-symbols-outlined text-[#005bb1] text-xl">show_chart</span>
-                                SEBARAN CAPAIAN PER IKU (BASELINE, TARGET & REALISASI)
+                                <span>SEBARAN CAPAIAN PER IKU (BASELINE, TARGET & REALISASI)</span>
+                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                                    capaianTab === 'real'
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}>
+                                    {capaianTab === 'real' ? 'Mode Real' : 'Mode Trim'}
+                                </span>
                             </div>
 
                             {/* Filter Triwulan Chart */}
@@ -1379,7 +1496,7 @@ export default function Dashboard() {
 
                         {/* Interactive Full Width Multi-Line Chart */}
                         <SebaranCapaianChart 
-                            data={stats?.sebaran_per_iku} 
+                            data={sebaranPerIku} 
                             filterTw={chartTwFilter} 
                             selectedTahun={selectedTahun}
                         />
@@ -1389,7 +1506,16 @@ export default function Dashboard() {
                     <section className="bg-white rounded-2xl sm:rounded-[2rem] shadow-sm p-4 sm:p-8 border border-[#c0c6d6]/15 space-y-6">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c0c6d6]/15 pb-4">
                             <div>
-                                <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
+                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                                        capaianTab === 'real'
+                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    }`}>
+                                        {capaianTab === 'real' ? 'Mode Real' : 'Mode Trim'}
+                                    </span>
+                                </div>
                                 <p className="text-xs text-[#535f71]">Perbandingan persentase data diajukan serta ketercapaian realisasi terhadap target untuk seluruh Fakultas & Unit Kerja.</p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -1410,7 +1536,7 @@ export default function Dashboard() {
                         </div>
 
                         <CapaianSemuaUnitBarChart 
-                            data={stats?.capaian_per_unit} 
+                            data={capaianPerUnit} 
                             selectedTw={unitTwFilter} 
                             selectedTahun={selectedTahun} 
                         />
