@@ -143,6 +143,19 @@ class DashboardController extends Controller
         return $iku->target ?? '-';
     }
 
+    private function getUnitJenjang($u)
+    {
+        if (!$u) return null;
+        $j = strtolower(trim($u->jenjang ?? ''));
+        if (preg_match('/\b(d1|d2|d3|d4|s1|s2|s3|profesi)\b/i', $u->nama_fak_prod_unit ?? '', $m)) {
+            $j = strtolower($m[1]);
+        }
+        if (empty($j) && ($u->kode_prodi ?? '') === '85202') {
+            $j = 's1';
+        }
+        return $j ?: null;
+    }
+
     public function summaryData(Request $request)
     {
         $tahunParam = $request->query('tahun', date('Y'));
@@ -152,6 +165,31 @@ class DashboardController extends Controller
 
         $user = $request->user();
         $scope = $user ? $user->scopeUnits() : [1];
+
+        $calcTahun = ($tahun !== 'ALL') ? (int)$tahun : (int)date('Y');
+
+        // Preload live SIMAK IKU 1 data across all 4 quarters (cached 5 min for SSE / streaming efficiency)
+        $simakByTw = [];
+        foreach ($this->TRIWULAN as $tKey) {
+            $simakByTw[$tKey] = \Illuminate\Support\Facades\Cache::remember(
+                "simak_iku1_v2_{$calcTahun}_{$tKey}",
+                300,
+                function() use ($calcTahun, $tKey) {
+                    return $this->calculateSimakIku1All($calcTahun, $tKey);
+                }
+            );
+        }
+
+        $jenjangIkuMap = [
+            'd1' => ['id' => 2, 'kode' => 'IKU 1 - a'],
+            'd2' => ['id' => 3, 'kode' => 'IKU 1 - b'],
+            'd3' => ['id' => 4, 'kode' => 'IKU 1 - c'],
+            'd4' => ['id' => 5, 'kode' => 'IKU 1 - d'],
+            's1' => ['id' => 6, 'kode' => 'IKU 1 - e'],
+            's2' => ['id' => 7, 'kode' => 'IKU 1 - f'],
+            's3' => ['id' => 8, 'kode' => 'IKU 1 - g'],
+            'profesi' => ['id' => 9, 'kode' => 'IKU 1 - h'],
+        ];
 
         // Determine if a specific unit is selected or scoped for the user
         $selectedUnitId = $request->filled('unit') 
@@ -174,6 +212,40 @@ class DashboardController extends Controller
             }
             $assignedIkuIds = $assignedIkuQuery->orderByRaw('COALESCE(gdrive_folder_logs.id, penugasan_target.id) ASC')
                 ->pluck('penugasan_target.id_indikator')->unique()->values()->toArray();
+
+            // Sertakan indikator IKU 1 sesuai jenjang untuk prodi terpilih (misal IKU 1 - e untuk S1 KIMIA)
+            $selectedUnitRow = DB::table('v_fakultas_unit')->where('id', $selectedUnitId)->first();
+            if ($selectedUnitRow && strtolower($selectedUnitRow->type ?? '') === 'prodi') {
+                $j = $this->getUnitJenjang($selectedUnitRow);
+                if (isset($jenjangIkuMap[$j])) {
+                    $prodiIku1Id = $jenjangIkuMap[$j]['id'];
+                    if (!in_array($prodiIku1Id, $assignedIkuIds)) {
+                        array_unshift($assignedIkuIds, $prodiIku1Id);
+                    }
+                }
+            } elseif ($selectedUnitRow && strtolower($selectedUnitRow->type ?? '') === 'fakultas') {
+                $facProdis = DB::table('v_fakultas_unit')
+                    ->where(function($w) { $w->whereNull('is_active')->orWhere('is_active', 1); })
+                    ->where('type', 'prodi')
+                    ->where(function($w) use ($selectedUnitRow) {
+                        $w->where('fakultas', $selectedUnitRow->nama_fak_prod_unit)
+                          ->orWhere('kode_fakultas', $selectedUnitRow->kode_fakultas);
+                    })
+                    ->get();
+                $facIku1Ids = [];
+                foreach ($facProdis as $fp) {
+                    $fpJ = $this->getUnitJenjang($fp);
+                    if (isset($jenjangIkuMap[$fpJ])) {
+                        $facIku1Ids[] = $jenjangIkuMap[$fpJ]['id'];
+                    }
+                }
+                $facIku1Ids = array_unique($facIku1Ids);
+                foreach (array_reverse($facIku1Ids) as $fId) {
+                    if (!in_array($fId, $assignedIkuIds)) {
+                        array_unshift($assignedIkuIds, $fId);
+                    }
+                }
+            }
         }
 
         // Fetch template_capaian in scope for user status counts & per_iku table
@@ -244,137 +316,204 @@ class DashboardController extends Controller
 
         // 1. Multi-Prodi / University-wide Sebaran Per IKU for aggregate distribution chart
         foreach ($allIkuList as $iku) {
-            $rows = $data->filter(function ($item) use ($iku) {
-                return $item->id_indikator === $iku->id;
-            });
-            $rowsSah = $rows->where('status_validasi', 'DISAHKAN');
-            $capaianRata = $rowsSah->count() > 0 ? round($rowsSah->avg('nilai_capaian'), 2) : ($rows->count() > 0 ? round($rows->avg('nilai_capaian'), 2) : null);
+            $isSimakIku = in_array($iku->id, range(1, 9));
 
-            $target = (float)$iku->target;
-            $baseLine = (float)$iku->base_line;
-            $kodeLabel = $iku->iku;
-            $hasData = ($rows->count() > 0 && $capaianRata !== null);
+            if ($isSimakIku) {
+                $tObj = isset($targetYearMap[$iku->id]) ? $targetYearMap[$iku->id]->firstWhere('tahun', $calcTahun) : null;
+                $target = ($tObj && is_numeric($tObj->target) && (float)$tObj->target > 0) ? (float)$tObj->target : ((float)$iku->target > 0 ? (float)$iku->target : 1);
+                $baseLine = ($tObj && is_numeric($tObj->base_line) && (float)$tObj->base_line > 0) ? (float)$tObj->base_line : ((float)$iku->base_line > 0 ? (float)$iku->base_line : 0);
 
-            // Calculate Multi-Prodi Aggregate Capaian % for Sebaran Per IKU
-            // Formula: (sum(realisasi_i) / sum(target_i)) * 100%
-            $rowsSebaran = $sebaranCapaianRows->filter(function ($item) use ($iku) {
-                return $item->id_indikator === $iku->id;
-            });
-            $rowsSebaranTahun = ($tahun !== 'ALL') ? $rowsSebaran->where('tahun', $tahun) : $rowsSebaran;
-
-            $twPcts = [];
-            foreach ($this->TRIWULAN as $tw) {
-                $rowsTw = $rowsSebaranTahun->where('triwulan', $tw);
-                if ($rowsTw->count() > 0) {
-                    $sumRealisasiTw = 0;
-                    $sumTargetTw = 0;
-                    foreach ($rowsTw as $r) {
-                        $uObj = $unitsMap->get($r->fakultas_unit);
-                        $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
-                        $sumRealisasiTw += (float)$r->nilai_capaian;
-                        $sumTargetTw += $this->getUnitTarget($iku, $uObj, $tObj);
-                    }
-                    $twPcts[$tw] = $sumTargetTw > 0 ? min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1)) : 0;
-                } else {
-                    $twPcts[$tw] = 0;
-                }
-            }
-
-            $targetPct = ($target > 0) ? 100 : 0;
-            $baselinePct = ($target > 0 && $baseLine > 0) ? min(100, round(($baseLine / $target) * 100, 1)) : min(100, $baseLine);
-
-            if ($rowsSebaranTahun->count() > 0) {
-                $sumRealisasiTotal = 0;
-                $sumTargetTotal = 0;
-                foreach ($rowsSebaranTahun as $r) {
-                    $uObj = $unitsMap->get($r->fakultas_unit);
-                    $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
-                    $sumRealisasiTotal += (float)$r->nilai_capaian;
-                    $sumTargetTotal += $this->getUnitTarget($iku, $uObj, $tObj);
-                }
-                $allPct = $sumTargetTotal > 0 ? min(100, round(($sumRealisasiTotal / $sumTargetTotal) * 100, 1)) : 0;
-            } else {
-                $allPct = 0;
-            }
-
-            // Generate multi-year breakdown (yearsData)
-            $yearsData = [];
-            foreach ($registeredYears as $yr) {
-                $rowsYr = $rowsSebaran->where('tahun', $yr);
-                $twPctsYr = [];
-                $targetYr = (float)$iku->target;
-
+                $twPcts = [];
                 foreach ($this->TRIWULAN as $tw) {
-                    $rowsYrTw = $rowsYr->where('triwulan', $tw);
-                    if ($rowsYrTw->count() > 0) {
+                    if ($iku->id === 1) {
+                        $realVal = (float)($simakByTw[$tw]['aee_pt'] ?? 0);
+                    } else {
+                        $realVal = (float)($simakByTw[$tw]['by_id'][$iku->id]['tingkat_pencapaian'] ?? 0);
+                    }
+                    $twPcts[$tw] = $target > 0 ? min(100, round(($realVal / $target) * 100, 1)) : 0;
+                }
+
+                $targetPct = ($target > 0) ? 100 : 0;
+                $baselinePct = ($target > 0 && $baseLine > 0) ? min(100, round(($baseLine / $target) * 100, 1)) : min(100, $baseLine);
+
+                $activeTwFilter = in_array($triwulanParam, ['TW1', 'TW2', 'TW3', 'TW4']) ? $triwulanParam : 'TW3';
+                if ($iku->id === 1) {
+                    $capaianVal = (float)($simakByTw[$activeTwFilter]['aee_pt'] ?? 0);
+                } else {
+                    $capaianVal = (float)($simakByTw[$activeTwFilter]['by_id'][$iku->id]['tingkat_pencapaian'] ?? 0);
+                }
+                $allPct = $twPcts[$activeTwFilter] ?? (count($twPcts) > 0 ? round(array_sum($twPcts) / count($twPcts), 1) : 0);
+
+                $yearsData = [];
+                foreach ($registeredYears as $yr) {
+                    $yearsData[$yr] = [
+                        'tahun' => $yr,
+                        'target' => $target,
+                        'target_pct' => $targetPct,
+                        'base_line' => $baseLine,
+                        'baseline_pct' => $baselinePct,
+                        'capaian' => $capaianVal,
+                        'capaian_pct' => $allPct,
+                        'has_data' => true,
+                        'TW1' => $twPcts['TW1'],
+                        'TW2' => $twPcts['TW2'],
+                        'TW3' => $twPcts['TW3'],
+                        'TW4' => $twPcts['TW4'],
+                        'ALL' => $allPct
+                    ];
+                }
+
+                $sebaranPerIku[] = [
+                    'id' => $iku->id,
+                    'kode_iku' => $iku->iku,
+                    'nama' => $iku->full_kategori ?: $iku->kategori,
+                    'base_line' => $baseLine,
+                    'baseline_pct' => $baselinePct,
+                    'target' => $target,
+                    'target_pct' => $targetPct,
+                    'capaian' => $capaianVal,
+                    'capaian_pct' => $allPct,
+                    'has_data' => true,
+                    'years_data' => $yearsData,
+                    'TW1' => $twPcts['TW1'],
+                    'TW2' => $twPcts['TW2'],
+                    'TW3' => $twPcts['TW3'],
+                    'TW4' => $twPcts['TW4'],
+                    'ALL' => $allPct
+                ];
+            } else {
+                $rows = $data->filter(function ($item) use ($iku) {
+                    return $item->id_indikator === $iku->id;
+                });
+                $rowsSah = $rows->where('status_validasi', 'DISAHKAN');
+                $capaianRata = $rowsSah->count() > 0 ? round($rowsSah->avg('nilai_capaian'), 2) : ($rows->count() > 0 ? round($rows->avg('nilai_capaian'), 2) : null);
+
+                $target = (float)$iku->target;
+                $baseLine = (float)$iku->base_line;
+                $kodeLabel = $iku->iku;
+                $hasData = ($rows->count() > 0 && $capaianRata !== null);
+
+                // Calculate Multi-Prodi Aggregate Capaian % for Sebaran Per IKU
+                // Formula: (sum(realisasi_i) / sum(target_i)) * 100%
+                $rowsSebaran = $sebaranCapaianRows->filter(function ($item) use ($iku) {
+                    return $item->id_indikator === $iku->id;
+                });
+                $rowsSebaranTahun = ($tahun !== 'ALL') ? $rowsSebaran->where('tahun', $tahun) : $rowsSebaran;
+
+                $twPcts = [];
+                foreach ($this->TRIWULAN as $tw) {
+                    $rowsTw = $rowsSebaranTahun->where('triwulan', $tw);
+                    if ($rowsTw->count() > 0) {
                         $sumRealisasiTw = 0;
                         $sumTargetTw = 0;
-                        foreach ($rowsYrTw as $r) {
+                        foreach ($rowsTw as $r) {
                             $uObj = $unitsMap->get($r->fakultas_unit);
-                            $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $yr) : null;
+                            $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
                             $sumRealisasiTw += (float)$r->nilai_capaian;
                             $sumTargetTw += $this->getUnitTarget($iku, $uObj, $tObj);
                         }
-                        $twPctsYr[$tw] = $sumTargetTw > 0 ? min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1)) : 0;
+                        $twPcts[$tw] = $sumTargetTw > 0 ? min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1)) : 0;
                     } else {
-                        $twPctsYr[$tw] = 0;
+                        $twPcts[$tw] = 0;
                     }
                 }
 
-                $capaianYr = $rowsYr->count() > 0 ? (float)$rowsYr->avg('nilai_capaian') : null;
-                $baselineYr = (float)$iku->base_line;
+                $targetPct = ($target > 0) ? 100 : 0;
+                $baselinePct = ($target > 0 && $baseLine > 0) ? min(100, round(($baseLine / $target) * 100, 1)) : min(100, $baseLine);
 
-                if ($rowsYr->count() > 0) {
-                    $sumRealisasiYr = 0;
-                    $sumTargetYr = 0;
-                    foreach ($rowsYr as $r) {
+                if ($rowsSebaranTahun->count() > 0) {
+                    $sumRealisasiTotal = 0;
+                    $sumTargetTotal = 0;
+                    foreach ($rowsSebaranTahun as $r) {
                         $uObj = $unitsMap->get($r->fakultas_unit);
-                        $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $yr) : null;
-                        $sumRealisasiYr += (float)$r->nilai_capaian;
-                        $sumTargetYr += $this->getUnitTarget($iku, $uObj, $tObj);
+                        $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $r->tahun) : null;
+                        $sumRealisasiTotal += (float)$r->nilai_capaian;
+                        $sumTargetTotal += $this->getUnitTarget($iku, $uObj, $tObj);
                     }
-                    $capaianPctYr = $sumTargetYr > 0 ? min(100, round(($sumRealisasiYr / $sumTargetYr) * 100, 1)) : 0;
+                    $allPct = $sumTargetTotal > 0 ? min(100, round(($sumRealisasiTotal / $sumTargetTotal) * 100, 1)) : 0;
                 } else {
-                    $capaianPctYr = 0;
+                    $allPct = 0;
                 }
 
-                $baselinePctYr = ($targetYr > 0 && $baselineYr > 0) ? min(100, round(($baselineYr / $targetYr) * 100, 1)) : min(100, $baselineYr);
+                // Generate multi-year breakdown (yearsData)
+                $yearsData = [];
+                foreach ($registeredYears as $yr) {
+                    $rowsYr = $rowsSebaran->where('tahun', $yr);
+                    $twPctsYr = [];
+                    $targetYr = (float)$iku->target;
 
-                $yearsData[$yr] = [
-                    'tahun' => $yr,
-                    'target' => $targetYr,
-                    'target_pct' => ($targetYr > 0) ? 100 : 0,
-                    'base_line' => $baselineYr,
-                    'baseline_pct' => $baselinePctYr,
-                    'capaian' => $capaianYr ?? 0,
-                    'capaian_pct' => $capaianPctYr,
-                    'has_data' => ($capaianYr !== null),
-                    'TW1' => $twPctsYr['TW1'],
-                    'TW2' => $twPctsYr['TW2'],
-                    'TW3' => $twPctsYr['TW3'],
-                    'TW4' => $twPctsYr['TW4'],
-                    'ALL' => $capaianPctYr
+                    foreach ($this->TRIWULAN as $tw) {
+                        $rowsYrTw = $rowsYr->where('triwulan', $tw);
+                        if ($rowsYrTw->count() > 0) {
+                            $sumRealisasiTw = 0;
+                            $sumTargetTw = 0;
+                            foreach ($rowsYrTw as $r) {
+                                $uObj = $unitsMap->get($r->fakultas_unit);
+                                $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $yr) : null;
+                                $sumRealisasiTw += (float)$r->nilai_capaian;
+                                $sumTargetTw += $this->getUnitTarget($iku, $uObj, $tObj);
+                            }
+                            $twPctsYr[$tw] = $sumTargetTw > 0 ? min(100, round(($sumRealisasiTw / $sumTargetTw) * 100, 1)) : 0;
+                        } else {
+                            $twPctsYr[$tw] = 0;
+                        }
+                    }
+
+                    $capaianYr = $rowsYr->count() > 0 ? (float)$rowsYr->avg('nilai_capaian') : null;
+                    $baselineYr = (float)$iku->base_line;
+
+                    if ($rowsYr->count() > 0) {
+                        $sumRealisasiYr = 0;
+                        $sumTargetYr = 0;
+                        foreach ($rowsYr as $r) {
+                            $uObj = $unitsMap->get($r->fakultas_unit);
+                            $tObj = isset($targetYearMap[$r->id_indikator]) ? $targetYearMap[$r->id_indikator]->firstWhere('tahun', $yr) : null;
+                            $sumRealisasiYr += (float)$r->nilai_capaian;
+                            $sumTargetYr += $this->getUnitTarget($iku, $uObj, $tObj);
+                        }
+                        $capaianPctYr = $sumTargetYr > 0 ? min(100, round(($sumRealisasiYr / $sumTargetYr) * 100, 1)) : 0;
+                    } else {
+                        $capaianPctYr = 0;
+                    }
+
+                    $baselinePctYr = ($targetYr > 0 && $baselineYr > 0) ? min(100, round(($baselineYr / $targetYr) * 100, 1)) : min(100, $baselineYr);
+
+                    $yearsData[$yr] = [
+                        'tahun' => $yr,
+                        'target' => $targetYr,
+                        'target_pct' => ($targetYr > 0) ? 100 : 0,
+                        'base_line' => $baselineYr,
+                        'baseline_pct' => $baselinePctYr,
+                        'capaian' => $capaianYr ?? 0,
+                        'capaian_pct' => $capaianPctYr,
+                        'has_data' => ($capaianYr !== null),
+                        'TW1' => $twPctsYr['TW1'],
+                        'TW2' => $twPctsYr['TW2'],
+                        'TW3' => $twPctsYr['TW3'],
+                        'TW4' => $twPctsYr['TW4'],
+                        'ALL' => $capaianPctYr
+                    ];
+                }
+
+                $sebaranPerIku[] = [
+                    'id' => $iku->id,
+                    'kode_iku' => $kodeLabel,
+                    'nama' => $iku->full_kategori ?: $iku->kategori,
+                    'base_line' => $baseLine,
+                    'baseline_pct' => $baselinePct,
+                    'target' => $target,
+                    'target_pct' => $targetPct,
+                    'capaian' => $capaianRata ?? 0,
+                    'capaian_pct' => $allPct,
+                    'has_data' => $hasData,
+                    'years_data' => $yearsData,
+                    'TW1' => $twPcts['TW1'],
+                    'TW2' => $twPcts['TW2'],
+                    'TW3' => $twPcts['TW3'],
+                    'TW4' => $twPcts['TW4'],
+                    'ALL' => $allPct
                 ];
             }
-
-            $sebaranPerIku[] = [
-                'id' => $iku->id,
-                'kode_iku' => $kodeLabel,
-                'nama' => $iku->full_kategori ?: $iku->kategori,
-                'base_line' => $baseLine,
-                'baseline_pct' => $baselinePct,
-                'target' => $target,
-                'target_pct' => $targetPct,
-                'capaian' => $capaianRata ?? 0,
-                'capaian_pct' => $allPct,
-                'has_data' => $hasData,
-                'years_data' => $yearsData,
-                'TW1' => $twPcts['TW1'],
-                'TW2' => $twPcts['TW2'],
-                'TW3' => $twPcts['TW3'],
-                'TW4' => $twPcts['TW4'],
-                'ALL' => $allPct
-            ];
         }
 
         // 2. Performance Distribution Table strictly matching penugasan_target for selected unit
@@ -382,69 +521,123 @@ class DashboardController extends Controller
         $ikuListForPerIku = $selectedUnitId ? collect($assignedIkuIds ?? [])->map(fn($id) => $allIkuList->firstWhere('id', $id))->filter() : $allIkuList;
 
         foreach ($ikuListForPerIku as $iku) {
-            $rows = $data->filter(function ($item) use ($iku) {
-                return $item->id_indikator === $iku->id;
-            });
+            $isSimakIku = in_array($iku->id, range(1, 9));
 
-            // Get triwulan specific values across user scope
-            $twDetails = [];
-            foreach ($this->TRIWULAN as $tw) {
-                $rowsTw = $rows->where('triwulan', $tw);
-                if ($rowsTw->count() > 0) {
-                    $avgNilai = round($rowsTw->avg('nilai_capaian'), 2);
-                    $firstSah = $rowsTw->where('status_validasi', 'DISAHKAN')->first();
-                    $statusVal = $firstSah ? 'DISAHKAN' : ($rowsTw->first() ? $rowsTw->first()->status_validasi : null);
+            if ($isSimakIku) {
+                $twDetails = [];
+                foreach ($this->TRIWULAN as $tw) {
+                    if ($iku->id === 1) {
+                        $val = (float)($simakByTw[$tw]['aee_pt'] ?? 0);
+                    } else {
+                        $val = (float)($simakByTw[$tw]['by_id'][$iku->id]['tingkat_pencapaian'] ?? 0);
+                    }
                     $twDetails[$tw] = [
-                        'nilai' => $avgNilai,
-                        'status_validasi' => $statusVal
-                    ];
-                } else {
-                    $twDetails[$tw] = [
-                        'nilai' => null,
-                        'status_validasi' => null
+                        'nilai' => $val,
+                        'status_validasi' => 'DISAHKAN'
                     ];
                 }
-            }
 
-            $rowsSah = $rows->where('status_validasi', 'DISAHKAN');
-            $capaianRata = $rowsSah->count() > 0 ? round($rowsSah->avg('nilai_capaian'), 2) : ($rows->count() > 0 ? round($rows->avg('nilai_capaian'), 2) : null);
+                $activeTw = in_array($triwulanParam, ['TW1', 'TW2', 'TW3', 'TW4']) ? $triwulanParam : 'TW3';
+                $capaianRata = $twDetails[$activeTw]['nilai'];
 
-            $tObj = isset($targetYearMap[$iku->id]) ? $targetYearMap[$iku->id]->firstWhere('tahun', $tahun !== 'ALL' ? $tahun : date('Y')) : null;
+                $tObj = isset($targetYearMap[$iku->id]) ? $targetYearMap[$iku->id]->firstWhere('tahun', $calcTahun) : null;
+                $rawTarget = $this->resolveUnitTargetValue($iku, $targetUnitObj, $tObj);
+                $rawBaseLine = ($tObj && isset($tObj->base_line) && $tObj->base_line !== null && $tObj->base_line !== '') ? $tObj->base_line : ($iku->base_line ?? '-');
 
-            $rawTarget = $this->resolveUnitTargetValue($iku, $targetUnitObj, $tObj);
-            $rawBaseLine = ($tObj && isset($tObj->base_line) && $tObj->base_line !== null && $tObj->base_line !== '') ? $tObj->base_line : ($iku->base_line ?? '-');
-
-            $status = 'BELUM ADA DATA SAH';
-            if ($capaianRata !== null) {
+                $status = 'BELUM TERCAPAI';
                 if (is_numeric($rawTarget) && (float)$rawTarget > 0) {
-                    $status = $capaianRata >= (float)$rawTarget ? 'TERCAPAI' : 'BELUM TERCAPAI';
+                    $status = ($capaianRata >= (float)$rawTarget) ? 'TERCAPAI' : 'BELUM TERCAPAI';
                 } else {
-                    $status = 'DIPERIKSA';
+                    $status = ($capaianRata > 0) ? 'TERCAPAI' : 'BELUM TERCAPAI';
                 }
-            }
 
-            $perIku[] = [
-                'id' => $iku->id,
-                'kode_iku' => $iku->iku,
-                'raw_kode' => $iku->iku,
-                'nama_indikator' => $iku->kategori ?: $iku->full_kategori,
-                'full_kategori' => $iku->full_kategori,
-                'jenis_iku' => $iku->jenis_iku ?? 'WAJIB',
-                'sifat' => $iku->jenis_iku ?? 'WAJIB',
-                'satuan' => $iku->satuan,
-                'base_line' => $rawBaseLine,
-                'target' => $rawTarget,
-                'capaian_rata' => $capaianRata,
-                'capaian_tw1' => $twDetails['TW1']['nilai'] ?? null,
-                'status_tw1' => $twDetails['TW1']['status_validasi'] ?? null,
-                'capaian_tw2' => $twDetails['TW2']['nilai'] ?? null,
-                'status_tw2' => $twDetails['TW2']['status_validasi'] ?? null,
-                'capaian_tw3' => $twDetails['TW3']['nilai'] ?? null,
-                'status_tw3' => $twDetails['TW3']['status_validasi'] ?? null,
-                'capaian_tw4' => $twDetails['TW4']['nilai'] ?? null,
-                'status_tw4' => $twDetails['TW4']['status_validasi'] ?? null,
-                'status' => $status
-            ];
+                $perIku[] = [
+                    'id' => $iku->id,
+                    'kode_iku' => $iku->iku,
+                    'raw_kode' => $iku->iku,
+                    'nama_indikator' => $iku->kategori ?: $iku->full_kategori,
+                    'full_kategori' => $iku->full_kategori,
+                    'jenis_iku' => $iku->jenis_iku ?? 'WAJIB',
+                    'sifat' => $iku->jenis_iku ?? 'WAJIB',
+                    'satuan' => $iku->satuan ?? '%',
+                    'base_line' => $rawBaseLine,
+                    'target' => $rawTarget,
+                    'capaian_rata' => $capaianRata,
+                    'capaian_tw1' => $twDetails['TW1']['nilai'],
+                    'status_tw1' => $twDetails['TW1']['status_validasi'],
+                    'capaian_tw2' => $twDetails['TW2']['nilai'],
+                    'status_tw2' => $twDetails['TW2']['status_validasi'],
+                    'capaian_tw3' => $twDetails['TW3']['nilai'],
+                    'status_tw3' => $twDetails['TW3']['status_validasi'],
+                    'capaian_tw4' => $twDetails['TW4']['nilai'],
+                    'status_tw4' => $twDetails['TW4']['status_validasi'],
+                    'status' => $status
+                ];
+            } else {
+                $rows = $data->filter(function ($item) use ($iku) {
+                    return $item->id_indikator === $iku->id;
+                });
+
+                // Get triwulan specific values across user scope
+                $twDetails = [];
+                foreach ($this->TRIWULAN as $tw) {
+                    $rowsTw = $rows->where('triwulan', $tw);
+                    if ($rowsTw->count() > 0) {
+                        $avgNilai = round($rowsTw->avg('nilai_capaian'), 2);
+                        $firstSah = $rowsTw->where('status_validasi', 'DISAHKAN')->first();
+                        $statusVal = $firstSah ? 'DISAHKAN' : ($rowsTw->first() ? $rowsTw->first()->status_validasi : null);
+                        $twDetails[$tw] = [
+                            'nilai' => $avgNilai,
+                            'status_validasi' => $statusVal
+                        ];
+                    } else {
+                        $twDetails[$tw] = [
+                            'nilai' => null,
+                            'status_validasi' => null
+                        ];
+                    }
+                }
+
+                $rowsSah = $rows->where('status_validasi', 'DISAHKAN');
+                $capaianRata = $rowsSah->count() > 0 ? round($rowsSah->avg('nilai_capaian'), 2) : ($rows->count() > 0 ? round($rows->avg('nilai_capaian'), 2) : null);
+
+                $tObj = isset($targetYearMap[$iku->id]) ? $targetYearMap[$iku->id]->firstWhere('tahun', $tahun !== 'ALL' ? $tahun : date('Y')) : null;
+
+                $rawTarget = $this->resolveUnitTargetValue($iku, $targetUnitObj, $tObj);
+                $rawBaseLine = ($tObj && isset($tObj->base_line) && $tObj->base_line !== null && $tObj->base_line !== '') ? $tObj->base_line : ($iku->base_line ?? '-');
+
+                $status = 'BELUM ADA DATA SAH';
+                if ($capaianRata !== null) {
+                    if (is_numeric($rawTarget) && (float)$rawTarget > 0) {
+                        $status = $capaianRata >= (float)$rawTarget ? 'TERCAPAI' : 'BELUM TERCAPAI';
+                    } else {
+                        $status = 'DIPERIKSA';
+                    }
+                }
+
+                $perIku[] = [
+                    'id' => $iku->id,
+                    'kode_iku' => $iku->iku,
+                    'raw_kode' => $iku->iku,
+                    'nama_indikator' => $iku->kategori ?: $iku->full_kategori,
+                    'full_kategori' => $iku->full_kategori,
+                    'jenis_iku' => $iku->jenis_iku ?? 'WAJIB',
+                    'sifat' => $iku->jenis_iku ?? 'WAJIB',
+                    'satuan' => $iku->satuan,
+                    'base_line' => $rawBaseLine,
+                    'target' => $rawTarget,
+                    'capaian_rata' => $capaianRata,
+                    'capaian_tw1' => $twDetails['TW1']['nilai'] ?? null,
+                    'status_tw1' => $twDetails['TW1']['status_validasi'] ?? null,
+                    'capaian_tw2' => $twDetails['TW2']['nilai'] ?? null,
+                    'status_tw2' => $twDetails['TW2']['status_validasi'] ?? null,
+                    'capaian_tw3' => $twDetails['TW3']['nilai'] ?? null,
+                    'status_tw3' => $twDetails['TW3']['status_validasi'] ?? null,
+                    'capaian_tw4' => $twDetails['TW4']['nilai'] ?? null,
+                    'status_tw4' => $twDetails['TW4']['status_validasi'] ?? null,
+                    'status' => $status
+                ];
+            }
         }
 
         $totalTercapai = count(array_filter($perIku, function($x) { return $x['status'] === 'TERCAPAI'; }));
@@ -460,11 +653,18 @@ class DashboardController extends Controller
 
         foreach ($this->TRIWULAN as $tw) {
             $rowsTw = $execCapaianRows->where('triwulan', $tw);
-            $filledCount = $rowsTw->pluck('id_indikator')->unique()->count();
+
+            // Gabungkan ID indikator dari template_capaian dan indikator IKU 1 SIMAK (ID 1 s/d 9)
+            $filledInds = $rowsTw->pluck('id_indikator')->merge(range(1, 9))->unique();
+            $filledCount = $filledInds->count();
             $isianPct = round(($filledCount / $totalIkus) * 100, 1);
 
             $capaianPctList = [];
             foreach ($rowsTw as $r) {
+                // Jangan hitung ganda ID 1-9 dari template_capaian, gunakan data resmi terverifikasi SIMAK
+                if (in_array((int)$r->id_indikator, range(1, 9))) {
+                    continue;
+                }
                 $ikuDef = $allIkuList->firstWhere('id', $r->id_indikator);
                 if ($ikuDef) {
                     $uObj = $unitsMap->get($r->fakultas_unit);
@@ -477,14 +677,35 @@ class DashboardController extends Controller
                 }
             }
 
+            // Tambahkan persentase ketercapaian resmi SIMAK IKU 1 (AEE PT - ID 1)
+            $aeePt = (float)($simakByTw[$tw]['aee_pt'] ?? 0);
+            $tObj1 = isset($targetYearMap[1]) ? $targetYearMap[1]->firstWhere('tahun', $calcTahun) : null;
+            $targetVal1 = ($tObj1 && is_numeric($tObj1->target) && (float)$tObj1->target > 0) ? (float)$tObj1->target : (float)($allIkuList->firstWhere('id', 1)->target ?? 86);
+            if ($targetVal1 > 0) {
+                $capaianPctList[] = min(100, round(($aeePt / $targetVal1) * 100, 2));
+            }
+
+            // Tambahkan persentase ketercapaian resmi SIMAK Sub-IKU (ID 2 s/d 9) yang memiliki target
+            foreach (range(2, 9) as $subId) {
+                $subDef = $allIkuList->firstWhere('id', $subId);
+                $tObjSub = isset($targetYearMap[$subId]) ? $targetYearMap[$subId]->firstWhere('tahun', $calcTahun) : null;
+                $targetSub = ($tObjSub && is_numeric($tObjSub->target) && (float)$tObjSub->target > 0) 
+                    ? (float)$tObjSub->target 
+                    : (is_numeric($subDef->target ?? null) ? (float)$subDef->target : 0);
+                if ($targetSub > 0) {
+                    $subVal = (float)($simakByTw[$tw]['by_id'][$subId]['tingkat_pencapaian'] ?? 0);
+                    $capaianPctList[] = min(100, round(($subVal / $targetSub) * 100, 2));
+                }
+            }
+
             $capaianAvg = count($capaianPctList) > 0 ? round(array_sum($capaianPctList) / count($capaianPctList), 2) : 0;
             if ($capaianAvg > 0) {
                 $totalCapaianSum += $capaianAvg;
                 $totalCapaianCount++;
             }
 
-            $hasSubmitted = $rowsTw->whereIn('status_validasi', ['DIAJUKAN', 'DIVERIFIKASI', 'DISAHKAN'])->count() > 0;
-            $status = $hasSubmitted ? 'SUBMITTED' : 'DRAFT';
+            $hasSubmitted = true; // SIMAK IKU 1 terintegrasi otomatis dan sah
+            $status = 'SUBMITTED';
             $isClosed = in_array($tw, ['TW1', 'TW2']) || ($hasSubmitted && $isianPct >= 100);
 
             $twSummary[$tw] = [
@@ -578,33 +799,51 @@ class DashboardController extends Controller
             $unitAssignments = $penugasanByUnit->get($u->id, collect());
             $unitRows = $capaianByUnit->get($u->id, collect());
 
-            // Status yang tergolong telah diajukan oleh unit kerja
+            $assignedIkuIds = $unitAssignments->pluck('id_indikator')->unique()->values()->toArray();
+
+            // Identifikasi indikator IKU 1 jenjang jika unit bertipe prodi
+            $prodiIku1Id = null;
+            if (strtolower($u->type ?? '') === 'prodi') {
+                $j = $this->getUnitJenjang($u);
+                if (isset($jenjangIkuMap[$j])) {
+                    $prodiIku1Id = $jenjangIkuMap[$j]['id'];
+                    if (!in_array($prodiIku1Id, $assignedIkuIds)) {
+                        $assignedIkuIds[] = $prodiIku1Id;
+                    }
+                }
+            }
+
+            $totalAssigned = count($assignedIkuIds);
+
+            // Status yang tergolong telah diajukan oleh unit kerja dari template_capaian (kecualikan 1-9 agar tidak ganda)
             $submittedRows = $unitRows->filter(function($r) {
                 $status = strtoupper(trim($r->status_validasi ?? ''));
                 return in_array($status, ['DIAJUKAN', 'DIVERIFIKASI', 'DISAHKAN']);
             });
 
-            $assignedIkuIds = $unitAssignments->pluck('id_indikator')->unique()->values()->toArray();
-            $totalAssigned = count($assignedIkuIds);
+            $submittedIds = $submittedRows->whereIn('id_indikator', $assignedIkuIds)->pluck('id_indikator')->unique()->toArray();
+            if ($prodiIku1Id && !in_array($prodiIku1Id, $submittedIds)) {
+                $submittedIds[] = $prodiIku1Id; // SIMAK terintegrasi otomatis dan sah
+            }
 
             if ($unitTwParam !== 'ALL') {
                 $denominator = $totalAssigned;
-                $diajukanCount = $denominator > 0 
-                    ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)->pluck('id_indikator')->unique()->count() 
-                    : 0;
+                $diajukanCount = $denominator > 0 ? count($submittedIds) : 0;
             } else {
                 if ($tahun !== 'ALL') {
                     $denominator = $totalAssigned * 4;
                 } else {
                     $assignedRecords = $unitAssignments->map(fn($a) => ($a->tahun ?? '') . '_' . $a->id_indikator)->unique()->count();
+                    if ($prodiIku1Id) $assignedRecords += 1;
                     $denominator = $assignedRecords * 4;
                 }
 
                 $diajukanCount = $denominator > 0
                     ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)
+                        ->whereNotIn('id_indikator', range(1, 9))
                         ->map(fn($r) => ($r->tahun ?? '') . '_' . ($r->triwulan ?? '') . '_' . $r->id_indikator)
                         ->unique()
-                        ->count()
+                        ->count() + ($prodiIku1Id ? 4 : 0)
                     : 0;
             }
 
@@ -614,8 +853,8 @@ class DashboardController extends Controller
             // 2. Ketercapaian antara realisasi terhadap target:
             // Dihitung terhadap seluruh indikator yang ditugaskan (indikator yang belum ada data dihitung 0%)
             $submittedUnique = ($unitTwParam !== 'ALL')
-                ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)->keyBy('id_indikator')
-                : $submittedRows->whereIn('id_indikator', $assignedIkuIds)->keyBy(fn($r) => ($r->tahun ?? '') . '_' . ($r->triwulan ?? '') . '_' . $r->id_indikator);
+                ? $submittedRows->whereIn('id_indikator', $assignedIkuIds)->whereNotIn('id_indikator', range(1, 9))->keyBy('id_indikator')
+                : $submittedRows->whereIn('id_indikator', $assignedIkuIds)->whereNotIn('id_indikator', range(1, 9))->keyBy(fn($r) => ($r->tahun ?? '') . '_' . ($r->triwulan ?? '') . '_' . $r->id_indikator);
 
             $unitRealPcts = [];
             foreach ($submittedUnique as $r) {
@@ -631,8 +870,40 @@ class DashboardController extends Controller
                     }
                 }
             }
-            // Dibagi total indikator penugasan ($denominator), bukan hanya data yang diinput
-            $persentaseRealisasi = $denominator > 0 ? min(100, round(array_sum($unitRealPcts) / $denominator, 1)) : 0;
+
+            // Tambahkan realisasi IKU 1 jenjang resmi dari SIMAK untuk prodi
+            if ($prodiIku1Id && !(str_contains(strtoupper($u->nama_fak_prod_unit), 'BPSI') || $u->id == 41)) {
+                if ($unitTwParam !== 'ALL') {
+                    $simakTwData = $simakByTw[$unitTwParam] ?? ($simakByTw['TW3'] ?? reset($simakByTw));
+                    $realisasiVal = (float)($simakTwData['by_id'][$prodiIku1Id]['tingkat_pencapaian'] ?? 0);
+                    $ikuDef = $allIkuList->firstWhere('id', $prodiIku1Id);
+                    $tObj = isset($targetYearMap[$prodiIku1Id]) ? $targetYearMap[$prodiIku1Id]->firstWhere('tahun', $calcTahun) : null;
+                    $targetVal = $this->getUnitTarget($ikuDef, $u, $tObj);
+                    if ($targetVal > 0) {
+                        $pct = min(100, round(($realisasiVal / $targetVal) * 100, 1));
+                        $unitRealPcts[] = $pct;
+                    }
+                } else {
+                    foreach ($this->TRIWULAN as $twKey) {
+                        $simakTwData = $simakByTw[$twKey] ?? reset($simakByTw);
+                        $realisasiVal = (float)($simakTwData['by_id'][$prodiIku1Id]['tingkat_pencapaian'] ?? 0);
+                        $ikuDef = $allIkuList->firstWhere('id', $prodiIku1Id);
+                        $tObj = isset($targetYearMap[$prodiIku1Id]) ? $targetYearMap[$prodiIku1Id]->firstWhere('tahun', $calcTahun) : null;
+                        $targetVal = $this->getUnitTarget($ikuDef, $u, $tObj);
+                        if ($targetVal > 0) {
+                            $pct = min(100, round(($realisasiVal / $targetVal) * 100, 1));
+                            $unitRealPcts[] = $pct;
+                        }
+                    }
+                }
+            }
+
+            // BPSI adalah unit (bukan prodi), sehingga realisasinya adalah 0 sesuai aturan sistem
+            if (str_contains(strtoupper($u->nama_fak_prod_unit), 'BPSI') || $u->id == 41) {
+                $persentaseRealisasi = 0;
+            } else {
+                $persentaseRealisasi = $denominator > 0 ? min(100, round(array_sum($unitRealPcts) / $denominator, 1)) : 0;
+            }
 
             $stat = $simakStats->get($u->id);
 
@@ -1123,7 +1394,7 @@ class DashboardController extends Controller
      * Mengikuti logika SyncSimakIku1Command (tanpa upload GDrive)
      * Menjumlahkan masing-masing kolom: total mahasiswa, total lulus tepat waktu, total drop out, total lulus tidak tepat waktu
      * Menghitung sesuai rumus:
-     * 1) AEE Realisasi = (Total Lulus Tepat / (Total Mhs - DO)) x 100%
+     * 1) AEE Realisasi = (Total Lulus Tepat / Total Mhs) x 100%
      * 2) Tingkat Pencapaian AEE = (AEE Realisasi / AEE Ideal) x 100%
      * 3) AEE PT (IKU 1) = Rata-rata Tingkat Pencapaian across all active jenjangs
      */
@@ -1331,7 +1602,7 @@ class DashboardController extends Controller
         $subRealValues = [];
         foreach ($jenjangConfig as $jKey => $cfg) {
             $s = $statsByJenjang[$jKey];
-            $den = ($s['tot_mhs'] - $s['drop_out'] > 0) ? ($s['tot_mhs'] - $s['drop_out']) : $s['tot_mhs'];
+            $den = (int)$s['tot_mhs'];
             $aeeReal = $den > 0 ? round(($s['lulus_tepat'] / $den) * 100, 2) : 0;
             $capaian = $cfg['ideal'] > 0 ? round(($aeeReal / $cfg['ideal']) * 100, 2) : 0;
 
@@ -1685,7 +1956,7 @@ class DashboardController extends Controller
             $sheet3->mergeCells('A1:H1');
             $sheet3->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
-            $sheet3->setCellValue('A2', "Sumber: unpak_simak.m_mahasiswa | Rumus: AEE Realisasi = (Lulus Tepat / (Total Mhs - DO)) x 100% | Tingkat Pencapaian = (AEE Real / AEE Ideal) x 100%");
+            $sheet3->setCellValue('A2', "Sumber: unpak_simak.m_mahasiswa | Rumus: AEE Realisasi = (Lulus Tepat / Total Mhs) x 100% | Tingkat Pencapaian = (AEE Real / AEE Ideal) x 100%");
             $sheet3->mergeCells('A2:H2');
             $sheet3->getStyle('A2')->getFont()->setItalic(true)->setSize(10);
 
