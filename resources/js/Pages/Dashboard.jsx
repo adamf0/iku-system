@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import SearchableSelect from '@/Components/SearchableSelect';
 import axios from 'axios';
-import { buildGroupedUnitOptions } from '@/Utils/unitHelper';
+import { buildGroupedUnitOptions, formatUnitTargetName } from '@/Utils/unitHelper';
 
 export const TW_PERIOD_LABELS = {
     TW1: 'Januari - Maret',
@@ -850,18 +850,37 @@ function CapaianSemuaUnitBarChart({ data, selectedTw = 'TW1', selectedTahun = '2
     );
 }
 
+
+
 export default function Dashboard() {
     const user = usePage().props.auth.user;
-
-    const isSingleUnitUser = user && !['ADMIN', 'LPM', 'FAKULTAS'].includes(user.role);
-    const isFacultyUser = user && user.role === 'FAKULTAS';
-    const isAdminUser = user && ['ADMIN', 'LPM'].includes(user.role);
 
     const [stats, setStats] = useState(null);
     const [units, setUnits] = useState([]);
     const [years, setYears] = useState([]);
     const [selectedTahun, setSelectedTahun] = useState('2026');
-    const [selectedUnit, setSelectedUnit] = useState(user?.fakultas_unit || '');
+
+    const isWarekUser = Boolean(
+        stats?.is_warek ||
+        (user?.nama_unit && user.nama_unit.toUpperCase().includes('WAKIL REKTOR')) ||
+        (user?.name && user.name.toUpperCase().includes('WAKIL REKTOR')) ||
+        (user?.username && user.username.toUpperCase().includes('WAKIL_REKTOR')) ||
+        (user?.role && user.role.toUpperCase().includes('WAKIL REKTOR'))
+    );
+    const isFacultyUser = Boolean(
+        (user && user.role === 'FAKULTAS') ||
+        stats?.is_faculty ||
+        (user?.nama_unit && user.nama_unit.toUpperCase().includes('FAKULTAS')) ||
+        (user?.name && user.name.toUpperCase().includes('FAKULTAS'))
+    );
+    const isAdminUser = Boolean(user && ['ADMIN', 'LPM'].includes(user.role));
+    const isPrivilegedScope = Boolean(isFacultyUser || stats?.is_faculty || isAdminUser || isWarekUser || stats?.is_privileged);
+    const isSingleUnitUser = Boolean(user && !['ADMIN', 'LPM', 'FAKULTAS'].includes(user.role) && !isWarekUser);
+
+    const canToggleSelfOnly = Boolean(!isAdminUser && (isFacultyUser || isWarekUser || stats?.is_faculty || stats?.is_warek));
+    const [onlyCurrentUnit, setOnlyCurrentUnit] = useState(true);
+
+    const [selectedUnit, setSelectedUnit] = useState(isSingleUnitUser ? (user?.fakultas_unit || '') : '');
     const [loading, setLoading] = useState(true);
     const [isStreaming, setIsStreaming] = useState(false);
 
@@ -869,6 +888,18 @@ export default function Dashboard() {
     const [chartTwFilter, setChartTwFilter] = useState('ALL');
     const [unitTwFilter, setUnitTwFilter] = useState('TW3');
     const [capaianTab, setCapaianTab] = useState('trim'); // 'trim' | 'real'
+
+    // Global Scoped State for Faculty View
+    const [scopeTab, setScopeTab] = useState('fakultas');
+    const [selectedProdi, setSelectedProdi] = useState('ALL');
+    const [selectedIkuFilter4, setSelectedIkuFilter4] = useState('');
+
+    const activeUnitId = useMemo(() => {
+        if (selectedUnit && Number(selectedUnit) !== Number(user?.fakultas_unit)) {
+            return Number(selectedUnit);
+        }
+        return Number(user?.fakultas_unit || (isFacultyUser && stats?.faculty_unit?.id) || selectedUnit);
+    }, [selectedUnit, user, isFacultyUser, stats]);
 
     // Export ZIP Background & Chunk Download State
     const [exportModalState, setExportModalState] = useState({
@@ -1147,21 +1178,100 @@ export default function Dashboard() {
             });
     };
 
-    const twSummary = capaianTab === 'real'
-        ? (stats?.triwulan_summary_real ?? stats?.triwulan_summary ?? {})
-        : (stats?.triwulan_summary_trim ?? stats?.triwulan_summary ?? {});
+    const resolveScopedData = (tab, prodiId) => {
+        if (!stats?.views) {
+            return stats;
+        }
+        if (tab === 'fakultas') {
+            return stats.views.fakultas || stats;
+        }
+        if (prodiId === 'ALL' || !prodiId) {
+            return stats.views.prodi_all || stats;
+        }
+        return stats.views.by_prodi?.[prodiId] || stats.views.prodi_all || stats;
+    };
 
-    const overallCapaian = capaianTab === 'real'
-        ? (stats?.overall_capaian_real ?? stats?.overall_capaian ?? 0)
-        : (stats?.overall_capaian_trim ?? stats?.overall_capaian ?? 0);
+    // Scoped Data for Dashboard (Fakultas vs Prodi)
+    const scopedData = resolveScopedData(scopeTab, selectedProdi);
 
-    const sebaranPerIku = capaianTab === 'real'
-        ? (stats?.sebaran_per_iku_real ?? stats?.sebaran_per_iku ?? [])
-        : (stats?.sebaran_per_iku_trim ?? stats?.sebaran_per_iku ?? []);
+    // Scoped Data for Card 1 (Ringkasan Capaian Triwulan & Keseluruhan)
+    const twSummary1 = capaianTab === 'real'
+        ? (scopedData?.triwulan_summary_real ?? scopedData?.triwulan_summary ?? {})
+        : (scopedData?.triwulan_summary_trim ?? scopedData?.triwulan_summary ?? {});
+    const overallCapaian1 = capaianTab === 'real'
+        ? (scopedData?.overall_capaian_real ?? scopedData?.overall_capaian ?? 0)
+        : (scopedData?.overall_capaian_trim ?? scopedData?.overall_capaian ?? 0);
 
-    const capaianPerUnit = capaianTab === 'real'
-        ? (stats?.capaian_per_unit_real ?? stats?.capaian_per_unit ?? [])
-        : (stats?.capaian_per_unit_trim ?? stats?.capaian_per_unit ?? []);
+    // Scoped Data for Card 2 (Sebaran Capaian Per IKU)
+    const sebaranPerIku2 = capaianTab === 'real'
+        ? (scopedData?.sebaran_per_iku_real ?? scopedData?.sebaran_per_iku ?? [])
+        : (scopedData?.sebaran_per_iku_trim ?? scopedData?.sebaran_per_iku ?? []);
+
+    // Scoped Data for Card 3 (Capaian Realisasi Unit Kerja)
+    const capaianPerUnit3 = capaianTab === 'real'
+        ? (scopedData?.capaian_per_unit_real ?? scopedData?.capaian_per_unit ?? [])
+        : (scopedData?.capaian_per_unit_trim ?? scopedData?.capaian_per_unit ?? []);
+
+    // Scoped Data for Card 4 (Performance Distribution)
+    const perIku4 = useMemo(() => {
+        if (!stats) return [];
+        if (stats.views && scopeTab === 'prodi' && selectedProdi && selectedProdi !== 'ALL') {
+            return stats.views.by_prodi?.[selectedProdi]?.per_iku || stats.per_iku || [];
+        }
+        return stats.per_iku || [];
+    }, [stats, scopeTab, selectedProdi]);
+
+    const ikuOptions4 = useMemo(() => {
+        if (!perIku4 || perIku4.length === 0) return [];
+        const seen = new Set();
+        const options = [];
+        perIku4.forEach(iku => {
+            const idKey = String(iku.id_indikator || iku.id);
+            if (!seen.has(idKey)) {
+                seen.add(idKey);
+                const desc = iku.full_kategori || iku.nama_indikator || '';
+                const searchStr = `${iku.kode_iku || ''} ${desc} ${iku.kategori || ''} ${iku.satuan || ''}`.toLowerCase();
+                options.push({
+                    value: idKey,
+                    label: iku.kode_iku ? `${iku.kode_iku} - ${desc}` : desc,
+                    badge: null,
+                    searchStr: searchStr
+                });
+            }
+        });
+        return options;
+    }, [perIku4]);
+
+    const displayedPerIku4 = useMemo(() => {
+        if (!perIku4) return [];
+        let items = perIku4;
+
+        if (canToggleSelfOnly && onlyCurrentUnit && activeUnitId) {
+            if (selectedUnit !== '') {
+                items = items.filter(iku => Number(iku.unit_id) === Number(activeUnitId));
+            }
+        }
+
+        if (selectedIkuFilter4) {
+            items = items.filter(iku => String(iku.id_indikator || iku.id) === String(selectedIkuFilter4));
+        }
+        return items;
+    }, [perIku4, canToggleSelfOnly, onlyCurrentUnit, activeUnitId, selectedUnit, selectedIkuFilter4]);
+
+    useEffect(() => {
+        if (selectedIkuFilter4) {
+            const exists = perIku4 && perIku4.some(i => String(i.id_indikator || i.id) === String(selectedIkuFilter4));
+            if (!exists) {
+                setSelectedIkuFilter4('');
+            }
+        }
+    }, [perIku4, selectedIkuFilter4]);
+
+    // Fallbacks
+    const twSummary = twSummary1;
+    const overallCapaian = overallCapaian1;
+    const sebaranPerIku = sebaranPerIku2;
+    const capaianPerUnit = capaianPerUnit3;
 
     const renderStatusBadge = (status) => {
         if (!status) {
@@ -1253,6 +1363,59 @@ export default function Dashboard() {
                         </button>
                     </div>
 
+                    {stats?.is_faculty && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center bg-white border border-[#c0c6d6]/40 rounded-xl p-1 shadow-xs">
+                                <span className="text-[10px] font-extrabold text-[#717785] uppercase tracking-wider px-2">Set Semua Section:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setScopeTab('fakultas')}
+                                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                                        scopeTab === 'fakultas'
+                                            ? 'bg-[#005bb1] text-white shadow-xs'
+                                            : 'text-[#535f71] hover:text-[#181c23]'
+                                    }`}
+                                    title="Tampilkan Fakultas pada seluruh section"
+                                >
+                                    <span className="material-symbols-outlined text-[14px]">apartment</span>
+                                    <span>Fakultas</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setScopeTab('prodi')}
+                                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                                        scopeTab === 'prodi'
+                                            ? 'bg-[#005bb1] text-white shadow-xs'
+                                            : 'text-[#535f71] hover:text-[#181c23]'
+                                    }`}
+                                    title="Tampilkan Program Studi pada seluruh section"
+                                >
+                                    <span className="material-symbols-outlined text-[14px]">school</span>
+                                    <span>Prodi</span>
+                                </button>
+                            </div>
+
+                            {/* Dropdown prodi saat tab Prodi dipilih */}
+                            {scopeTab === 'prodi' && (
+                                <div className="flex items-center gap-1.5 bg-white border border-[#005bb1]/30 rounded-xl px-3 py-1.5 text-xs font-bold shadow-xs animate-in fade-in duration-200">
+                                    <span className="material-symbols-outlined text-[#005bb1] text-base">filter_alt</span>
+                                    <select
+                                        value={selectedProdi}
+                                        onChange={(e) => setSelectedProdi(e.target.value)}
+                                        className="bg-transparent border-none text-xs font-extrabold text-[#005bb1] outline-none cursor-pointer pr-2 max-w-[240px] truncate"
+                                    >
+                                        <option value="ALL">-- Semua Prodi ({stats?.faculty_unit?.nama || 'Fakultas'}) --</option>
+                                        {(stats?.prodi_units || []).map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.jenjang ? `${p.jenjang.toUpperCase()} - ` : ''}{p.nama_fak_prod_unit}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="flex items-center gap-2 bg-white border border-[#c0c6d6]/40 rounded-xl px-4 py-2 text-xs font-bold text-[#181c23] shadow-xs">
                         <span className="material-symbols-outlined text-[#005bb1] text-lg">calendar_today</span>
                         <span className="text-xs font-bold text-[#717785]">Tahun:</span>
@@ -1296,42 +1459,44 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            {/* Dual Tabs Control */}
-                            <div className="flex items-center bg-[#f1f3fe] p-1.5 rounded-2xl border border-[#c0c6d6]/30 shadow-2xs">
-                                <button
-                                    type="button"
-                                    onClick={() => setCapaianTab('real')}
-                                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer ${
-                                        capaianTab === 'real'
-                                            ? 'bg-white text-[#005bb1] shadow-xs ring-1 ring-black/5'
-                                            : 'text-[#535f71] hover:text-[#181c23]'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-sm">bar_chart</span>
-                                    <span>Tab Real</span>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
-                                        capaianTab === 'real' ? 'bg-[#005bb1]/10 text-[#005bb1]' : 'bg-gray-200 text-gray-600'
-                                    }`}>
-                                        Semua Data
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setCapaianTab('trim')}
-                                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer ${
-                                        capaianTab === 'trim'
-                                            ? 'bg-[#005bb1] text-white shadow-xs'
-                                            : 'text-[#535f71] hover:text-[#181c23]'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-sm">tune</span>
-                                    <span>Tab Trim</span>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
-                                        capaianTab === 'trim' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
-                                    }`}>
-                                        Tanpa Realisasi 0
-                                    </span>
-                                </button>
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* Dual Tabs Control */}
+                                <div className="flex items-center bg-[#f1f3fe] p-1.5 rounded-2xl border border-[#c0c6d6]/30 shadow-2xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCapaianTab('real')}
+                                        className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer ${
+                                            capaianTab === 'real'
+                                                ? 'bg-white text-[#005bb1] shadow-xs ring-1 ring-black/5'
+                                                : 'text-[#535f71] hover:text-[#181c23]'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-sm">bar_chart</span>
+                                        <span>Tab Real</span>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
+                                            capaianTab === 'real' ? 'bg-[#005bb1]/10 text-[#005bb1]' : 'bg-gray-200 text-gray-600'
+                                        }`}>
+                                            Semua Data
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCapaianTab('trim')}
+                                        className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all duration-200 cursor-pointer ${
+                                            capaianTab === 'trim'
+                                                ? 'bg-[#005bb1] text-white shadow-xs'
+                                                : 'text-[#535f71] hover:text-[#181c23]'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-sm">tune</span>
+                                        <span>Tab Trim</span>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
+                                            capaianTab === 'trim' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
+                                        }`}>
+                                            Tanpa Realisasi 0
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1349,7 +1514,7 @@ export default function Dashboard() {
                                     </div>
                                     <div className="mt-2 flex items-baseline gap-1">
                                         <span className="text-5xl font-extrabold tracking-tight">
-                                            {overallCapaian.toString().replace('.', ',')}
+                                            {overallCapaian1.toString().replace('.', ',')}
                                         </span>
                                         <span className="text-2xl font-bold opacity-80">%</span>
                                     </div>
@@ -1364,7 +1529,7 @@ export default function Dashboard() {
                             {/* 4 Triwulan Grid Cards */}
                             <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 {['TW1', 'TW2', 'TW3', 'TW4'].map((twKey, idx) => {
-                                    const twData = twSummary[twKey] || {
+                                    const twData = twSummary1[twKey] || {
                                         capaian: 0,
                                         isian_percent: 0,
                                         status: 'DRAFT',
@@ -1477,7 +1642,7 @@ export default function Dashboard() {
                             </div>
 
                             {/* Filter Triwulan Chart */}
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
                                     <span className="material-symbols-outlined text-[#005bb1] text-base">filter_list</span>
                                     <select 
@@ -1496,7 +1661,7 @@ export default function Dashboard() {
 
                         {/* Interactive Full Width Multi-Line Chart */}
                         <SebaranCapaianChart 
-                            data={sebaranPerIku} 
+                            data={sebaranPerIku2} 
                             filterTw={chartTwFilter} 
                             selectedTahun={selectedTahun}
                         />
@@ -1507,7 +1672,15 @@ export default function Dashboard() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c0c6d6]/15 pb-4">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <h3 className="text-lg font-extrabold text-[#181c23]">Capaian Realisasi Semua Unit Kerja</h3>
+                                    <h3 className="text-lg font-extrabold text-[#181c23]">
+                                        {stats?.is_faculty
+                                            ? (scopeTab === 'fakultas' 
+                                                ? `Capaian Realisasi Fakultas (${stats?.faculty_unit?.nama || 'Fakultas'})` 
+                                                : (selectedProdi === 'ALL' 
+                                                    ? `Capaian Realisasi Semua Prodi (${stats?.faculty_unit?.nama || 'Fakultas'})` 
+                                                    : `Capaian Realisasi Prodi (${stats?.prodi_units?.find(p => p.id == selectedProdi)?.nama_fak_prod_unit || 'Program Studi'})`))
+                                            : 'Capaian Realisasi Semua Unit Kerja'}
+                                    </h3>
                                     <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                                         capaianTab === 'real'
                                             ? 'bg-blue-50 text-blue-700 border-blue-200'
@@ -1516,9 +1689,15 @@ export default function Dashboard() {
                                         {capaianTab === 'real' ? 'Mode Real' : 'Mode Trim'}
                                     </span>
                                 </div>
-                                <p className="text-xs text-[#535f71]">Perbandingan persentase data diajukan serta ketercapaian realisasi terhadap target untuk seluruh Fakultas & Unit Kerja.</p>
+                                <p className="text-xs text-[#535f71]">
+                                    {stats?.is_faculty
+                                        ? (scopeTab === 'fakultas'
+                                            ? `Evaluasi ketercapaian dan data diajukan untuk unit ${stats?.faculty_unit?.nama || 'Fakultas'}.`
+                                            : 'Perbandingan persentase data diajukan serta ketercapaian realisasi untuk Program Studi.')
+                                        : 'Perbandingan persentase data diajukan serta ketercapaian realisasi terhadap target untuk seluruh Fakultas & Unit Kerja.'}
+                                </p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center gap-1.5 bg-[#f1f3fe] border border-[#c0c6d6]/30 rounded-xl px-3.5 py-2 text-xs font-bold text-[#181c23]">
                                     <span className="material-symbols-outlined text-[#005bb1] text-base">filter_list</span>
                                     <select 
@@ -1536,7 +1715,7 @@ export default function Dashboard() {
                         </div>
 
                         <CapaianSemuaUnitBarChart 
-                            data={capaianPerUnit} 
+                            data={capaianPerUnit3} 
                             selectedTw={unitTwFilter} 
                             selectedTahun={selectedTahun} 
                         />
@@ -1547,7 +1726,15 @@ export default function Dashboard() {
                         <div className="p-4 sm:p-8 border-b border-[#c0c6d6]/15 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h3 className="text-lg font-bold text-[#181c23]">Performance Distribution</h3>
-                                <p className="text-xs text-[#535f71]">Distribusi capaian performa realisasi IKU perguruan tinggi dari database.</p>
+                                <p className="text-xs text-[#535f71]">
+                                    Distribusi capaian performa realisasi IKU perguruan tinggi dari database
+                                    {selectedIkuFilter4 && displayedPerIku4.length > 0 && (
+                                        <span className="ml-1 text-[#005bb1] font-bold">
+                                            (Filter: {displayedPerIku4[0].kode_iku})
+                                        </span>
+                                    )}
+                                    .
+                                </p>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-4">
@@ -1568,6 +1755,58 @@ export default function Dashboard() {
                                     </div>
                                 )}
 
+                                {/* Dropdown Search Indikator IKU - Hanya muncul di level fakultas, admin dan Unit Pelapor Terkait "WAKIL REKTOR *" */}
+                                {isPrivilegedScope && (
+                                    <div className="w-64 sm:w-72 md:w-80">
+                                        <SearchableSelect 
+                                            options={ikuOptions4}
+                                            value={selectedIkuFilter4}
+                                            onChange={(val) => setSelectedIkuFilter4(val)}
+                                            placeholder="-- Semua Indikator IKU --"
+                                            searchPlaceholder="Cari Indikator IKU (kode / nama)..."
+                                            disabled={!perIku4 || perIku4.length === 0}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Input Checkbox/On-Off Samping Pilih Indikator (Hanya untuk Fakultas dan Warek, default ON) */}
+                                {canToggleSelfOnly && (
+                                    <label 
+                                        className={`inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-xs cursor-pointer select-none transition-all duration-200 shadow-sm ${
+                                            onlyCurrentUnit 
+                                                ? 'bg-[#ebedf8] border-[#005bb1]/30 text-[#005bb1]' 
+                                                : 'bg-white border-[#c0c6d6] text-[#535f71] hover:border-[#005bb1]'
+                                        }`}
+                                        title={onlyCurrentUnit 
+                                            ? `Hanya menampilkan data unit saat ini login (${user?.nama_unit || 'Unit Login'})` 
+                                            : (isFacultyUser 
+                                                ? 'Menampilkan data fakultas dan seluruh prodi' 
+                                                : 'Menampilkan data wakil rektor dan seluruh fakultas')
+                                        }
+                                    >
+                                        <div className="relative inline-flex items-center flex-shrink-0">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={onlyCurrentUnit} 
+                                                onChange={(e) => setOnlyCurrentUnit(e.target.checked)}
+                                                className="sr-only" 
+                                            />
+                                            <div className={`w-9 h-5 rounded-full transition-colors duration-200 ease-in-out relative ${
+                                                onlyCurrentUnit ? 'bg-[#005bb1]' : 'bg-gray-300'
+                                            }`}>
+                                                <span 
+                                                    className={`inline-block w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ease-in-out absolute top-0.5 left-0.5 ${
+                                                        onlyCurrentUnit ? 'translate-x-4' : 'translate-x-0'
+                                                    }`} 
+                                                />
+                                            </div>
+                                        </div>
+                                        <span className="whitespace-nowrap font-bold">
+                                            Hanya Unit Saya
+                                        </span>
+                                    </label>
+                                )}
+
                                 <div className="bg-[#f1f3fe] p-1 rounded-xl flex items-center gap-1 text-[11px] font-bold text-[#535f71]">
                                     {['TW1', 'TW2', 'TW3', 'TW4'].map((p) => (
                                         <button 
@@ -1586,106 +1825,105 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        {!selectedUnit ? (
-                            <div className="p-12 text-center text-[#535f71] bg-[#f9f9ff] flex flex-col items-center justify-center gap-3">
-                                <div className="w-12 h-12 rounded-2xl bg-[#ebedf8] flex items-center justify-center text-[#005bb1]">
-                                    <span className="material-symbols-outlined text-2xl">apartment</span>
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-sm text-[#181c23]">Pilih Unit Kerja Terlebih Dahulu</h4>
-                                    <p className="text-xs text-[#717785] mt-1 max-w-md">
-                                        Silakan pilih Unit Kerja pada dropdown di atas untuk dapat menampilkan tabel distribusi capaian <span className="font-bold text-[#005bb1]">{activePeriod}</span>.
-                                    </p>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs">
-                                    <thead>
-                                        <tr className="bg-[#f1f3fe]/40 border-b border-[#c0c6d6]/15 text-[#717785] font-bold uppercase tracking-wider">
-                                            <th className="px-6 py-4 w-32">KODE IKU</th>
-                                            <th className="px-6 py-4">DESKRIPSI INDIKATOR</th>
-                                            <th className="px-6 py-4 text-center w-28">BASELINE</th>
-                                            <th className="px-6 py-4 text-center w-28">TARGET</th>
-                                            <th className="px-6 py-4 text-center w-44">CAPAIAN & %</th>
-                                            <th className="px-6 py-4 text-center w-36">STATUS</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#c0c6d6]/10">
-                                        {!stats?.per_iku || stats.per_iku.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="6" className="p-8 text-center text-[#717785] italic">
-                                                    Belum ada data indikator terpilih.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            stats.per_iku.map((iku) => {
-                                                const twKey = activePeriod.toLowerCase();
-                                                const nilaiCapaian = iku[`capaian_${twKey}`];
-                                                const itemData = {
-                                                    capaian: nilaiCapaian,
-                                                    status: iku[`status_${twKey}`]
-                                                };
-
-                                                // const targetVal = Number(iku.target);
-                                                // let progressPct = null;
-                                                // if (nilaiCapaian !== null && targetVal > 0) {
-                                                //     const pct = ((Number(nilaiCapaian) / targetVal) * 100).toFixed(1);
-                                                //     progressPct = `${pct}% dari Target`;
-                                                // }
-
-                                                return (
-                                                    <tr key={iku.id} className="hover:bg-[#f9f9ff] transition-colors">
-                                                        <td className="px-6 py-4 font-bold text-[#005bb1]">
-                                                            {iku.kode_iku}
-                                                        </td>
-                                                        <td className="px-6 py-4 font-medium text-[#181c23]">
-                                                            {iku.full_kategori || iku.nama_indikator}
-                                                        </td>
-
-                                                        <td className="px-6 py-4 text-center">
-                                                            <div className="bg-[#f1f3fe]/40 border border-[#c0c6d6]/30 rounded-xl px-3 py-2 text-[#535f71] font-bold text-xs inline-block min-w-[64px]">
-                                                                {(!iku.base_line || iku.base_line === '-' || iku.base_line === '0' || iku.base_line === 0) ? '-' : iku.base_line}
-                                                            </div>
-                                                        </td>
-
-                                                        <td className="px-6 py-4 text-center">
-                                                            <div className="bg-[#f1f3fe]/40 border border-[#c0c6d6]/30 rounded-xl px-3 py-2 text-[#181c23] font-extrabold text-xs inline-block min-w-[64px]">
-                                                                {(!iku.target || iku.target === '-' || iku.target === '0' || iku.target === 0) ? '-' : iku.target}
-                                                            </div>
-                                                        </td>
-
-                                                        <td className="px-6 py-4 text-center">
-                                                            {nilaiCapaian !== null ? (
-                                                                <div className="relative bg-[#ebedf8] border border-[#005bb1]/20 rounded-2xl px-3 py-2 inline-block w-full max-w-[150px]">
-                                                                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 py-0.5 rounded-full text-[8px] font-extrabold text-[#181c23] uppercase tracking-wider border border-[#c0c6d6]/30 shadow-2xs">
-                                                                        Realisasi
-                                                                    </span>
-                                                                    <div className="text-sm font-extrabold text-[#005bb1] mt-0.5">
-                                                                        {nilaiCapaian} {/* <span className="text-[10px] font-normal text-[#535f71]">{iku.satuan}</span> */}
-                                                                    </div>
-                                                                    {/* {progressPct && (
-                                                                        <div className="text-[10px] font-bold text-[#535f71] mt-0.5">
-                                                                            {progressPct}
-                                                                        </div>
-                                                                    )} */}
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-sm font-bold text-[#717785]">-</span>
-                                                            )}
-                                                        </td>
-
-                                                        <td className="px-6 py-4 text-center">
-                                                            {renderStatusBadge(itemData.status)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr className="bg-[#f1f3fe]/40 border-b border-[#c0c6d6]/15 text-[#717785] font-bold uppercase tracking-wider">
+                                        <th className="px-6 py-4 w-32">KODE IKU</th>
+                                        <th className="px-6 py-4">DESKRIPSI INDIKATOR</th>
+                                        {isPrivilegedScope && (
+                                            <th className="px-6 py-4">TARGET</th>
                                         )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                                        <th className="px-6 py-4 text-center w-28">BASELINE</th>
+                                        <th className="px-6 py-4 text-center w-28">TARGET</th>
+                                        <th className="px-6 py-4 text-center w-44">CAPAIAN & %</th>
+                                        <th className="px-6 py-4 text-center w-36">STATUS</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#c0c6d6]/10">
+                                    {!displayedPerIku4 || displayedPerIku4.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={isPrivilegedScope ? 7 : 6} className="p-8 text-center text-[#717785] italic">
+                                                <div className="flex flex-col items-center justify-center gap-2">
+                                                    <span>
+                                                        {selectedIkuFilter4 
+                                                            ? 'Tidak ada data indikator yang sesuai dengan filter pencarian.' 
+                                                            : 'Belum ada data indikator terpilih.'}
+                                                    </span>
+                                                    {canToggleSelfOnly && onlyCurrentUnit && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOnlyCurrentUnit(false)}
+                                                            className="inline-flex items-center gap-1.5 text-xs text-[#005bb1] font-bold hover:underline not-italic cursor-pointer bg-[#ebedf8] px-3 py-1.5 rounded-lg border border-[#005bb1]/20 mt-1"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">visibility</span>
+                                                            <span>Tampilkan data seluruh unit terkait (matikan toggle "Hanya Unit Saya")</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        displayedPerIku4.map((iku, index) => {
+                                            const twKey = activePeriod.toLowerCase();
+                                            const nilaiCapaian = iku[`capaian_${twKey}`];
+                                            const itemData = {
+                                                capaian: nilaiCapaian,
+                                                status: iku[`status_${twKey}`]
+                                            };
+
+                                            return (
+                                                <tr key={iku.row_key || `${iku.id}_${iku.unit_id || index}`} className="hover:bg-[#f9f9ff] transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-[#005bb1]">
+                                                        {iku.kode_iku}
+                                                    </td>
+                                                    <td className="px-6 py-4 font-medium text-[#181c23]">
+                                                        {iku.full_kategori || iku.nama_indikator}
+                                                    </td>
+
+                                                    {isPrivilegedScope && (
+                                                        <td className="px-6 py-4 font-bold text-[#181c23]">
+                                                            {formatUnitTargetName(units.find(u => Number(u.id) === Number(iku.unit_id)) || iku.nama_unit || iku.nama_fak_prod_unit || '-')}
+                                                        </td>
+                                                    )}
+
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="bg-[#f1f3fe]/40 border border-[#c0c6d6]/30 rounded-xl px-3 py-2 text-[#535f71] font-bold text-xs inline-block min-w-[64px]">
+                                                            {(!iku.base_line || iku.base_line === '-' || iku.base_line === '0' || iku.base_line === 0) ? '-' : iku.base_line}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="bg-[#f1f3fe]/40 border border-[#c0c6d6]/30 rounded-xl px-3 py-2 text-[#181c23] font-extrabold text-xs inline-block min-w-[64px]">
+                                                            {(!iku.target || iku.target === '-' || iku.target === '0' || iku.target === 0) ? '-' : iku.target}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="px-6 py-4 text-center">
+                                                        {nilaiCapaian !== null ? (
+                                                            <div className="relative bg-[#ebedf8] border border-[#005bb1]/20 rounded-2xl px-3 py-2 inline-block w-full max-w-[150px]">
+                                                                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 py-0.5 rounded-full text-[8px] font-extrabold text-[#181c23] uppercase tracking-wider border border-[#c0c6d6]/30 shadow-2xs">
+                                                                    Realisasi
+                                                                </span>
+                                                                <div className="text-sm font-extrabold text-[#005bb1] mt-0.5">
+                                                                    {nilaiCapaian}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-sm font-bold text-[#717785]">-</span>
+                                                        )}
+                                                    </td>
+
+                                                    <td className="px-6 py-4 text-center">
+                                                        {renderStatusBadge(itemData.status)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </section>
                 </div>
             )}

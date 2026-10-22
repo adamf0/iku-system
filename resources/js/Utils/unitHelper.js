@@ -30,6 +30,44 @@ export function formatJenjang(val) {
 }
 
 /**
+ * Format unit name for the TARGET (NAMA_FAKULTAS_PRODI_UNIT) column:
+ * 1. s1 - TEKNIK SIPIL (Fak. TEKNIK)
+ * 2. FAKULTAS TEKNIK
+ * 3. LPM
+ */
+export function formatUnitTargetName(unit) {
+    if (!unit) return '-';
+    if (typeof unit === 'string') {
+        let str = unit.trim();
+        if (/^UNIT\s*[-_–—\s]\s*/i.test(str)) {
+            str = str.replace(/^UNIT\s*[-_–—\s]\s*/i, '');
+        }
+        return str;
+    }
+
+    const type = (unit.type || '').toLowerCase();
+    const nama = (unit.nama_fak_prod_unit || unit.nama_unit || unit.name || '').trim();
+
+    if (type === 'fakultas') {
+        return nama.toUpperCase().startsWith('FAKULTAS') ? nama : `FAKULTAS ${nama}`;
+    }
+
+    if (type === 'prodi') {
+        const j = formatJenjang(unit.jenjang || unit.kode_jenjang);
+        let cleanNama = nama;
+        if (j) {
+            cleanNama = cleanNama.replace(new RegExp(`^${j}\\s*[-_–—\\s]\\s*`, 'i'), '');
+            cleanNama = cleanNama.replace(new RegExp(`^${j}\\s+`, 'i'), '');
+        }
+        const fakStr = unit.fakultas ? ` (Fak. ${unit.fakultas})` : '';
+        return j ? `${j} - ${cleanNama}${fakStr}` : `${cleanNama}${fakStr}`;
+    }
+
+    // Unit / Lembaga: LPM, BPSI, WAKIL REKTOR 4, etc.
+    return nama.replace(/^UNIT\s*[-_–—\s]\s*/i, '');
+}
+
+/**
  * Utility to format raw v_fakultas_unit rows into grouped & categorized options for SearchableSelect
  */
 export function buildGroupedUnitOptions(units = [], defaultOptionLabel = 'Semua Unit') {

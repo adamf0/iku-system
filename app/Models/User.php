@@ -55,6 +55,17 @@ class User extends Authenticatable
      */
     public function scopeUnits(): array
     {
+        $isWarek = str_contains(strtoupper($this->name ?? ''), 'WAKIL REKTOR')
+            || str_contains(strtoupper($this->username ?? ''), 'WAKIL_REKTOR')
+            || str_contains(strtoupper($this->role ?? ''), 'WAKIL REKTOR');
+
+        if (!$isWarek && $this->fakultas_unit) {
+            $u = DB::table('v_fakultas_unit')->where('id', $this->fakultas_unit)->first();
+            if ($u && str_contains(strtoupper($u->nama_fak_prod_unit ?? ''), 'WAKIL REKTOR')) {
+                $isWarek = true;
+            }
+        }
+
         if (in_array($this->role, ['LPM', 'ADMIN'])) {
             return DB::table('v_fakultas_unit')
                 ->where(function($w) {
@@ -62,6 +73,20 @@ class User extends Authenticatable
                 })
                 ->pluck('id')
                 ->toArray();
+        }
+
+        if ($isWarek) {
+            $facIds = DB::table('v_fakultas_unit')
+                ->where(function($w) {
+                    $w->whereNull('is_active')->orWhere('is_active', 1);
+                })
+                ->where('type', 'fakultas')
+                ->pluck('id')
+                ->toArray();
+            if ($this->fakultas_unit && !in_array($this->fakultas_unit, $facIds)) {
+                $facIds[] = (int)$this->fakultas_unit;
+            }
+            return array_values(array_unique($facIds));
         }
 
         if (!$this->fakultas_unit) {
